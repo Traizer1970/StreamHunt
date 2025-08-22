@@ -1,0 +1,238 @@
+{
+  "brand": "StreamHunt Studio",
+  "badge": "Premium",
+
+  "nav": {
+    "home": "Início",
+    "widgets": "Widgets",
+    "games": "Jogos",
+    "premium": "Premium",
+    "dashboard": "Dashboard",
+    "builder": "Builder",
+    "settings": "Configurações"
+  },
+
+  "auth": {
+    "login": "Login",
+    "create": "Criar conta",
+    "email": "Email",
+    "password": "Palavra-passe",
+    "name": "Nome",
+    "namePlaceholder": "O seu nome",
+    "demoNote": "Demo sem backend — substitua por autenticação real.",
+    "noAccount": "Não tem conta?",
+    "haveAccount": "Já tem conta?",
+    "welcome": "Bem-vindo!",
+    "loginOk": "Sessão iniciada com sucesso.",
+    "createdTitle": "Conta criada com sucesso!",
+    "createdMsg": "Enviámos um email de verificação. Confirme a conta para iniciar sessão.",
+    "error": "Erro",
+    "resend": "Reenviar email",
+    "sent": "Enviado!",
+    "checkInbox": "Verifique o seu email."
+  },
+
+  "errors": {
+    "auth": {
+      "emailNotConfirmed": "Email não confirmado. Verifique a sua caixa de entrada para ativar a conta.",
+      "invalidCredentials": "Email ou palavra-passe inválidos.",
+      "userExists": "Já existe uma conta com esse email.",
+      "weakPassword": "A palavra-passe deve ter pelo menos 6 caracteres.",
+      "tooManyRequests": "Demasiadas tentativas. Tente novamente mais tarde.",
+      "network": "Erro de rede. Verifique a sua ligação.",
+      "generic": "Ocorreu um erro. Tente novamente."
+    }
+  },
+
+  "theme": {
+    "toLight": "Tema claro",
+    "toDark": "Tema escuro"
+  },
+
+  "common": {
+    "free": "Grátis",
+    "ok": "Ok"
+  },
+
+  "home": {
+    "headline": "Organize & mostre os seus Bonus Hunts",
+    "sub": "Integre dados de hunts e widgets personalizáveis nas suas streams para destacar as suas melhores vitórias — rapidamente e sem fricção.",
+    "ctaStart": "Começar grátis",
+    "ctaWidgets": "Ver Widgets",
+    "perkPay": "Pagamentos fáceis",
+    "perkLive": "Destaques em tempo-real",
+    "perkWidgets": "40+ widgets possíveis",
+    "overlayTitle": "Exemplo de Overlay",
+    "overlayDesc": "Monte uma área com widgets em poucos cliques.",
+    "includedTitle": "O que vem incluído",
+    "includedSub": "Estrutura pronta com páginas, UI moderna, exemplos de widgets e um dashboard local para gerir hunts e criar embeds.",
+    "features": {
+      "widgets": { "title": "Widgets personalizáveis", "desc": "Atualizações em tempo-real via API (a ligar)." },
+      "games":   { "title": "Jogos de giveaway",       "desc": "Deal or No Deal, Roda da Sorte e mais (demo)." },
+      "premium": { "title": "Plano Premium",           "desc": "Comparação Free vs Premium e checkout." }
+    }
+  },
+
+  "widgets": {
+    "title": "Vários Widgets",
+    "sub": "A maioria é personalizável às suas necessidades.",
+    "list": {
+      "amountWon":   { "title": "Montante Ganho",       "desc": "Mostra o total ganho no hunt ativo." },
+      "averageBet":  { "title": "Aposta Média",         "desc": "Aposta média do hunt atual." },
+      "avgBonusCost":{ "title": "Custo Médio do Bónus", "desc": "Custo médio dos bónus do hunt." },
+      "currentMulti":{ "title": "Multiplicador Atual",  "desc": "Multiplicador médio do hunt." },
+      "bestPayout":  { "title": "Maior Payout",         "desc": "Bónus com o maior ganho do hunt." },
+      "simpleList":  { "title": "Lista Simples de Bónus","desc": "Lista rolável dos bónus." },
+      "remaining":   { "title": "Bónus Restantes",      "desc": "Número de bónus ainda por abrir." },
+      "progress":    { "title": "Progresso",            "desc": "Progresso até ao break-even." }
+    }
+  },
+"about": {
+    "title": "About & Upgrades",
+    "important": "IMPORTANTE",
+    "importantNote": "Logins partilhados NÃO são permitidos. Não partilhe a sua conta; o acesso pode ser revogado sem aviso.",
+    "table": {
+      "features": "Funcionalidades",
+      "freeCol": "Membro Free",
+      "freeColSub": "Tudo o que precisa para começar",
+      "proCol": "Membro Premium",
+      "proColSub": "Experiência & funcionalidades premium"
+      }
+    },
+    "rows": {
+      "bonusHunts": "Bonus Hunts",
+      "streamingWidgets": "Streaming Widgets",
+      "streamGames": "Stream Games",
+      "bonusOpeningRecap": "Bonus Opening Recap",
+      "tournaments": "Bonus Buy Tournaments",
+      "battles": "Bonus Buy Battles",
+      "chatCommands": "Chat Commands",
+      "huntApi": "Bonus Hunt API",
+      "infoPanels": "Information Panels",
+      "customWidgets": "Custom Widgets",
+      "customThemes": "Customizable Themes for Widgets",
+      "hotWords": "Hot Words (Kick & Twitch)",
+      "customSpinners": "Custom Spinners",
+      "advancedStats": "Advanced Statistics",
+      "refresh": "Widget Refresh Interval"
+    },
+    "values": {
+      "freeUpTo": "até {{n}}",
+      "unlimited": "ilimitado",
+      "seconds": "{{n}}s"
+    },
+    "promo": {
+      "title": "Premium Membership",
+      "desc": "Apenas 15€/mês — inclui mais widgets, torneios, battles, API e estatísticas avançadas.",
+      "bonus": "Bónus: 14 dias de Premium grátis ao criares a tua primeira conta.",
+      "contact": "Contactar suporte",
+      "upgradeBtn": "Fazer upgrade para Premium"
+    },
+    "badges": {
+      "tick": "✔",
+      "dash": "—"
+    },
+  "games": {
+    "title": "Uma melhor forma de envolver os seus viewers",
+    "sub": "Jogos de giveaway fáceis de correr em stream.",
+    "list": {
+      "deal":  { "title": "Deal or No Deal",   "desc": "26 malas com prémios e ofertas do Banker." },
+      "wheel": { "title": "Roda da Sorte",     "desc": "Roda com 10 slots de prémios — totalmente personalizável." },
+      "cards": { "title": "Sete Cartas",       "desc": "O viewer escolhe cartas; a carta define o prémio." }
+    }
+  },
+
+  "premium": {
+    "title": "Planos",
+    "sub": "Comece grátis e faça upgrade para Premium quando precisar de mais.",
+    "free": "Grátis",
+    "freeDesc": "Tudo o que precisa para começar.",
+    "freeBtn": "Criar conta grátis",
+    "pro": "Premium",
+    "proDesc": "Experiência completa e funcionalidades avançadas.",
+    "price": "15€/mês",
+    "proBtn": "Obter Premium",
+    "recommended": "Recomendado",
+    "custom": "Personalizado",
+    "customDesc": "Funcionalidades e suporte à medida para equipas/agências.",
+    "customPrice": "Preço a combinar",
+    "customBtn": "Falar connosco",
+    "exclusive": "Exclusivo",
+    "topSeller": "Top seller",
+    "customFeatures": [
+      "Widgets e jogos ilimitados",
+      "White-label e domínio personalizado",
+      "Suporte prioritário e SLAs",
+      "Várias contas e permissões de equipa"
+    ],
+    "features": [
+      "Até 50 hunts ativos",
+      "20+ widgets incluídos",
+      "Atualização a cada 5s",
+      "Estatísticas básicas",
+      "Todos os widgets (40+)",
+      "Atualização a cada 2s",
+      "Temas & widgets customizados",
+      "Estatísticas avançadas"
+    ]
+  },
+
+  "footer": "Jogue com responsabilidade. 18+ • Este é um template UI premium.",
+
+  "dash": {
+    "title": "Dashboard",
+    "subtitle": "Gestão de hunt (dados locais em memória para demo).",
+    "export": "Exportar JSON",
+    "remove": "Remover",
+    "add": "Adicionar bónus",
+    "slot": "Slot",
+    "slotPlaceholder": "Nome do jogo",
+    "cost": "Custo (€)",
+    "payout": "Ganho (€)",
+    "totalPayout": "Montante ganho",
+    "totalCost": "Custo total",
+    "avgBet": "Aposta média",
+    "progress": "Progresso",
+    "bonus": "Bónus"
+  },
+
+  "builder": {
+    "title": "Widget Builder",
+    "subtitle": "Crie um widget simples e gere o código embed.",
+    "copy": "Copiar embed",
+    "settings": "Configurações",
+    "parameters": "Defina os parâmetros do widget.",
+    "amount": "Montante",
+    "currency": "Moeda",
+    "darkEmbed": "Tema escuro (embed)",
+    "refreshLabel": "Intervalo de atualização (s)",
+    "embed": "Embed",
+    "preview": "Pré-visualização",
+    "previewDesc": "Veja como aparece no overlay."
+  },
+
+  "settings": {
+    "title": "Configurações",
+    "profile": "Perfil",
+    "uploadPhoto": "Carregar foto",
+    "pasteUrl": "ou cola um URL de imagem",
+    "username": "Username",
+    "saveProfile": "Guardar perfil",
+    "email": "Email",
+    "saveEmail": "Guardar email",
+    "password": "Palavra-passe",
+    "currentPassword": "Palavra-passe atual",
+    "newPassword": "Nova palavra-passe",
+    "updatePassword": "Atualizar palavra-passe",
+    "messages": {
+      "needSession": "Sem sessão.",
+      "profileSaved": "Perfil atualizado.",
+      "avatarPublicUrlFail": "Não foi possível obter URL pública.",
+      "avatarUploaded": "Avatar carregado.",
+      "emailUpdated": "Email atualizado. Verifica a caixa de correio para confirmar, se necessário.",
+      "wrongPassword": "Palavra-passe atual incorreta.",
+      "weakPassword": "A palavra-passe deve ter pelo menos 6 caracteres.",
+      "passwordUpdated": "Palavra-passe atualizada."
+    }
+  }
+}

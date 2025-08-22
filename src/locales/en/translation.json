@@ -1,0 +1,237 @@
+{
+  "brand": "StreamHunt Studio",
+  "badge": "Premium",
+
+  "nav": {
+    "home": "Home",
+    "widgets": "Widgets",
+    "games": "Games",
+    "premium": "Premium",
+    "dashboard": "Dashboard",
+    "builder": "Builder",
+    "settings": "Settings"
+  },
+
+  "errors": {
+    "auth": {
+      "emailNotConfirmed": "Email not confirmed. Please check your inbox to activate your account.",
+      "invalidCredentials": "Invalid email or password.",
+      "userExists": "An account with this email already exists.",
+      "weakPassword": "Password must be at least 6 characters.",
+      "tooManyRequests": "Too many attempts. Try again later.",
+      "network": "Network error. Check your connection.",
+      "generic": "Something went wrong. Please try again."
+    }
+  },
+
+  "auth": {
+    "login": "Login",
+    "create": "Create account",
+    "email": "Email",
+    "password": "Password",
+    "name": "Name",
+    "namePlaceholder": "Your name",
+    "demoNote": "Demo without backend — replace with real authentication.",
+    "noAccount": "Don't have an account?",
+    "haveAccount": "Already have an account?",
+    "welcome": "Welcome!",
+    "loginOk": "Signed in successfully.",
+    "createdTitle": "Account created successfully!",
+    "createdMsg": "We sent you a verification email. Confirm your account to sign in.",
+    "error": "Error",
+    "resend": "Resend email",
+    "sent": "Sent!",
+    "checkInbox": "Check your inbox."
+  },
+
+  "theme": {
+    "toLight": "Light theme",
+    "toDark": "Dark theme"
+  },
+
+  "common": {
+    "free": "Free"
+  },
+
+  "home": {
+    "headline": "Organize & showcase your Bonus Hunts",
+    "sub": "Integrate hunt data and customizable widgets into your streams to highlight your best wins — quickly and seamlessly.",
+    "ctaStart": "Start free",
+    "ctaWidgets": "Browse Widgets",
+    "perkPay": "Easy payments",
+    "perkLive": "Realtime highlights",
+    "perkWidgets": "40+ possible widgets",
+    "overlayTitle": "Overlay Example",
+    "overlayDesc": "Assemble a widget area in a few clicks.",
+    "includedTitle": "What’s included",
+    "includedSub": "Ready-made structure with pages, modern UI, widget examples and a local dashboard to manage hunts and create embeds.",
+    "features": {
+      "widgets": { "title": "Customizable widgets", "desc": "Realtime updates via API (to be connected)." },
+      "games":   { "title": "Giveaway games",       "desc": "Deal or No Deal, Wheel of Fortune and more (demo)." },
+      "premium": { "title": "Premium plan",         "desc": "Free vs Premium comparison and checkout." }
+    }
+  },
+
+  "widgets": {
+    "title": "Tons of Widgets",
+    "sub": "Most are customizable to your needs.",
+    "list": {
+      "amountWon":   { "title": "Amount Won",         "desc": "Shows the total amount won in the active hunt." },
+      "averageBet":  { "title": "Average Bet",        "desc": "Average bet of the current hunt." },
+      "avgBonusCost":{ "title": "Average Bonus Cost", "desc": "Average cost of the hunt bonuses." },
+      "currentMulti":{ "title": "Current Multiplier", "desc": "Average multiplier for the hunt." },
+      "bestPayout":  { "title": "Best Payout",        "desc": "Bonus with the highest payout in the hunt." },
+      "simpleList":  { "title": "Simple Bonus List",  "desc": "Scrollable list of bonuses." },
+      "remaining":   { "title": "Remaining Bonuses",  "desc": "Number of unopened bonuses." },
+      "progress":    { "title": "Progress",           "desc": "Progress to break-even." }
+    }
+  },
+
+  "games": {
+    "title": "A better way to engage your viewers",
+    "sub": "Giveaway games that are easy to run on stream.",
+    "list": {
+      "deal":  { "title": "Deal or No Deal",  "desc": "26 briefcases with custom prizes and Banker offers." },
+      "wheel": { "title": "Wheel of Fortune", "desc": "Wheel with 10 prize slots — fully customizable." },
+      "cards": { "title": "Seven Cards",      "desc": "Viewer picks cards; the card defines the prize." }
+    }
+  },
+
+  "premium": {
+    "title": "Plans",
+    "sub": "Start free and upgrade to Premium when you need more.",
+    "free": "Free",
+    "freeDesc": "Everything you need to start.",
+    "freeBtn": "Create free account",
+    "pro": "Premium",
+    "proDesc": "Full experience and advanced features.",
+    "price": "$15/mo",
+    "proBtn": "Get Premium",
+    "recommended": "Recommended",
+    "custom": "Custom",
+    "customDesc": "Tailored features and support for teams or agencies.",
+    "customPrice": "Price on request",
+    "customBtn": "Talk to us",
+    "exclusive": "Exclusive",
+    "topSeller": "Top seller",
+    "customFeatures": [
+      "Unlimited widgets & games",
+      "White-label and custom domains",
+      "Priority support & SLAs",
+      "Team seats and roles"
+    ],
+    "features": [
+      "Up to 50 active hunts",
+      "20+ widgets included",
+      "5s refresh",
+      "Basic stats",
+      "All widgets (40+)",
+      "2s refresh",
+      "Custom themes & widgets",
+      "Advanced stats"
+    ]
+  },
+
+  "footer": "Play responsibly. 18+ • This is a premium UI template.",
+
+  "dash": {
+    "title": "Dashboard",
+    "subtitle": "Hunt management (local in-memory data for demo).",
+    "export": "Export JSON",
+    "remove": "Remove",
+    "add": "Add bonus",
+    "slot": "Slot",
+    "slotPlaceholder": "Game name",
+    "cost": "Cost (€)",
+    "payout": "Payout (€)",
+    "totalPayout": "Total payout",
+    "totalCost": "Total cost",
+    "avgBet": "Average bet",
+    "progress": "Progress",
+    "bonus": "Bonuses"
+  },
+
+  "builder": {
+    "title": "Widget Builder",
+    "subtitle": "Create a simple widget and generate the embed code.",
+    "copy": "Copy embed",
+    "settings": "Settings",
+    "parameters": "Set the widget parameters.",
+    "amount": "Amount",
+    "currency": "Currency",
+    "darkEmbed": "Dark theme (embed)",
+    "refreshLabel": "Refresh interval (s)",
+    "embed": "Embed",
+    "preview": "Preview",
+    "previewDesc": "See how it looks in the overlay."
+  },
+"about": {
+    "title": "About & Upgrades",
+    "important": "IMPORTANT",
+    "importantNote": "Shared logins are NOT allowed. Do not share your account; access may be revoked without notice.",
+    "table": {
+      "features": "Features",
+      "freeCol": "Free Member",
+      "freeColSub": "Everything you need to start",
+      "proCol": "Premium Member",
+      "proColSub": "Premium experience & features"
+    }
+    },
+    "rows": {
+      "bonusHunts": "Bonus Hunts",
+      "streamingWidgets": "Streaming Widgets",
+      "streamGames": "Stream Games",
+      "bonusOpeningRecap": "Bonus Opening Recap",
+      "tournaments": "Bonus Buy Tournaments",
+      "battles": "Bonus Buy Battles",
+      "chatCommands": "Chat Commands",
+      "huntApi": "Bonus Hunt API",
+      "infoPanels": "Information Panels",
+      "customWidgets": "Custom Widgets",
+      "customThemes": "Customizable Themes for Widgets",
+      "hotWords": "Hot Words (Kick & Twitch)",
+      "customSpinners": "Custom Spinners",
+      "advancedStats": "Advanced Statistics",
+      "refresh": "Widget Refresh Interval"
+    },
+    "values": {
+      "freeUpTo": "up to {{n}}",
+      "unlimited": "unlimited",
+      "seconds": "{{n}}s"
+    },
+    "promo": {
+      "title": "Premium Membership",
+      "desc": "Only $15/mo — includes more widgets, tournaments, battles, API and advanced statistics.",
+      "bonus": "Bonus: 14 days of Premium free on your first account.",
+      "contact": "Contact support",
+      "upgradeBtn": "Upgrade to Premium"
+    },
+    "badges": {
+      "tick": "✔",
+      "dash": "—"
+    },
+  "settings": {
+    "title": "Settings",
+    "profile": "Profile",
+    "uploadPhoto": "Upload photo",
+    "pasteUrl": "or paste an image URL",
+    "username": "Username",
+    "saveProfile": "Save profile",
+    "email": "Email",
+    "saveEmail": "Save email",
+    "password": "Password",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "updatePassword": "Update password",
+    "messages": {
+      "needSession": "No active session.",
+      "profileSaved": "Profile updated.",
+      "avatarPublicUrlFail": "Could not get public URL.",
+      "avatarUploaded": "Avatar uploaded.",
+      "emailUpdated": "Email updated. Check your inbox to confirm if requested.",
+      "wrongPassword": "Current password is incorrect.",
+      "weakPassword": "Password must have at least 6 characters.",
+      "passwordUpdated": "Password updated."
+    }
+  }
+}
