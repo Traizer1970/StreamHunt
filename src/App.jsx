@@ -30,6 +30,7 @@ import TournamentsPage from "@/tournaments";
 import TournamentDetail from "@/tournament-detail.jsx";
 import BattlesPage from "./battlespage.jsx";
 import BattleView  from "./battle-view.jsx";
+import WidgetOverlay from "@/widget-overlay.jsx";
 
 /* =================== CONFIG =================== */
 const TELEGRAM_URL = "https://t.me/gsousa70";
@@ -1478,10 +1479,11 @@ export default function App() {
            route === "hunts" ||
            route === "tournaments" ||
            route === "battles" ||
-           route === "terms") &&
-           !route.startsWith("hunts/") &&
-           !route.startsWith("tournaments/") &&
+           route === "terms") ||
+           !route.startsWith("hunts/") ||
+           !route.startsWith("tournaments/") ||
            route === "battles" || route.startsWith("battles/") ||  // <-- acrescenta isto
+           <Route path="/overlay/battle/:id" element={<WidgetOverlay />} /> ||
            <Home goPremium={() => navigate("premium")} navigate={navigate} />}
       </>
     );
