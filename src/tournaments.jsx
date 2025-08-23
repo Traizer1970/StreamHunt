@@ -1,6 +1,6 @@
 // /src/tournaments.jsx
 import React from "react";
-import { useTheme } from "@/contexts/auth-context";
+import { AuthCtx, useTheme } from "@/contexts/auth-context";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import {
   Trophy,
   Eye,
   Crown,
+  Lock,
 } from "lucide-react";
 
 /* ───────────────────────── i18n ───────────────────────── */
@@ -153,6 +154,58 @@ function AccentBox({ children, className }) {
   );
 }
 
+/* ───────────── Tooltip + “Locked cards” (igual ao Hunt) ───────────── */
+function Tip({ content, children, className }) {
+  return (
+    <span className={cn("relative inline-flex items-center group", className)}>
+      {children}
+      <span className="pointer-events-none absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full z-50 hidden group-hover:block">
+        <div className="rounded-xl border border-white/10 bg-zinc-900/95 shadow-xl px-3 py-2 max-w-[280px]">
+          {content}
+        </div>
+        <div className="mx-auto -mt-1 h-2 w-2 rotate-45 bg-zinc-900/95 border-l border-t border-white/10" />
+      </span>
+    </span>
+  );
+}
+function BlockCard({ height }) {
+  const { isDark } = useTheme();
+  return (
+    <div
+      className={cn(
+        "rounded-xl border grid place-items-center",
+        isDark ? "bg-neutral-900/95 border-white/10" : "bg-zinc-100 border-zinc-200",
+        height
+      )}
+    >
+      <div className="flex items-center gap-2 text-sm opacity-80">
+        <Lock className="h-4 w-4" />
+        Available on Plus.
+      </div>
+    </div>
+  );
+}
+function TournamentsLocked() {
+  const { isDark } = useTheme();
+  return (
+    <div className="space-y-4">
+      <div
+        className={cn(
+          "rounded-xl border px-3 py-2 text-sm flex items-center gap-2",
+          isDark ? "bg-zinc-900/90 border-white/10" : "bg-white border-zinc-200"
+        )}
+      >
+        <Lock className="h-4 w-4 opacity-80" />
+        Tournaments are available only on Plus. Upgrade to unlock.
+      </div>
+      {/* “Insights” placeholder */}
+      <BlockCard height="h-[360px]" />
+      {/* “Table” placeholder */}
+      <BlockCard height="h-[520px]" />
+    </div>
+  );
+}
+
 /* ───────────────────────── Recharts ───────────────────────── */
 import {
   ResponsiveContainer,
@@ -160,7 +213,7 @@ import {
   Bar,
   XAxis,
   YAxis,
-  Tooltip,
+  Tooltip as RTooltip,
   Cell,
 } from "recharts";
 const BAR_COLORS = ["#6366F1", "#22C55E", "#F59E0B"];
@@ -259,7 +312,7 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
         title: title || null,
         description: description || null,
         status: status || null,
-        prize_pool: total || null, // auto
+        prize_pool: total || null,
       };
 
       let id = initial?.id ?? null;
@@ -544,6 +597,8 @@ function computeTournamentWinner(entries, paymentsRows) {
 /* ───────────────────────── Página ───────────────────────── */
 export default function TournamentsPage() {
   const { isDark } = useTheme();
+  const { profile } = React.useContext(AuthCtx) || {};
+  const isFree = String(profile?.plan || "Free").toLowerCase() === "free";
 
   const [busy, setBusy] = React.useState(true);
   const [rows, setRows] = React.useState([]);
@@ -615,9 +670,10 @@ export default function TournamentsPage() {
     }
   }, []);
 
+  // Só carrega dados no PLUS
   React.useEffect(() => {
-    load();
-  }, [load]);
+    if (!isFree) load();
+  }, [load, isFree]);
 
   // Mapa No. por torneio (1..N por ordem de criação)
   const userNoById = React.useMemo(() => {
@@ -803,6 +859,7 @@ export default function TournamentsPage() {
     );
   };
 
+  /* ---------------- Render ---------------- */
   return (
     <section className="py-8 md:py-10">
       <div className="max-w-7xl mx-auto px-4">
@@ -815,242 +872,262 @@ export default function TournamentsPage() {
           <div className="flex items-center gap-2">
             <div className="relative">
               <Input
+                disabled={isFree}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t("searchPh")}
-                className="pl-8 h-10 rounded-xl bg-zinc-900 border-white/10 text-white placeholder:text-white/40"
+                className="pl-8 h-10 rounded-xl bg-zinc-900 border-white/10 text-white placeholder:text-white/40 disabled:opacity-60"
               />
               <Search className="h-4 w-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-white/60" />
             </div>
-            <Button
-              onClick={() => {
-                setEditRow(null);
-                setModalOpen(true);
-              }}
-              className="h-10"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              {t("add")}
-            </Button>
+
+            {isFree ? (
+              <Tip content="Available on Plus. Upgrade to create tournaments.">
+                <span className="inline-flex">
+                  <Button disabled className="h-10 opacity-60 cursor-not-allowed">
+                    <Plus className="h-4 w-4 mr-2" />
+                    {t("add")}
+                  </Button>
+                </span>
+              </Tip>
+            ) : (
+              <Button
+                onClick={() => {
+                  setEditRow(null);
+                  setModalOpen(true);
+                }}
+                className="h-10"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                {t("add")}
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* Insights (accent azul) */}
-        <AccentCard title={t("insights")} className="mb-6">
-          <div className="grid lg:grid-cols-[1fr_360px] gap-4">
-            {/* chart */}
-            <div className="rounded-xl border border-white/10 p-3">
-              <div className="text-sm opacity-70 mb-2">{t("topSlots")}</div>
-              <div className="h-[260px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData}>
-                    <XAxis dataKey="name" tick={{ fill: "currentColor" }} />
-                    <YAxis tick={{ fill: "currentColor" }} allowDecimals={false} />
-                    <Tooltip content={<NiceTooltip />} />
-                    <Bar dataKey="wins" radius={[6, 6, 0, 0]}>
-                      {chartData.map((_, i) => (
-                        <Cell
-                          key={`cell-${i}`}
-                          fill={BAR_COLORS[i % BAR_COLORS.length]}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
+        {/* FREE: tudo bloqueado */}
+        {isFree ? (
+          <TournamentsLocked />
+        ) : (
+          <>
+            {/* Insights */}
+            <AccentCard title={t("insights")} className="mb-6">
+              <div className="grid lg:grid-cols-[1fr_360px] gap-4">
+                {/* chart */}
+                <div className="rounded-xl border border-white/10 p-3">
+                  <div className="text-sm opacity-70 mb-2">{t("topSlots")}</div>
+                  <div className="h-[260px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData}>
+                        <XAxis dataKey="name" tick={{ fill: "currentColor" }} />
+                        <YAxis tick={{ fill: "currentColor" }} allowDecimals={false} />
+                        <RTooltip content={<NiceTooltip />} />
+                        <Bar dataKey="wins" radius={[6, 6, 0, 0]}>
+                          {chartData.map((_, i) => (
+                            <Cell
+                              key={`cell-${i}`}
+                              fill={BAR_COLORS[i % BAR_COLORS.length]}
+                            />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
 
-            {/* right cards */}
-            <div className="space-y-4">
-              <div className="rounded-xl border border-white/10 p-4">
-                <div className="text-sm opacity-70 mb-2">{t("topPlayer")}</div>
-                {topPlayer.name ? (
-                  <div className="flex items-center gap-3">
-                    <Avatar name={topPlayer.name} />
-                    <div className="min-w-0">
-                      <div className="text-xl font-semibold truncate">
-                        {topPlayer.name}
-                      </div>
-                      <div className="text-sm opacity-80">
-                        {topPlayer.wins} {t("wins")}
-                      </div>
-                      <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                        <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1">
-                          <div className="opacity-70">{t("totalPrize")}</div>
-                          <div className="font-semibold">
-                            {fmtMoney(topPlayer.totalPrize)}
+                {/* right cards */}
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-white/10 p-4">
+                    <div className="text-sm opacity-70 mb-2">{t("topPlayer")}</div>
+                    {topPlayer.name ? (
+                      <div className="flex items-center gap-3">
+                        <Avatar name={topPlayer.name} />
+                        <div className="min-w-0">
+                          <div className="text-xl font-semibold truncate">
+                            {topPlayer.name}
+                          </div>
+                          <div className="text-sm opacity-80">
+                            {topPlayer.wins} {t("wins")}
+                          </div>
+                          <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                            <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1">
+                              <div className="opacity-70">{t("totalPrize")}</div>
+                              <div className="font-semibold">
+                                {fmtMoney(topPlayer.totalPrize)}
+                              </div>
+                            </div>
+                            <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1">
+                              <div className="opacity-70">{t("lastPrize")}</div>
+                              <div className="font-semibold">
+                                {fmtMoney(topPlayer.lastPrize)}
+                              </div>
+                            </div>
                           </div>
                         </div>
-                        <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1">
-                          <div className="opacity-70">{t("lastPrize")}</div>
-                          <div className="font-semibold">
-                            {fmtMoney(topPlayer.lastPrize)}
+                      </div>
+                    ) : (
+                      <div className="text-sm opacity-60">—</div>
+                    )}
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 p-4">
+                    <div className="text-sm opacity-70 mb-2">{t("lastWinner")}</div>
+                    {lastWinner.player ? (
+                      <div className="flex items-start gap-3">
+                        <Avatar name={lastWinner.player} />
+                        <div>
+                          <div className="text-sm">
+                            <span className="opacity-70">{t("player")}: </span>
+                            <span className="font-medium">{lastWinner.player}</span>
+                          </div>
+                          <div className="text-sm">
+                            <span className="opacity-70">{t("slot")}: </span>
+                            <span className="font-medium">{lastWinner.slot || "—"}</span>
                           </div>
                         </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="text-sm opacity-60">—</div>
+                    )}
                   </div>
-                ) : (
-                  <div className="text-sm opacity-60">—</div>
+                </div>
+              </div>
+            </AccentCard>
+
+            {/* Table */}
+            <AccentBox>
+              <div
+                className={cn(
+                  "grid grid-cols-12 px-3 py-2 text-[12px] font-semibold",
+                  isDark ? "bg-white/[0.06]" : "bg-zinc-50"
                 )}
+              >
+                <button
+                  onClick={() => toggleSort("no")}
+                  className="col-span-1 text-left flex items-center"
+                >
+                  {t("no")} {sort.key === "no" && <SortIcon dir={sort.dir} />}
+                </button>
+                <button
+                  onClick={() => toggleSort("title")}
+                  className="col-span-7 text-left flex items-center"
+                >
+                  {t("name")} {sort.key === "title" && <SortIcon dir={sort.dir} />}
+                </button>
+                <div className="col-span-2 text-center">{t("prizes")}</div>
+                <div className="col-span-2 text-right">{t("actions")}</div>
               </div>
 
-              <div className="rounded-xl border border-white/10 p-4">
-                <div className="text-sm opacity-70 mb-2">{t("lastWinner")}</div>
-                {lastWinner.player ? (
-                  <div className="flex items-start gap-3">
-                    <Avatar name={lastWinner.player} />
-                    <div>
-                      <div className="text-sm">
-                        <span className="opacity-70">{t("player")}: </span>
-                        <span className="font-medium">{lastWinner.player}</span>
-                      </div>
-                      <div className="text-sm">
-                        <span className="opacity-70">{t("slot")}: </span>
-                        <span className="font-medium">{lastWinner.slot || "—"}</span>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-sm opacity-60">—</div>
-                )}
-              </div>
-            </div>
-          </div>
-        </AccentCard>
+              {busy && (
+                <div className="px-4 py-6 text-sm opacity-70 flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+                </div>
+              )}
 
-        {/* Table (accent azul + No. à esquerda) */}
-        <AccentBox>
-          <div
-            className={cn(
-              "grid grid-cols-12 px-3 py-2 text-[12px] font-semibold",
-              isDark ? "bg-white/[0.06]" : "bg-zinc-50"
-            )}
-          >
-            <button
-              onClick={() => toggleSort("no")}
-              className="col-span-1 text-left flex items-center"
-            >
-              {t("no")} {sort.key === "no" && <SortIcon dir={sort.dir} />}
-            </button>
-            <button
-              onClick={() => toggleSort("title")}
-              className="col-span-7 text-left flex items-center"
-            >
-              {t("name")} {sort.key === "title" && <SortIcon dir={sort.dir} />}
-            </button>
-            <div className="col-span-2 text-center">{t("prizes")}</div>
-            <div className="col-span-2 text-right">{t("actions")}</div>
-          </div>
+              {err && !busy && (
+                <div className="px-4 py-3 text-sm text-red-400">{err}</div>
+              )}
+              {!busy && filtered.length === 0 && !err && (
+                <div className="px-4 py-6 text-sm opacity-70">{t("empty")}</div>
+              )}
 
-          {busy && (
-            <div className="px-4 py-6 text-sm opacity-70 flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-            </div>
-          )}
+              {!busy && filtered.length > 0 && (
+                <div className="divide-y divide-white/10">
+                  {filtered.map((r) => {
+                    const title = r.title || r.name || "—";
+                    const prizes = prizesMap.get(r.id) || { 1: null, 2: null, 3: null };
+                    const no = userNoById.get(r.id) ?? "—";
 
-          {err && !busy && (
-            <div className="px-4 py-3 text-sm text-red-400">{err}</div>
-          )}
-          {!busy && filtered.length === 0 && !err && (
-            <div className="px-4 py-6 text-sm opacity-70">{t("empty")}</div>
-          )}
+                    return (
+                      <div
+                        key={r.id}
+                        className="grid grid-cols-12 items-center px-3 py-3 hover:bg-white/[0.06] transition-colors"
+                      >
+                        {/* No. */}
+                        <div className="col-span-1">{no}</div>
 
-          {!busy && filtered.length > 0 && (
-            <div className="divide-y divide-white/10">
-              {filtered.map((r) => {
-                const title = r.title || r.name || "—";
-                const prizes = prizesMap.get(r.id) || { 1: null, 2: null, 3: null };
-                const no = userNoById.get(r.id) ?? "—";
+                        {/* Title + description */}
+                        <div className="col-span-7 min-w-0">
+                          <div className="font-medium truncate">{title}</div>
+                          <div className="text-xs opacity-70 truncate">
+                            {r.description || ""}
+                          </div>
+                        </div>
 
-                return (
-                  <div
-                    key={r.id}
-                    className="grid grid-cols-12 items-center px-3 py-3 hover:bg-white/[0.06] transition-colors"
-                  >
-                    {/* No. */}
-                    <div className="col-span-1">{no}</div>
-
-                    {/* Title + description */}
-                    <div className="col-span-7 min-w-0">
-                      <div className="font-medium truncate">{title}</div>
-                      <div className="text-xs opacity-70 truncate">
-                        {r.description || ""}
-                      </div>
-                    </div>
-
-                    {/* Prizes */}
-                    <div
-                      className={cn(
-                        "col-span-2 flex items-center justify-center gap-2",
-                        numCls
-                      )}
-                    >
-                      <PrizeBadge kind={1} value={prizes[1]} />
-                      <PrizeBadge kind={2} value={prizes[2]} />
-                      <PrizeBadge kind={3} value={prizes[3]} />
-                    </div>
-
-                    {/* Actions */}
-                    <div className="col-span-2">
-                      <div className="flex justify-end gap-1.5">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-8 w-8"
-                          title={t("open")}
-                          onClick={() => {
-                            window.location.hash = `#/tournaments/${r.id}`;
-                          }}
+                        {/* Prizes */}
+                        <div
+                          className={cn(
+                            "col-span-2 flex items-center justify-center gap-2",
+                            numCls
+                          )}
                         >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-8 w-8"
-                          title={t("edit")}
-                          onClick={() => {
-                            setEditRow(r);
-                            setModalOpen(true);
-                          }}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="icon"
-                          className="h-8 w-8 text-white"
-                          title={t("delete")}
-                          onClick={() => askDelete(r)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </AccentBox>
+                          <PrizeBadge kind={1} value={prizes[1]} />
+                          <PrizeBadge kind={2} value={prizes[2]} />
+                          <PrizeBadge kind={3} value={prizes[3]} />
+                        </div>
 
-        {/* Modals */}
-        <UpsertTournamentModal
-          open={modalOpen}
-          initial={editRow}
-          onClose={() => setModalOpen(false)}
-          onSaved={load}
-        />
-        <Confirm
-          open={confirmOpen}
-          title={t("delete")}
-          body="Are you sure you want to delete this tournament? This cannot be undone."
-          confirmText={t("confirm")}
-          cancelText={t("cancel")}
-          onConfirm={confirmDelete}
-          onCancel={() => setConfirmOpen(false)}
-        />
+                        {/* Actions */}
+                        <div className="col-span-2">
+                          <div className="flex justify-end gap-1.5">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8"
+                              title={t("open")}
+                              onClick={() => {
+                                window.location.hash = `#/tournaments/${r.id}`;
+                              }}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8"
+                              title={t("edit")}
+                              onClick={() => {
+                                setEditRow(r);
+                                setModalOpen(true);
+                              }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="icon"
+                              className="h-8 w-8 text-white"
+                              title={t("delete")}
+                              onClick={() => askDelete(r)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </AccentBox>
+
+            {/* Modals (PLUS apenas) */}
+            <UpsertTournamentModal
+              open={modalOpen}
+              initial={editRow}
+              onClose={() => setModalOpen(false)}
+              onSaved={load}
+            />
+            <Confirm
+              open={confirmOpen}
+              title={t("delete")}
+              body="Are you sure you want to delete this tournament? This cannot be undone."
+              confirmText={t("confirm")}
+              cancelText={t("cancel")}
+              onConfirm={confirmDelete}
+              onCancel={() => setConfirmOpen(false)}
+            />
+          </>
+        )}
       </div>
     </section>
   );
