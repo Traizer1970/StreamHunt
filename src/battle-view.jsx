@@ -33,21 +33,38 @@ const fmtMoney = (n) =>
       }).format(Number(n))
     : "—";
 
-/* Tema por defeito do widget (customizável) */
+/* Tema por defeito (tudo customizável no Designer) */
 const DEFAULT_THEME = {
   bgStart: "#0b1020",
   bgEnd: "#111827",
-  panelBg: "rgba(255,255,255,0.06)",
   panelBorder: "rgba(255,255,255,0.12)",
   text: "#e5e7eb",
   subtext: "#9ca3af",
-  accent: "#60a5fa",
+  accent: "#7dd3fc",
+
+  // chips (buys)
   chipBg: "rgba(255,255,255,0.08)",
   chipBorder: "rgba(255,255,255,0.18)",
-  pos: "#34d399",
-  neg: "#f87171",
+  chipRadius: 12,
+
+  // badges (Best of / Bonus Buy)
+  badgeBg: "rgba(255,255,255,0.08)",
+  badgeBorder: "rgba(255,255,255,0.18)",
+
+  // total ribbon
+  totalBg: "rgba(255,255,255,0.10)",
+  totalBorder: "rgba(255,255,255,0.18)",
+
+  // semantic
+  pos: "#22c55e",
+  neg: "#ef4444",
   vsBg: "rgba(99,102,241,0.35)",
+
+  // layout / tipografia
   radius: 18,
+  fontFamily:
+    "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji','Segoe UI Emoji'",
+  fontScale: 100, // %
   showThumbs: true,
   shine: true,
   pulse: true,
@@ -63,7 +80,7 @@ const PRESETS = [
   { name: "Twilight", t: { bgStart: "#0b1b3a", bgEnd: "#112a46", accent: "#7dd3fc", pos: "#22c55e", neg: "#fb7185", vsBg: "rgba(125,211,252,0.30)" } },
 ];
 
-/* helpers: tema em localStorage */
+/* theme storage */
 const THEME_KEY = (id) => `battle_theme_${id}`;
 const loadTheme = (battleId) => {
   try {
@@ -79,7 +96,7 @@ const saveTheme = (battleId, theme) => {
   } catch {}
 };
 
-/* Enriquecer slot com thumbnail/provider */
+/* enriquecer slot */
 async function enrichSlotInfo(slot) {
   if (!slot) return slot;
   if (slot.thumbnail && slot.provider) return slot;
@@ -88,14 +105,12 @@ async function enrichSlotInfo(slot) {
     if (slot.id) q = q.eq("id", slot.id);
     else if (slot.name) q = q.ilike("NAME", `%${slot.name}%`);
     const { data } = await q.maybeSingle();
-    if (data) {
-      return { id: data.id, name: data["NAME"], provider: data["PROVIDER"], thumbnail: data["THUMBNAIL"] };
-    }
+    if (data) return { id: data.id, name: data["NAME"], provider: data["PROVIDER"], thumbnail: data["THUMBNAIL"] };
   } catch {}
   return slot;
 }
 
-/* ─────────────────── UI blocks ─────────────────── */
+/* ───────────────── UI blocks ───────────────── */
 function AccentCard({ title, children, className }) {
   const { isDark } = useTheme();
   return (
@@ -127,7 +142,7 @@ function useDebounced(v, delay) {
   return s;
 }
 
-/* ───────────────────────── SlotsAutocomplete ───────────────────────── */
+/* ───────────────── SlotsAutocomplete ───────────────── */
 function SlotsAutocomplete({ value, onSelect, placeholder = "Add a Slot" }) {
   const { isDark } = useTheme();
   const [open, setOpen] = React.useState(false);
@@ -268,7 +283,7 @@ function SlotsAutocomplete({ value, onSelect, placeholder = "Add a Slot" }) {
   );
 }
 
-/* ───────────────── Preview do Widget (chips melhoradas) ───────────────── */
+/* ───────── Preview Panel (clean, subtotais em boxes, badges minimal) ───────── */
 function WidgetPreviewPanel({
   theme,
   bestOf,
@@ -287,21 +302,24 @@ function WidgetPreviewPanel({
   const Chip = ({ amount, ok, i }) => (
     <span
       key={i}
-      className="inline-flex items-center gap-1.5 rounded-[10px] px-3 py-1 text-[12px] font-bold mr-2 mb-2 shadow-[0_0_0_1px_rgba(0,0,0,0.25)_inset,0_8px_24px_rgba(0,0,0,.45)]"
+      className="inline-flex items-center gap-1.5 px-3 py-1 font-semibold mr-2 mb-2 shadow-[0_0_0_1px_rgba(0,0,0,0.25)_inset,0_6px_18px_rgba(0,0,0,.36)]"
       style={{
-        background: ok
-          ? `linear-gradient(180deg, ${theme.pos}33, ${theme.pos}1F)`
-          : `linear-gradient(180deg, ${theme.neg}33, ${theme.neg}1F)`,
+        borderRadius: theme.chipRadius,
+        background: ok ? `${theme.pos}1F` : `${theme.neg}1F`,
         border: `1px solid ${ok ? theme.pos : theme.neg}`,
         color: ok ? theme.pos : theme.neg,
         animation: theme.pulse ? `pop .16s ease-out both` : "none",
         animationDelay: `${i * 45}ms`,
+        fontSize: `calc(12px * ${theme.fontScale / 100})`,
       }}
-      title={ok ? "Covers buy cost" : "Below buy cost"}
+      title={ok ? "Cobre o buy" : "Abaixo do buy"}
     >
       <span
         className="h-1.5 w-1.5 rounded-full"
-        style={{ background: ok ? theme.pos : theme.neg, boxShadow: `0 0 0 2px ${ok ? theme.pos : theme.neg}22` }}
+        style={{
+          background: ok ? theme.pos : theme.neg,
+          boxShadow: `0 0 0 2px ${ok ? theme.pos : theme.neg}26`,
+        }}
       />
       {fmtMoney(Number(amount || 0))}
     </span>
@@ -322,6 +340,8 @@ function WidgetPreviewPanel({
           border: `1px solid ${theme.panelBorder}`,
           borderRadius: theme.radius,
           color: theme.text,
+          fontFamily: theme.fontFamily,
+          fontSize: `${theme.fontScale}%`,
           animation: "glow .3s ease-out both",
         }}
       >
@@ -332,26 +352,25 @@ function WidgetPreviewPanel({
           />
         )}
 
-        {/* Header badges */}
+        {/* Badges clean */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <div
-              className="px-3 py-1.5 rounded-full text-sm font-bold"
-              style={{ background: theme.chipBg, border: `1px solid ${theme.chipBorder}`, color: theme.text }}
+              className="px-3 py-1.5 rounded-full text-[12px] font-semibold"
+              style={{ background: theme.badgeBg, border: `1px solid ${theme.badgeBorder}`, color: theme.text }}
             >
-              Best of {bestOf}
+              Best of <span className="font-bold ml-1">{bestOf}</span>
             </div>
             <div
-              className="px-3 py-1.5 rounded-full text-sm font-bold"
-              style={{ background: theme.chipBg, border: `1px solid ${theme.chipBorder}`, color: theme.accent }}
+              className="px-3 py-1.5 rounded-full text-[12px] font-semibold"
+              style={{ background: theme.badgeBg, border: `1px solid ${theme.badgeBorder}`, color: theme.accent }}
             >
-              Bonus Buy {fmtMoney(buyCost)}
+              Bonus Buy <span className="font-bold ml-1">{fmtMoney(buyCost)}</span>
             </div>
           </div>
-          {/* sem profit aqui, como pedido */}
         </div>
 
-        {/* Players row */}
+        {/* Players */}
         <div className="mt-5 grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-5">
           <div className="flex items-center justify-end gap-3">
             <div className="min-w-0 text-right">
@@ -363,7 +382,10 @@ function WidgetPreviewPanel({
               </div>
             </div>
             {theme.showThumbs && (
-              <div className="h-14 w-14 rounded-xl overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder }}>
+              <div
+                className="h-14 w-14 rounded-xl overflow-hidden ring-1 bg-white/5"
+                style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}
+              >
                 {sideA?.thumbnail ? <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
               </div>
             )}
@@ -380,7 +402,10 @@ function WidgetPreviewPanel({
 
           <div className="flex items-center gap-3">
             {theme.showThumbs && (
-              <div className="h-14 w-14 rounded-xl overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder }}>
+              <div
+                className="h-14 w-14 rounded-xl overflow-hidden ring-1 bg-white/5"
+                style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}
+              >
                 {sideB?.thumbnail ? <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
               </div>
             )}
@@ -395,50 +420,60 @@ function WidgetPreviewPanel({
           </div>
         </div>
 
-        {/* Buys */}
+        {/* Chips + subtotais (em boxes) */}
         <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
           <div>
-            <div className="text-[12px] mb-2" style={{ color: theme.subtext }}>
-              Buys (Side A)
-            </div>
             <div className="flex flex-wrap">
               {aPays.map((p, i) => (
                 <Chip key={`a-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
               ))}
             </div>
-            <div className="mt-2 text-xs" style={{ color: theme.subtext }}>
-              Subtotal:{" "}
-              <span className="font-semibold" style={{ color: theme.text }}>
+            <div
+              className="inline-flex mt-3 items-center gap-2 px-3 py-1.5 text-[12px] font-semibold"
+              style={{
+                background: theme.chipBg,
+                border: `1px solid ${theme.chipBorder}`,
+                borderRadius: theme.radius,
+                color: theme.subtext,
+              }}
+            >
+              <span>Subtotal</span>
+              <span className="font-bold" style={{ color: theme.text }}>
                 {fmtMoney(aTotal)}
               </span>
             </div>
           </div>
 
           <div>
-            <div className="text-[12px] mb-2" style={{ color: theme.subtext }}>
-              Buys (Side B)
-            </div>
             <div className="flex flex-wrap">
               {bPays.map((p, i) => (
                 <Chip key={`b-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
               ))}
             </div>
-            <div className="mt-2 text-xs" style={{ color: theme.subtext }}>
-              Subtotal:{" "}
-              <span className="font-semibold" style={{ color: theme.text }}>
+            <div
+              className="inline-flex mt-3 items-center gap-2 px-3 py-1.5 text-[12px] font-semibold"
+              style={{
+                background: theme.chipBg,
+                border: `1px solid ${theme.chipBorder}`,
+                borderRadius: theme.radius,
+                color: theme.subtext,
+              }}
+            >
+              <span>Subtotal</span>
+              <span className="font-bold" style={{ color: theme.text }}>
                 {fmtMoney(bTotal)}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Ribbon total (sem Profit) */}
+        {/* Total Pay clean */}
         <div className="mt-6 flex justify-center">
           <div
-            className="px-4 py-1.5 rounded-full text-sm font-bold shadow-[0_10px_30px_rgba(0,0,0,.35)]"
+            className="px-4 py-2 rounded-full text-sm font-extrabold shadow-[0_10px_30px_rgba(0,0,0,.35)]"
             style={{
-              background: theme.chipBg,
-              border: `1px solid ${theme.chipBorder}`,
+              background: theme.totalBg,
+              border: `1px solid ${theme.totalBorder}`,
               color: theme.accent,
             }}
           >
@@ -450,7 +485,7 @@ function WidgetPreviewPanel({
   );
 }
 
-/* ───────────── Color field (com picker nativo) ───────────── */
+/* ───────── Color field (com color picker nativo) ───────── */
 function ColorField({ label, value, onChange }) {
   const ref = React.useRef(null);
   return (
@@ -459,13 +494,13 @@ function ColorField({ label, value, onChange }) {
       <div className="flex items-center gap-3">
         <button type="button" onClick={() => ref.current?.click()} className="h-9 w-9 rounded-lg border border-white/10 shadow-inner" style={{ background: value }} />
         <Input value={value} onChange={(e) => onChange(e.target.value)} className="h-9 bg-zinc-900 border-white/10 text-white" />
-        <input ref={ref} type="color" value={value} onChange={(e) => onChange(e.target.value)} className="sr-only" />
+        <input ref={ref} type="color" value={value.startsWith("#") ? value : "#ffffff"} onChange={(e) => onChange(e.target.value)} className="sr-only" />
       </div>
     </div>
   );
 }
 
-/* ───────────────────────── Designer (overlay) ───────────────────────── */
+/* ───────── Designer (overlay com mais controlos) ───────── */
 function WidgetDesigner({ open, onClose, battleId, theme, setTheme, previewProps }) {
   if (!open) return null;
   return (
@@ -488,7 +523,7 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, previewProps
         </div>
       </div>
 
-      <div className="absolute inset-x-0 top-14 bottom-0 grid lg:grid-cols-[430px_1fr]">
+      <div className="absolute inset-x-0 top-14 bottom-0 grid lg:grid-cols-[460px_1fr]">
         <div className="border-r border-white/10 bg-zinc-950/70 overflow-auto">
           <div className="p-4 space-y-4">
             <div className="rounded-xl border border-white/10 bg-white/5 p-3">
@@ -511,28 +546,43 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, previewProps
             <div className="grid grid-cols-1 gap-4">
               <ColorField label="Background start" value={theme.bgStart} onChange={(v) => setTheme((t) => ({ ...t, bgStart: v }))} />
               <ColorField label="Background end" value={theme.bgEnd} onChange={(v) => setTheme((t) => ({ ...t, bgEnd: v }))} />
-              <ColorField label="Panel border" value={theme.panelBorder} onChange={(v) => setTheme((t) => ({ ...t, panelBorder: v }))} />
+              <ColorField label="Panel/Line border" value={theme.panelBorder} onChange={(v) => setTheme((t) => ({ ...t, panelBorder: v }))} />
               <ColorField label="Text" value={theme.text} onChange={(v) => setTheme((t) => ({ ...t, text: v }))} />
               <ColorField label="Subtext" value={theme.subtext} onChange={(v) => setTheme((t) => ({ ...t, subtext: v }))} />
               <ColorField label="Accent" value={theme.accent} onChange={(v) => setTheme((t) => ({ ...t, accent: v }))} />
+
               <ColorField label="Chip bg" value={theme.chipBg} onChange={(v) => setTheme((t) => ({ ...t, chipBg: v }))} />
               <ColorField label="Chip border" value={theme.chipBorder} onChange={(v) => setTheme((t) => ({ ...t, chipBorder: v }))} />
-              <ColorField label="Profit +" value={theme.pos} onChange={(v) => setTheme((t) => ({ ...t, pos: v }))} />
-              <ColorField label="Profit −" value={theme.neg} onChange={(v) => setTheme((t) => ({ ...t, neg: v }))} />
+              <ColorField label="OK (verde)" value={theme.pos} onChange={(v) => setTheme((t) => ({ ...t, pos: v }))} />
+              <ColorField label="NOK (vermelho)" value={theme.neg} onChange={(v) => setTheme((t) => ({ ...t, neg: v }))} />
+
+              <ColorField label="Badge bg" value={theme.badgeBg} onChange={(v) => setTheme((t) => ({ ...t, badgeBg: v }))} />
+              <ColorField label="Badge border" value={theme.badgeBorder} onChange={(v) => setTheme((t) => ({ ...t, badgeBorder: v }))} />
+              <ColorField label="Total bg" value={theme.totalBg} onChange={(v) => setTheme((t) => ({ ...t, totalBg: v }))} />
+              <ColorField label="Total border" value={theme.totalBorder} onChange={(v) => setTheme((t) => ({ ...t, totalBorder: v }))} />
               <ColorField label="VS bg" value={theme.vsBg} onChange={(v) => setTheme((t) => ({ ...t, vsBg: v }))} />
             </div>
 
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-              <div className="text-xs opacity-70 mb-1">Border radius</div>
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
+              <div className="text-xs opacity-70">Layout</div>
+              <label className="block text-sm">Border radius: {theme.radius}px</label>
               <input type="range" min={8} max={28} step={1} value={theme.radius} onChange={(e) => setTheme((t) => ({ ...t, radius: Number(e.target.value) }))} className="w-full" />
-              <div className="text-xs mt-1 opacity-70">{theme.radius}px</div>
-              <div className="h-2" />
+
+              <label className="block text-sm">Chip radius: {theme.chipRadius}px</label>
+              <input type="range" min={8} max={20} step={1} value={theme.chipRadius} onChange={(e) => setTheme((t) => ({ ...t, chipRadius: Number(e.target.value) }))} className="w-full" />
+
+              <label className="block text-sm">Font size: {theme.fontScale}%</label>
+              <input type="range" min={80} max={130} step={1} value={theme.fontScale} onChange={(e) => setTheme((t) => ({ ...t, fontScale: Number(e.target.value) }))} className="w-full" />
+
+              <label className="block text-sm">Font family</label>
+              <Input value={theme.fontFamily} onChange={(e) => setTheme((t) => ({ ...t, fontFamily: e.target.value }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
+
               {[
                 ["showThumbs", "Show thumbnails"],
                 ["shine", "Shine sweep"],
                 ["pulse", "VS/Chips pulse"],
               ].map(([k, label]) => (
-                <label key={k} className="flex items-center gap-2 text-sm mb-1">
+                <label key={k} className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={!!theme[k]} onChange={(e) => setTheme((t) => ({ ...t, [k]: e.target.checked }))} />
                   {label}
                 </label>
@@ -567,19 +617,8 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, previewProps
   );
 }
 
-/* ───────────────── Widget Card (Preview + Designer) ───────────────── */
-function WidgetCard({
-  battleId,
-  sideA,
-  sideB,
-  playerA,
-  playerB,
-  bestOf,
-  buyCost,
-  totalPay,
-  aPays = [],
-  bPays = [],
-}) {
+/* ───────── Widget Card (Preview + Designer) ───────── */
+function WidgetCard({ battleId, sideA, sideB, playerA, playerB, bestOf, buyCost, totalPay, aPays = [], bPays = [] }) {
   const [theme, setTheme] = React.useState(() => loadTheme(battleId));
   React.useEffect(() => setTheme(loadTheme(battleId)), [battleId]);
   const [openDesigner, setOpenDesigner] = React.useState(false);
@@ -611,14 +650,7 @@ function WidgetCard({
         <WidgetPreviewPanel theme={theme} {...previewProps} />
       </AccentCard>
 
-      <WidgetDesigner
-        open={openDesigner}
-        onClose={() => setOpenDesigner(false)}
-        battleId={battleId}
-        theme={theme}
-        setTheme={(t) => setTheme(typeof t === "function" ? t(theme) : t)}
-        previewProps={previewProps}
-      />
+      <WidgetDesigner open={openDesigner} onClose={() => setOpenDesigner(false)} battleId={battleId} theme={theme} setTheme={setTheme} previewProps={previewProps} />
     </>
   );
 }
@@ -864,16 +896,12 @@ export default function BattleView() {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-semibold">Battle {row ? `#${row.id}` : ""}</h1>
-            {row?.status ? (
-              <span className="ml-2 text-xs rounded-lg border border-white/10 bg-white/5 px-2 py-0.5">{row.status}</span>
-            ) : null}
+            {row?.status ? <span className="ml-2 text-xs rounded-lg border border-white/10 bg-white/5 px-2 py-0.5">{row.status}</span> : null}
           </div>
           <div className="text-sm opacity-70">{row?.created_at ? new Date(row.created_at).toLocaleDateString() : ""}</div>
         </div>
 
-        {err ? (
-          <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{err}</div>
-        ) : null}
+        {err ? <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{err}</div> : null}
 
         {/* grid */}
         <div className="grid lg:grid-cols-[520px_1fr] gap-6">
