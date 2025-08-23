@@ -47,7 +47,6 @@ const DICT = {
 const t = (k) => DICT.en[k] || k;
 
 /* ───────────────────────── utils ───────────────────────── */
-const TOP3_COLORS = ["#6366F1", "#22C55E", "#F59E0B"]; // indigo, green, amber
 const LOCALE = "pt-PT";
 const CURRENCY = "EUR";
 const numCls = "tabular-nums whitespace-nowrap";
@@ -386,6 +385,7 @@ export default function TournamentsPage() {
   React.useEffect(() => { load(); }, [load]);
 
   // compute chart + top player + last winner
+// --- substitui a função computeInsights existente por esta ---
 async function computeInsights(tournaments) {
   try {
     if (!tournaments?.length) {
@@ -403,7 +403,7 @@ async function computeInsights(tournaments) {
       return;
     }
 
-    // Lê entradas, pagamentos e prémios (1º lugar) para estes torneios
+    // LER TUDO e depois mapear colunas que existirem
     const { data: entries, error: e1 } = await supabase
       .from("tournament_entries")
       .select("*")
@@ -425,13 +425,13 @@ async function computeInsights(tournaments) {
       .limit(5000);
     if (e3) throw e3;
 
-    // Índices auxiliares
+    // map por torneio
     const byTournamentEntries = new Map();
     for (const r of entries || []) {
       const arr = byTournamentEntries.get(r.tournament_id) || [];
       arr.push({
         seed: r.seed,
-        player_name: r.player ?? r.player_name ?? "",
+        player_name: r.player ?? r.player_name ?? "", // suporta ambas
         slot_name: r.slot_name ?? "",
         slot_id: r.slot_id ?? null,
       });
@@ -445,7 +445,7 @@ async function computeInsights(tournaments) {
       byTournamentPays.set(p.tournament_id, arr);
     }
 
-    // Descobrir vencedor de cada torneio
+    // vencedores por torneio
     const winners = [];
     for (const t of tournaments) {
       const w = computeTournamentWinner(
@@ -455,54 +455,23 @@ async function computeInsights(tournaments) {
       if (w) winners.push({ tournament_id: t.id, player: w.player_name || "", slot: w.slot_name || "" });
     }
 
-    // Map vitórias por slot
-    const slotWins = new Map();
-    for (const w of winners) {
-      const name = w.slot || "—";
-      slotWins.set(name, (slotWins.get(name) || 0) + 1);
-    }
-
-    // Candidatos ordenados por vitórias
-    const orderedWins = [...slotWins.entries()]
+    // TOP 3 slots
+    const slotCount = new Map();
+    for (const w of winners) slotCount.set(w.slot, (slotCount.get(w.slot) || 0) + 1);
+    const topSlots = [...slotCount.entries()]
       .sort((a, b) => b[1] - a[1])
-      .map(([name, wins]) => ({ name, wins }));
-
-    // Se faltar para 3, preencher com slots mais frequentes em entradas (0 wins)
-    if (orderedWins.length < 3) {
-      const entryFreq = new Map();
-      for (const e of entries || []) {
-        const nm = (e.slot_name || "").trim();
-        if (!nm) continue;
-        entryFreq.set(nm, (entryFreq.get(nm) || 0) + 1);
-      }
-      const candidatesByAppear = [...entryFreq.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .map(([nm]) => nm);
-
-      for (const nm of candidatesByAppear) {
-        if (orderedWins.length >= 3) break;
-        if (!orderedWins.some((x) => x.name === nm)) {
-          orderedWins.push({ name: nm, wins: 0 });
-        }
-      }
-      // Se mesmo assim não chegar, coloca placeholders
-      while (orderedWins.length < 3) orderedWins.push({ name: "—", wins: 0 });
-    }
-
-    // Top 3 final
-    const topSlots = orderedWins.slice(0, 3);
+      .slice(0, 3)
+      .map(([name, wins]) => ({ name: name || "—", wins }));
     setChartData(topSlots);
 
-    // Top player (wins)
-    const playerWins = new Map();
-    for (const w of winners) {
-      playerWins.set(w.player, (playerWins.get(w.player) || 0) + 1);
-    }
-    const topP = [...playerWins.entries()].sort((a, b) => b[1] - a[1])[0];
+    // TOP player (wins)
+    const playerCount = new Map();
+    for (const w of winners) playerCount.set(w.player, (playerCount.get(w.player) || 0) + 1);
+    const topP = [...playerCount.entries()].sort((a, b) => b[1] - a[1])[0];
     const topPlayerName = topP?.[0] || "";
     const topPlayerWins = topP?.[1] || 0;
 
-    // Prémios (1º lugar em tournament_prizes; fallback prize_pool)
+    // prémios (1º lugar em tournament_prizes; fallback prize_pool)
     const prizeByTournament = new Map();
     for (const r of prizeRows || []) {
       if (Number(r.position) === 1) prizeByTournament.set(r.tournament_id, Number(r.amount) || 0);
@@ -519,7 +488,7 @@ async function computeInsights(tournaments) {
       if (w.player === topPlayerName) totalPrize += prizeByTournament.get(w.tournament_id) || 0;
     }
 
-    // Último vencedor (primeiro na lista ordenada por created_at desc)
+    // último vencedor (torneio mais recente com winner)
     let last = null;
     for (const t of tournaments) {
       const w = winners.find((x) => x.tournament_id === t.id);
@@ -637,12 +606,16 @@ async function computeInsights(tournaments) {
             <div className="text-sm opacity-70 mb-2">{t("topSlots")}</div>
             <div className="h-[260px]">
               <ResponsiveContainer width="100%" height="100%">
-                <Bar dataKey="wins" radius={[8, 8, 0, 0]}>
-  {chartData.map((_, idx) => (
-    <Cell key={`cell-${idx}`} fill={TOP3_COLORS[idx % TOP3_COLORS.length]} />
-  ))}
-</Bar>
-
+                <BarChart data={chartData}>
+                  <XAxis dataKey="name" tick={{ fill: "currentColor" }} />
+                  <YAxis tick={{ fill: "currentColor" }} allowDecimals={false} />
+                  <Tooltip content={<NiceTooltip />} />
+                  <Bar dataKey="wins" radius={[6,6,0,0]}>
+                    {chartData.map((_, i) => (
+                      <Cell key={`cell-${i}`} fill={BAR_COLORS[i % BAR_COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
