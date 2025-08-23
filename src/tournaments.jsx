@@ -5,7 +5,16 @@ import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Plus, Search, ChevronDown, ChevronUp, Loader2, Pencil, Trash2, Trophy, Eye, Crown
+  Plus,
+  Search,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  Pencil,
+  Trash2,
+  Trophy,
+  Eye,
+  Crown,
 } from "lucide-react";
 
 /* ───────────────────────── i18n ───────────────────────── */
@@ -37,7 +46,7 @@ const DICT = {
     lastPrize: "Last prize won",
     prizes: "Prizes",
   },
-  pt: {}
+  pt: {},
 };
 const t = (k) => DICT.en[k] || k;
 
@@ -59,18 +68,44 @@ const toNum = (v) => {
   const n = Number(String(v ?? "").replace(",", "."));
   return Number.isFinite(n) ? n : null;
 };
-const ceilPow2 = (n) => { let p = 1; while (p < Math.max(1, n)) p <<= 1; return p; };
-const lettersFromIndex = (idx) => { let n = idx + 1, s = ""; while (n > 0){ n--; s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n/26);} return s; };
-const indexFromLetters = (s) => { let n = 0; for (const ch of String(s).toUpperCase()) n = n*26 + (ch.charCodeAt(0) - 64); return n-1; };
+const ceilPow2 = (n) => {
+  let p = 1;
+  while (p < Math.max(1, n)) p <<= 1;
+  return p;
+};
+const lettersFromIndex = (idx) => {
+  let n = idx + 1,
+    s = "";
+  while (n > 0) {
+    n--;
+    s = String.fromCharCode(65 + (n % 26)) + s;
+    n = Math.floor(n / 26);
+  }
+  return s;
+};
+const indexFromLetters = (s) => {
+  let n = 0;
+  for (const ch of String(s).toUpperCase())
+    n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n - 1;
+};
 function useDebounced(v, delay = 300) {
   const [s, setS] = React.useState(v);
-  React.useEffect(() => { const id = setTimeout(() => setS(v), delay); return () => clearTimeout(id); }, [v, delay]);
+  React.useEffect(() => {
+    const id = setTimeout(() => setS(v), delay);
+    return () => clearTimeout(id);
+  }, [v, delay]);
   return s;
 }
 
 /* avatar placeholder */
 function Avatar({ name }) {
-  const initials = String(name || "?").split(/\s+/).map(p => p[0]).join("").slice(0,2).toUpperCase();
+  const initials = String(name || "?")
+    .split(/\s+/)
+    .map((p) => p[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
   return (
     <div className="h-8 w-8 rounded-full bg-gradient-to-br from-indigo-500 to-emerald-500 text-white grid place-items-center text-[11px] font-extrabold shadow ring-2 ring-black/20">
       {initials || "?"}
@@ -79,7 +114,15 @@ function Avatar({ name }) {
 }
 
 /* ───────────────────────── Recharts ───────────────────────── */
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from "recharts";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Cell,
+} from "recharts";
 const BAR_COLORS = ["#6366F1", "#22C55E", "#F59E0B"];
 
 function NiceTooltip({ active, payload, label }) {
@@ -89,13 +132,24 @@ function NiceTooltip({ active, payload, label }) {
     <div className="rounded-xl border border-white/10 bg-zinc-900/95 text-white px-3 py-2 shadow-2xl">
       <div className="text-xs opacity-70">{t("slot")}</div>
       <div className="text-sm font-semibold">{label}</div>
-      <div className="mt-1 text-xs"><span className="opacity-70">{t("wins")}:</span> <span className="font-semibold">{p.value}</span></div>
+      <div className="mt-1 text-xs">
+        <span className="opacity-70">{t("wins")}:</span>{" "}
+        <span className="font-semibold">{p.value}</span>
+      </div>
     </div>
   );
 }
 
 /* ───────────────────────── Confirm ───────────────────────── */
-function Confirm({ open, title, body, confirmText, cancelText, onConfirm, onCancel }) {
+function Confirm({
+  open,
+  title,
+  body,
+  confirmText,
+  cancelText,
+  onConfirm,
+  onCancel,
+}) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[95]">
@@ -105,13 +159,34 @@ function Confirm({ open, title, body, confirmText, cancelText, onConfirm, onCanc
           <div className="text-lg font-semibold mb-2">{title}</div>
           <div className="text-sm opacity-80 mb-5">{body}</div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onCancel}>{cancelText}</Button>
+            <Button variant="outline" onClick={onCancel}>
+              {cancelText}
+            </Button>
             <Button onClick={onConfirm}>{confirmText}</Button>
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+/* ───────────────────────── Helpers: next tournament number per user ───────────────────────── */
+async function getNextTournamentNo() {
+  const { data: auth, error: uErr } = await supabase.auth.getUser();
+  if (uErr) throw uErr;
+  const userId = auth?.user?.id || null;
+  if (!userId) return null;
+
+  const { data: last, error } = await supabase
+    .from("tournaments")
+    .select("no")
+    .eq("created_by", userId)
+    .order("no", { ascending: false })
+    .limit(1);
+
+  if (error) throw error;
+  const prev = last?.[0]?.no ?? 0;
+  return prev + 1;
 }
 
 /* ───────────────────────── Modal ───────────────────────── */
@@ -139,12 +214,16 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
           .from("tournament_prizes")
           .select("position,amount")
           .eq("tournament_id", initial.id);
-        const map = new Map((data || []).map(r => [Number(r.position), Number(r.amount) || 0]));
+        const map = new Map(
+          (data || []).map((r) => [Number(r.position), Number(r.amount) || 0])
+        );
         setP1(map.get(1) ?? "");
         setP2(map.get(2) ?? "");
         setP3(map.get(3) ?? "");
       } else {
-        setP1(""); setP2(""); setP3("");
+        setP1("");
+        setP2("");
+        setP3("");
       }
     })();
   }, [open, initial?.id, initial?.title, initial?.name, initial?.description, initial?.status]);
@@ -164,10 +243,23 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
 
       let id = initial?.id ?? null;
       if (id) {
-        const { error } = await supabase.from("tournaments").update(payload).eq("id", id);
+        // EDIT
+        const { error } = await supabase
+          .from("tournaments")
+          .update(payload)
+          .eq("id", id);
         if (error) throw error;
       } else {
-        const { data, error } = await supabase.from("tournaments").insert([payload]).select("id").single();
+        // CREATE — include per-user sequential number and created_by
+        const nextNo = await getNextTournamentNo();
+        const { data: auth } = await supabase.auth.getUser();
+        const created_by = auth?.user?.id || null;
+
+        const { data, error } = await supabase
+          .from("tournaments")
+          .insert([{ ...payload, no: nextNo, created_by }])
+          .select("id")
+          .single();
         if (error) throw error;
         id = data.id;
       }
@@ -203,12 +295,20 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
             <div className="text-lg font-semibold flex items-center gap-2">
               <Trophy className="h-5 w-5" /> {titleText}
             </div>
-            <button onClick={onClose} className="p-2 rounded-lg hover:bg-white/10 transition" aria-label="Close">✕</button>
+            <button
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-white/10 transition"
+              aria-label="Close"
+            >
+              ✕
+            </button>
           </div>
 
           <div className="space-y-6">
             <div>
-              <div className="text-[11px] font-semibold tracking-wide opacity-60 mb-2">DETAILS</div>
+              <div className="text-[11px] font-semibold tracking-wide opacity-60 mb-2">
+                DETAILS
+              </div>
               <div className="grid md:grid-cols-2 gap-3">
                 <div className="md:col-span-2">
                   <div className="text-xs opacity-70 mb-1">Title</div>
@@ -235,12 +335,16 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
                 </div>
 
                 <div className="md:col-span-2">
-                  <div className="text-[11px] font-semibold tracking-wide opacity-60 mb-2">PRIZES BY POSITION</div>
+                  <div className="text-[11px] font-semibold tracking-wide opacity-60 mb-2">
+                    PRIZES BY POSITION
+                  </div>
                   <div className="grid md:grid-cols-3 gap-3">
                     <div>
                       <div className="text-xs opacity-70 mb-1">1st place</div>
                       <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">€</span>
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">
+                          €
+                        </span>
                         <Input
                           inputMode="decimal"
                           type="number"
@@ -255,7 +359,9 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
                     <div>
                       <div className="text-xs opacity-70 mb-1">2nd place</div>
                       <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">€</span>
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">
+                          €
+                        </span>
                         <Input
                           inputMode="decimal"
                           type="number"
@@ -270,7 +376,9 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
                     <div>
                       <div className="text-xs opacity-70 mb-1">3rd place</div>
                       <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">€</span>
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">
+                          €
+                        </span>
                         <Input
                           inputMode="decimal"
                           type="number"
@@ -287,7 +395,9 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
                   <div className="mt-3">
                     <div className="text-xs opacity-70 mb-1">Prize pool (auto)</div>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">€</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">
+                        €
+                      </span>
                       <Input
                         readOnly
                         value={String(total).replace(".", ",")}
@@ -312,9 +422,13 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
           </div>
 
           <div className="mt-5 flex items-center justify-end gap-2">
-            <Button variant="outline" onClick={onClose}>{t("cancel")}</Button>
+            <Button variant="outline" onClick={onClose}>
+              {t("cancel")}
+            </Button>
             <Button onClick={save} disabled={busy}>
-              {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              {busy ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : null}
               {t("save")}
             </Button>
           </div>
@@ -329,10 +443,13 @@ function computeTournamentWinner(entries, paymentsRows) {
   if (!Array.isArray(entries) || entries.length < 2) return null;
 
   const bySeed = {};
-  entries.forEach((e) => { if (e?.seed) bySeed[e.seed] = e; });
+  entries.forEach((e) => {
+    if (e?.seed) bySeed[e.seed] = e;
+  });
 
-  const seedList = [...Object.keys(bySeed)]
-    .sort((a,b) => indexFromLetters(a) - indexFromLetters(b));
+  const seedList = [...Object.keys(bySeed)].sort(
+    (a, b) => indexFromLetters(a) - indexFromLetters(b)
+  );
 
   const p = Math.max(2, ceilPow2(seedList.length));
   const filled = [...seedList];
@@ -340,40 +457,62 @@ function computeTournamentWinner(entries, paymentsRows) {
 
   const payMap = {};
   for (const r of paymentsRows || []) {
-    const k = `R${r.round_idx}M${r.match_idx}-${(r.side || "").toUpperCase()}-B${r.buy_idx}`;
+    const k = `R${r.round_idx}M${r.match_idx}-${(r.side || "")
+      .toUpperCase()}-B${r.buy_idx}`;
     payMap[k] = Number(r.amount) || 0;
   }
   const sumSide = (r, m, side, buys = 3) => {
     let s = 0;
-    for (let i = 1; i <= Math.max(1, buys); i++) s += Number(payMap[`R${r}M${m}-${side}-B${i}`] || 0);
+    for (let i = 1; i <= Math.max(1, buys); i++)
+      s += Number(payMap[`R${r}M${m}-${side}-B${i}`] || 0);
     return s;
   };
 
   const rounds = [];
   const r0 = [];
-  for (let i=0; i<p; i+=2) {
+  for (let i = 0; i < p; i += 2) {
     const Ls = filled[i];
-    const Rs = filled[i+1];
-    r0.push({ leftSeed: Ls, rightSeed: Rs, left: Ls ? bySeed[Ls] : null, right: Rs ? bySeed[Rs] : null });
+    const Rs = filled[i + 1];
+    r0.push({
+      leftSeed: Ls,
+      rightSeed: Rs,
+      left: Ls ? bySeed[Ls] : null,
+      right: Rs ? bySeed[Rs] : null,
+    });
   }
   rounds.push(r0);
 
   const totalRounds = Math.log2(p);
-  for (let r=0; r<totalRounds-1; r++) {
+  for (let r = 0; r < totalRounds - 1; r++) {
     const cur = rounds[r];
-    const next = Array.from({length: Math.ceil(cur.length/2)}, () => ({ left: null, right: null, leftSeed: null, rightSeed: null }));
-    for (let m=0; m<cur.length; m++) {
+    const next = Array.from({ length: Math.ceil(cur.length / 2) }, () => ({
+      left: null,
+      right: null,
+      leftSeed: null,
+      rightSeed: null,
+    }));
+    for (let m = 0; m < cur.length; m++) {
       const match = cur[m];
       const sumL = sumSide(r, m, "L");
       const sumR = sumSide(r, m, "R");
       const w = sumL > sumR ? "L" : sumR > sumL ? "R" : null;
-      const target = next[Math.floor(m/2)];
+      const target = next[Math.floor(m / 2)];
       if (w === "L" && match.left) {
-        if (m % 2 === 0) { target.left = match.left; target.leftSeed = match.leftSeed; }
-        else { target.right = match.left; target.rightSeed = match.leftSeed; }
+        if (m % 2 === 0) {
+          target.left = match.left;
+          target.leftSeed = match.leftSeed;
+        } else {
+          target.right = match.left;
+          target.rightSeed = match.leftSeed;
+        }
       } else if (w === "R" && match.right) {
-        if (m % 2 === 0) { target.left = match.right; target.leftSeed = match.rightSeed; }
-        else { target.right = match.right; target.rightSeed = match.rightSeed; }
+        if (m % 2 === 0) {
+          target.left = match.right;
+          target.leftSeed = match.rightSeed;
+        } else {
+          target.right = match.right;
+          target.rightSeed = match.rightSeed;
+        }
       }
     }
     rounds.push(next);
@@ -411,16 +550,24 @@ export default function TournamentsPage() {
 
   // insights
   const [chartData, setChartData] = React.useState([]); // [{name, wins}]
-  const [topPlayer, setTopPlayer] = React.useState({ name: "", wins: 0, totalPrize: 0, lastPrize: 0 });
+  const [topPlayer, setTopPlayer] = React.useState({
+    name: "",
+    wins: 0,
+    totalPrize: 0,
+    lastPrize: 0,
+  });
   const [lastWinner, setLastWinner] = React.useState({ player: "", slot: "" });
 
   const load = React.useCallback(async () => {
     try {
       setBusy(true);
       setErr("");
-      const { data, error } = await supabase.from("tournaments").select("*").limit(500);
+      const { data, error } = await supabase
+        .from("tournaments")
+        .select("*")
+        .limit(500);
       if (error) throw error;
-      const ordered = [...(data || [])].sort((a,b) => {
+      const ordered = [...(data || [])].sort((a, b) => {
         const da = new Date(a?.created_at || a?.starts_at || 0).getTime();
         const db = new Date(b?.created_at || b?.starts_at || 0).getTime();
         return db - da;
@@ -428,7 +575,7 @@ export default function TournamentsPage() {
       setRows(ordered);
 
       // fetch prizes for table + insights
-      const ids = ordered.map(t => t.id);
+      const ids = ordered.map((t) => t.id);
       if (ids.length) {
         const { data: pr } = await supabase
           .from("tournament_prizes")
@@ -436,7 +583,7 @@ export default function TournamentsPage() {
           .in("tournament_id", ids);
         const m = new Map();
         for (const r of pr || []) {
-          const cur = m.get(r.tournament_id) || {1:null,2:null,3:null};
+          const cur = m.get(r.tournament_id) || { 1: null, 2: null, 3: null };
           cur[Number(r.position)] = Number(r.amount) || 0;
           m.set(r.tournament_id, cur);
         }
@@ -454,7 +601,9 @@ export default function TournamentsPage() {
     }
   }, []);
 
-  React.useEffect(() => { load(); }, [load]);
+  React.useEffect(() => {
+    load();
+  }, [load]);
 
   async function computeInsights(tournaments) {
     try {
@@ -466,16 +615,28 @@ export default function TournamentsPage() {
       }
       const ids = tournaments.map((t) => t.id);
       const { data: entries } = await supabase
-        .from("tournament_entries").select("*").in("tournament_id", ids).limit(5000);
+        .from("tournament_entries")
+        .select("*")
+        .in("tournament_id", ids)
+        .limit(5000);
       const { data: pays } = await supabase
-        .from("tournament_payments").select("*").in("tournament_id", ids).limit(10000);
+        .from("tournament_payments")
+        .select("*")
+        .in("tournament_id", ids)
+        .limit(10000);
       const { data: prizeRows } = await supabase
-        .from("tournament_prizes").select("tournament_id, position, amount").in("tournament_id", ids);
+        .from("tournament_prizes")
+        .select("tournament_id, position, amount")
+        .in("tournament_id", ids);
 
       const byTournamentEntries = new Map();
       for (const r of entries || []) {
         const arr = byTournamentEntries.get(r.tournament_id) || [];
-        arr.push({ seed: r.seed, player_name: r.player ?? r.player_name ?? "", slot_name: r.slot_name ?? "" });
+        arr.push({
+          seed: r.seed,
+          player_name: r.player ?? r.player_name ?? "",
+          slot_name: r.slot_name ?? "",
+        });
         byTournamentEntries.set(r.tournament_id, arr);
       }
       const byTournamentPays = new Map();
@@ -487,41 +648,64 @@ export default function TournamentsPage() {
 
       const winners = [];
       for (const t of tournaments) {
-        const w = computeTournamentWinner(byTournamentEntries.get(t.id) || [], byTournamentPays.get(t.id) || []);
-        if (w) winners.push({ tournament_id: t.id, player: w.player_name || "", slot: w.slot_name || "" });
+        const w = computeTournamentWinner(
+          byTournamentEntries.get(t.id) || [],
+          byTournamentPays.get(t.id) || []
+        );
+        if (w)
+          winners.push({
+            tournament_id: t.id,
+            player: w.player_name || "",
+            slot: w.slot_name || "",
+          });
       }
 
       const slotCount = new Map();
-      for (const w of winners) slotCount.set(w.slot, (slotCount.get(w.slot) || 0) + 1);
-      const topSlots = [...slotCount.entries()].sort((a,b) => b[1]-a[1]).slice(0,3).map(([name, wins]) => ({ name: name || "—", wins }));
+      for (const w of winners)
+        slotCount.set(w.slot, (slotCount.get(w.slot) || 0) + 1);
+      const topSlots = [...slotCount.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([name, wins]) => ({ name: name || "—", wins }));
       setChartData(topSlots);
 
       const playerCount = new Map();
-      for (const w of winners) playerCount.set(w.player, (playerCount.get(w.player) || 0) + 1);
-      const topP = [...playerCount.entries()].sort((a,b)=>b[1]-a[1])[0];
+      for (const w of winners)
+        playerCount.set(w.player, (playerCount.get(w.player) || 0) + 1);
+      const topP = [...playerCount.entries()].sort((a, b) => b[1] - a[1])[0];
       const topPlayerName = topP?.[0] || "";
       const topPlayerWins = topP?.[1] || 0;
 
       const prizeByTournament = new Map();
-      for (const r of prizeRows || []) if (Number(r.position) === 1) prizeByTournament.set(r.tournament_id, Number(r.amount) || 0);
-      for (const t of tournaments) if (!prizeByTournament.has(t.id)) {
-        const v = Number(t.prize_pool); if (Number.isFinite(v)) prizeByTournament.set(t.id, v);
-      }
+      for (const r of prizeRows || [])
+        if (Number(r.position) === 1)
+          prizeByTournament.set(r.tournament_id, Number(r.amount) || 0);
+      for (const t of tournaments)
+        if (!prizeByTournament.has(t.id)) {
+          const v = Number(t.prize_pool);
+          if (Number.isFinite(v)) prizeByTournament.set(t.id, v);
+        }
 
       let totalPrize = 0;
-      for (const w of winners) if (w.player === topPlayerName) totalPrize += prizeByTournament.get(w.tournament_id) || 0;
+      for (const w of winners)
+        if (w.player === topPlayerName)
+          totalPrize += prizeByTournament.get(w.tournament_id) || 0;
 
       let last = null;
       for (const t of tournaments) {
-        const w = winners.find(x => x.tournament_id === t.id);
-        if (w) { last = { ...w, prize: prizeByTournament.get(t.id) || 0 }; break; }
+        const w = winners.find((x) => x.tournament_id === t.id);
+        if (w) {
+          last = { ...w, prize: prizeByTournament.get(t.id) || 0 };
+          break;
+        }
       }
 
       setTopPlayer({
         name: topPlayerName,
         wins: topPlayerWins,
         totalPrize,
-        lastPrize: last?.player === topPlayerName ? (last?.prize || 0) : 0,
+        lastPrize:
+          last?.player === topPlayerName ? last?.prize || 0 : 0,
       });
       setLastWinner({ player: last?.player || "", slot: last?.slot || "" });
     } catch {
@@ -534,21 +718,32 @@ export default function TournamentsPage() {
   const filtered = React.useMemo(() => {
     const needle = dSearch.trim().toLowerCase();
     let arr = [...rows];
-    if (needle) arr = arr.filter((r) => String(r.title || r.name || "").toLowerCase().includes(needle));
+    if (needle)
+      arr = arr.filter((r) =>
+        String(r.title || r.name || "").toLowerCase().includes(needle)
+      );
     const get = (r, k) => (k === "title" ? String(r.title || r.name || "") : 0);
     arr.sort((a, b) => {
-      const A = get(a, sort.key), B = get(b, sort.key);
-      if (typeof A === "string" || typeof B === "string") return A.localeCompare(B) * sort.dir;
+      const A = get(a, sort.key),
+        B = get(b, sort.key);
+      if (typeof A === "string" || typeof B === "string")
+        return A.localeCompare(B) * sort.dir;
       return (A - B) * sort.dir;
     });
     return arr;
   }, [rows, dSearch, sort]);
 
-  function askDelete(row) { setRowToDelete(row); setConfirmOpen(true); }
+  function askDelete(row) {
+    setRowToDelete(row);
+    setConfirmOpen(true);
+  }
   async function confirmDelete() {
     if (!rowToDelete) return;
     try {
-      const { error } = await supabase.from("tournaments").delete().eq("id", rowToDelete.id);
+      const { error } = await supabase
+        .from("tournaments")
+        .delete()
+        .eq("id", rowToDelete.id);
       if (error) throw error;
       setConfirmOpen(false);
       setRowToDelete(null);
@@ -562,13 +757,21 @@ export default function TournamentsPage() {
     const is = sort.key === k;
     return (
       <button
-        className={`flex items-center gap-1 ${right ? "justify-end" : ""}`}
+        className={`flex items-center gap-1 ${
+          right ? "justify-end" : ""
+        }`}
         onClick={() => setSort((s) => ({ key: k, dir: is ? -s.dir : 1 }))}
         title="Sort"
       >
         <span>{children}</span>
         <span className="opacity-60">
-          {is ? (sort.dir === -1 ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />) : null}
+          {is ? (
+            sort.dir === -1 ? (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronUp className="h-3.5 w-3.5" />
+            )
+          ) : null}
         </span>
       </button>
     );
@@ -579,7 +782,9 @@ export default function TournamentsPage() {
     return (
       <span className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs">
         <span>{label}</span>
-        <span className="font-semibold">{value != null ? fmtMoney(value) : "—"}</span>
+        <span className="font-semibold">
+          {value != null ? fmtMoney(value) : "—"}
+        </span>
       </span>
     );
   };
@@ -602,7 +807,13 @@ export default function TournamentsPage() {
             />
             <Search className="h-4 w-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-white/60" />
           </div>
-          <Button onClick={() => { setEditRow(null); setModalOpen(true); }} className="h-10">
+          <Button
+            onClick={() => {
+              setEditRow(null);
+              setModalOpen(true);
+            }}
+            className="h-10"
+          >
             <Plus className="h-4 w-4 mr-2" />
             {t("add")}
           </Button>
@@ -610,7 +821,11 @@ export default function TournamentsPage() {
       </div>
 
       {/* Insights */}
-      <div className={`rounded-2xl border ${isDark ? "border-white/10" : "border-zinc-200"} p-4 mb-6`}>
+      <div
+        className={`rounded-2xl border ${
+          isDark ? "border-white/10" : "border-zinc-200"
+        } p-4 mb-6`}
+      >
         <div className="flex items-center gap-2 mb-3">
           <Crown className="h-4 w-4" />
           <div className="text-lg font-semibold">{t("insights")}</div>
@@ -624,11 +839,17 @@ export default function TournamentsPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData}>
                   <XAxis dataKey="name" tick={{ fill: "currentColor" }} />
-                  <YAxis tick={{ fill: "currentColor" }} allowDecimals={false} />
+                  <YAxis
+                    tick={{ fill: "currentColor" }}
+                    allowDecimals={false}
+                  />
                   <Tooltip content={<NiceTooltip />} />
-                  <Bar dataKey="wins" radius={[6,6,0,0]}>
+                  <Bar dataKey="wins" radius={[6, 6, 0, 0]}>
                     {chartData.map((_, i) => (
-                      <Cell key={`cell-${i}`} fill={BAR_COLORS[i % BAR_COLORS.length]} />
+                      <Cell
+                        key={`cell-${i}`}
+                        fill={BAR_COLORS[i % BAR_COLORS.length]}
+                      />
                     ))}
                   </Bar>
                 </BarChart>
@@ -644,16 +865,24 @@ export default function TournamentsPage() {
                 <div className="flex items-center gap-3">
                   <Avatar name={topPlayer.name} />
                   <div className="min-w-0">
-                    <div className="text-xl font-semibold truncate">{topPlayer.name}</div>
-                    <div className="text-sm opacity-80">{topPlayer.wins} {t("wins")}</div>
+                    <div className="text-xl font-semibold truncate">
+                      {topPlayer.name}
+                    </div>
+                    <div className="text-sm opacity-80">
+                      {topPlayer.wins} {t("wins")}
+                    </div>
                     <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                       <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1">
                         <div className="opacity-70">{t("totalPrize")}</div>
-                        <div className="font-semibold">{fmtMoney(topPlayer.totalPrize)}</div>
+                        <div className="font-semibold">
+                          {fmtMoney(topPlayer.totalPrize)}
+                        </div>
                       </div>
                       <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1">
                         <div className="opacity-70">{t("lastPrize")}</div>
-                        <div className="font-semibold">{fmtMoney(topPlayer.lastPrize)}</div>
+                        <div className="font-semibold">
+                          {fmtMoney(topPlayer.lastPrize)}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -665,17 +894,35 @@ export default function TournamentsPage() {
 
             <div className="rounded-xl border border-white/10 p-4">
               <div className="text-sm opacity-70 mb-2">{t("lastWinner")}</div>
-              <div className="text-sm"><span className="opacity-70">{t("player")}: </span><span className="font-medium">{lastWinner.player || "—"}</span></div>
-              <div className="text-sm"><span className="opacity-70">{t("slot")}: </span><span className="font-medium">{lastWinner.slot || "—"}</span></div>
+              <div className="text-sm">
+                <span className="opacity-70">{t("player")}: </span>
+                <span className="font-medium">
+                  {lastWinner.player || "—"}
+                </span>
+              </div>
+              <div className="text-sm">
+                <span className="opacity-70">{t("slot")}: </span>
+                <span className="font-medium">{lastWinner.slot || "—"}</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       {/* Table */}
-      <div className={`rounded-xl border overflow-hidden ${isDark ? "border-white/10" : "border-zinc-200"}`}>
-        <div className={`${isDark ? "bg-white/[0.04]" : "bg-zinc-50"} grid grid-cols-12 items-center px-4 py-3 text-xs font-semibold`}>
-          <div className="col-span-7"><HeaderCell k="title">{t("name")}</HeaderCell></div>
+      <div
+        className={`rounded-xl border overflow-hidden ${
+          isDark ? "border-white/10" : "border-zinc-200"
+        }`}
+      >
+        <div
+          className={`${
+            isDark ? "bg-white/[0.04]" : "bg-zinc-50"
+          } grid grid-cols-12 items-center px-4 py-3 text-xs font-semibold`}
+        >
+          <div className="col-span-7">
+            <HeaderCell k="title">{t("name")}</HeaderCell>
+          </div>
           <div className="col-span-3 text-center">{t("prizes")}</div>
           <div className="col-span-2 text-right">{t("actions")}</div>
         </div>
@@ -686,25 +933,43 @@ export default function TournamentsPage() {
           </div>
         )}
 
-        {err && !busy && <div className="px-4 py-3 text-sm text-red-400">{err}</div>}
+        {err && !busy && (
+          <div className="px-4 py-3 text-sm text-red-400">{err}</div>
+        )}
         {!busy && filtered.length === 0 && !err && (
           <div className="px-4 py-6 text-sm opacity-70">{t("empty")}</div>
         )}
 
         {filtered.map((r) => {
           const title = r.title || r.name || "—";
-          const prizes = prizesMap.get(r.id) || {1:null,2:null,3:null};
+          const prizes = prizesMap.get(r.id) || { 1: null, 2: null, 3: null };
 
           return (
-            <div key={r.id} className={`grid grid-cols-12 items-center px-4 py-3 border-t ${isDark ? "border-white/10" : "border-zinc-200"}`}>
-              {/* Title */}
+            <div
+              key={r.id}
+              className={`grid grid-cols-12 items-center px-4 py-3 border-t ${
+                isDark ? "border-white/10" : "border-zinc-200"
+              }`}
+            >
+              {/* Title + per-user number badge */}
               <div className="col-span-7 min-w-0 pl-2">
-                <div className="font-medium truncate">{title}</div>
-                <div className="text-xs opacity-70 truncate">{r.description || ""}</div>
+                <div className="flex items-center gap-2">
+                  {Number.isFinite(Number(r.no)) && Number(r.no) > 0 && (
+                    <span className="inline-flex items-center rounded-lg border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold tabular-nums">
+                      #{r.no}
+                    </span>
+                  )}
+                  <div className="font-medium truncate">{title}</div>
+                </div>
+                <div className="text-xs opacity-70 truncate">
+                  {r.description || ""}
+                </div>
               </div>
 
               {/* Prizes */}
-              <div className={`col-span-3 flex items-center justify-center gap-2 ${numCls}`}>
+              <div
+                className={`col-span-3 flex items-center justify-center gap-2 ${numCls}`}
+              >
                 <PrizeBadge kind={1} value={prizes[1]} />
                 <PrizeBadge kind={2} value={prizes[2]} />
                 <PrizeBadge kind={3} value={prizes[3]} />
@@ -717,7 +982,9 @@ export default function TournamentsPage() {
                   size="icon"
                   className="h-8 w-8"
                   title={t("open")}
-                  onClick={() => { window.location.hash = `#/tournaments/${r.id}`; }}
+                  onClick={() => {
+                    window.location.hash = `#/tournaments/${r.id}`;
+                  }}
                 >
                   <Eye className="h-4 w-4" />
                 </Button>
@@ -726,7 +993,10 @@ export default function TournamentsPage() {
                   size="icon"
                   className="h-8 w-8"
                   title={t("edit")}
-                  onClick={() => { setEditRow(r); setModalOpen(true); }}
+                  onClick={() => {
+                    setEditRow(r);
+                    setModalOpen(true);
+                  }}
                 >
                   <Pencil className="h-4 w-4" />
                 </Button>
