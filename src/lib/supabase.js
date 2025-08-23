@@ -1,31 +1,37 @@
 import { createClient } from "@supabase/supabase-js";
 
-const url = import.meta.env.VITE_SUPABASE_URL;
-const anon = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(url, anon, {
-  auth: { persistSession: true, autoRefreshToken: true }
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
 });
 
-/**
- * Faz signOut local e garante POST /auth/v1/logout com Authorization + apikey (evitando 403).
- */
+// Logout que funciona em produção (Netlify) e em dev
 export async function safeSignOut() {
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    // limpa sessão local (evita UI ficar "presa")
+
+    // 1) limpa logo no cliente (UI sai da sessão, mesmo que o server falhe)
     await supabase.auth.signOut({ scope: "local" });
+
+    // 2) tenta revogar no servidor com os headers obrigatórios
     if (session?.access_token) {
-      await fetch(`${url}/auth/v1/logout`, {
+      await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
         method: "POST",
         headers: {
-          apikey: anon,
+          apikey: SUPABASE_ANON_KEY,
           Authorization: `Bearer ${session.access_token}`,
         },
-      });
+        // não uses credentials aqui (o Supabase usa header, não cookie)
+      }).catch(() => {});
     }
   } catch (e) {
-    // sem stress se falhar o fetch; o local já foi limpo
-    console.warn("safeSignOut warning:", e?.message || e);
+    // Não deites a app abaixo por causa do logout
+    console.warn("safeSignOut fallback:", e?.message || e);
   }
 }
