@@ -24,7 +24,7 @@ function AccentCard({ title, children, className }) {
   return (
     <div
       className={cn(
-        "relative rounded-xl overflow-hidden",
+        "relative rounded-xl",
         isDark ? "bg-white/5 border border-white/10" : "bg-white border border-zinc-200",
         className
       )}
@@ -196,6 +196,8 @@ export default function BattleView() {
   // entries
   const [sideA, setSideA] = React.useState(null); // {id,name,provider,thumbnail}
   const [sideB, setSideB] = React.useState(null);
+  const [playerA, setPlayerA] = React.useState("");
+  const [playerB, setPlayerB] = React.useState("");
 
   // payments
   const [pays, setPays] = React.useState([]); // battle_payments
@@ -238,7 +240,9 @@ export default function BattleView() {
       const A = (es || []).find(function(e){return String(e.seed).toUpperCase()==="A";});
       const B = (es || []).find(function(e){return String(e.seed).toUpperCase()==="B";});
       setSideA(A ? { id: A.slot_id ?? null, name: A.slot_name || "" } : null);
+      setPlayerA(A?.player_name || "");
       setSideB(B ? { id: B.slot_id ?? null, name: B.slot_name || "" } : null);
+      setPlayerB(B?.player_name || "");
 
       // payments
       const { data: ps } = await supabase.from("battle_payments").select("*").eq("battle_id", id).order("buy_idx", { ascending: true });
@@ -267,8 +271,8 @@ export default function BattleView() {
     if (!battleId) return;
     try {
       const rows = [];
-      if (sideA && sideA.name) rows.push({ battle_id: battleId, seed: "A", player_name: null, slot_name: sideA.name, slot_id: sideA.id ?? null });
-      if (sideB && sideB.name) rows.push({ battle_id: battleId, seed: "B", player_name: null, slot_name: sideB.name, slot_id: sideB.id ?? null });
+      if (sideA && sideA.name) rows.push({ battle_id: battleId, seed: "A", player_name: playerA || null, slot_name: sideA.name, slot_id: sideA.id ?? null });
+      if (sideB && sideB.name) rows.push({ battle_id: battleId, seed: "B", player_name: playerB || null, slot_name: sideB.name, slot_id: sideB.id ?? null });
       if (rows.length === 0) return;
       await supabase.from("battle_entries").upsert(rows, { onConflict: "battle_id,seed" });
       await load(battleId);
@@ -290,52 +294,64 @@ export default function BattleView() {
     }
   }
 
-  function BuysEditor({ side, stats }) {
-    const isLeft = side === "L";
-    const label = isLeft ? "Side A" : "Side B";
-    const buys = (pays || []).filter(function(p){return String(p.side).toUpperCase()===side;});
+function BuysEditor({ side, stats, player }) {
+  const isLeft = side === "L";
+  const label = isLeft ? "Side A" : "Side B";
+  const buys = (pays || []).filter((p) => String(p.side || "").toUpperCase() === side);
 
-    const inputs = [];
-    const maxN = Math.max(plannedBuys/2, buys.length);
-    for (let i=1;i<=maxN;i++) {
-      const r = buys.find(function(x){return Number(x.buy_idx)===i;});
-      inputs.push(
-        <div key={side+"-"+i} className="flex items-center gap-2">
-          <div className="w-12 text-xs opacity-70">Buy {i}</div>
-          <Input type="number" step="0.01" defaultValue={r ? r.amount : ""} onBlur={function(e){ setBuy(side, i, e.target.value); }} className="h-9 rounded-lg bg-zinc-900 border-white/10 text-white" />
-        </div>
-      );
-    }
-
-    return (
-      <div className="rounded-xl border border-white/10 p-3">
-        <div className="mb-2 text-xs opacity-70">{label}</div>
-        <div className="grid md:grid-cols-2 gap-2">
-          <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-            <div className="text-xs opacity-70">Slot</div>
-            <div className="font-medium">{isLeft ? (sideA && sideA.name) : (sideB && sideB.name) || "—"}</div>
-          </div>
-          <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-            <div className="text-xs opacity-70">Buys registados</div>
-            <div className="font-semibold">{stats.count}</div>
-          </div>
-          <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-            <div className="text-xs opacity-70">Total pago</div>
-            <div className="font-semibold">{fmtMoney(stats.total)}</div>
-          </div>
-          <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-            <div className="text-xs opacity-70">Best win</div>
-            <div className="font-semibold">{fmtMoney(stats.best)}</div>
-          </div>
-          <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-            <div className="text-xs opacity-70">Worst payment</div>
-            <div className="font-semibold">{fmtMoney(stats.worst)}</div>
-          </div>
-        </div>
-        <div className="mt-3 grid gap-2">{inputs}</div>
+  const inputs = [];
+  const maxN = Math.max(plannedBuys / 2, buys.length);
+  for (let i = 1; i <= maxN; i++) {
+    const r = buys.find((x) => Number(x.buy_idx) === i);
+    inputs.push(
+      <div key={`${side}-${i}`} className="flex items-center gap-2">
+        <div className="w-12 text-xs opacity-70">Buy {i}</div>
+        <Input
+          type="number"
+          step="0.01"
+          defaultValue={r ? r.amount : ""}
+          onBlur={(e) => setBuy(side, i, e.target.value)}
+          className="h-9 rounded-lg bg-zinc-900 border-white/10 text-white"
+        />
       </div>
     );
   }
+
+  return (
+    <div className="rounded-xl border border-white/10 p-3">
+      <div className="mb-2 text-xs opacity-70">{label}</div>
+      <div className="grid md:grid-cols-2 gap-2">
+        <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+          <div className="text-xs opacity-70">Slot</div>
+          <div className="font-medium">
+            {isLeft ? (sideA && sideA.name) : (sideB && sideB.name) || "\u2014"}
+          </div>
+        </div>
+        <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+          <div className="text-xs opacity-70">Player</div>
+          <div className="font-medium">{player || "\u2014"}</div>
+        </div>
+        <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+          <div className="text-xs opacity-70">Buys registados</div>
+          <div className="font-semibold">{stats.count}</div>
+        </div>
+        <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+          <div className="text-xs opacity-70">Total pago</div>
+          <div className="font-semibold">{fmtMoney(stats.total)}</div>
+        </div>
+        <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+          <div className="text-xs opacity-70">Best win</div>
+          <div className="font-semibold">{fmtMoney(stats.best)}</div>
+        </div>
+        <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+          <div className="text-xs opacity-70">Worst payment</div>
+          <div className="font-semibold">{fmtMoney(stats.worst)}</div>
+        </div>
+      </div>
+      <div className="mt-3 grid gap-2">{inputs}</div>
+    </div>
+  );
+}
 
   return (
     <section className="py-8 md:py-10">
@@ -391,24 +407,53 @@ export default function BattleView() {
           {/* RIGHT: sides / slots + buys editor */}
           <div className="space-y-4">
             <AccentCard title="Battle">
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <div className="text-xs opacity-70 mb-2 flex items-center gap-2"><Shield className="h-4 w-4" /> Side A</div>
-                  <SlotsAutocomplete value={sideA} onSelect={setSideA} placeholder="Add a Slot" />
-                </div>
-                <div>
-                  <div className="text-xs opacity-70 mb-2 flex items-center gap-2"><Users className="h-4 w-4" /> Side B</div>
-                  <SlotsAutocomplete value={sideB} onSelect={setSideB} placeholder="Add a Slot" />
-                </div>
-              </div>
+              <div className="grid md:grid-cols-2 gap-4"></div>
+                {/* SIDE A */}
+<div>
+  <div className="text-xs opacity-70 mb-2 flex items-center gap-2">
+    <Shield className="h-4 w-4" /> Side A
+  </div>
+  <div className="space-y-2">
+    <SlotsAutocomplete value={sideA} onSelect={setSideA} placeholder="Add a Slot" />
+    <div>
+      <div className="text-xs opacity-70 mb-1">Player</div>
+      <Input
+        value={playerA}
+        onChange={(e) => setPlayerA(e.target.value)}
+        placeholder="Player name"
+        className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white"
+      />
+    </div>
+  </div>
+</div>
+
+{/* SIDE B */}
+<div>
+  <div className="text-xs opacity-70 mb-2 flex items-center gap-2">
+    <Users className="h-4 w-4" /> Side B
+  </div>
+  <div className="space-y-2">
+    <SlotsAutocomplete value={sideB} onSelect={setSideB} placeholder="Add a Slot" />
+    <div>
+      <div className="text-xs opacity-70 mb-1">Player</div>
+      <Input
+        value={playerB}
+        onChange={(e) => setPlayerB(e.target.value)}
+        placeholder="Player name"
+        className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white"
+      />
+    </div>
+  </div>
+</div>
+
               <div className="mt-4 flex justify-end">
                 <Button onClick={saveSides} className="h-10">Save sides</Button>
               </div>
             </AccentCard>
 
             <div className="grid md:grid-cols-2 gap-4">
-              <BuysEditor side="L" stats={aStats} />
-              <BuysEditor side="R" stats={bStats} />
+              <BuysEditor side="L" stats={aStats} player={playerA} />
+              <BuysEditor side="R" stats={bStats} player={playerB} />
             </div>
           </div>
         </div>
