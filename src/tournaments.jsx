@@ -14,7 +14,6 @@ import {
   Trash2,
   Trophy,
   Eye,
-  Crown,
 } from "lucide-react";
 
 /* ───────────────────────── i18n ───────────────────────── */
@@ -219,7 +218,6 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
 
   // prizes by position
   const [p1, setP1] = React.useState("");
-  theP2: 0;
   const [p2, setP2] = React.useState("");
   const [p3, setP3] = React.useState("");
   const total = (toNum(p1) || 0) + (toNum(p2) || 0) + (toNum(p3) || 0);
@@ -731,8 +729,7 @@ export default function TournamentsPage() {
         name: topPlayerName,
         wins: topPlayerWins,
         totalPrize,
-        lastPrize:
-          last?.player === topPlayerName ? last?.prize || 0 : 0,
+        lastPrize: last?.player === topPlayerName ? last?.prize || 0 : 0,
       });
       setLastWinner({ player: last?.player || "", slot: last?.slot || "" });
     } catch {
@@ -837,8 +834,8 @@ export default function TournamentsPage() {
           </div>
         </div>
 
-        {/* Insights (accent azul) */}
-        <AccentCard title={t("insights")} className="mb-6">
+        {/* Insights (accent azul) — sem título */}
+        <AccentCard className="mb-6">
           <div className="grid lg:grid-cols-[1fr_360px] gap-4">
             {/* chart */}
             <div className="rounded-xl border border-white/10 p-3">
