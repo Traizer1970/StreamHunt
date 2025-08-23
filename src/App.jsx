@@ -28,6 +28,7 @@ import { redirectIfLoggedToApp } from "@/guards/redirect-if-logged";
 import { ThemeCtx, AuthCtx, useTheme, useAuth } from "@/contexts/auth-context";
 import TournamentsPage from "@/tournaments";
 import TournamentDetail from "@/tournament-detail.jsx";
+import Battlespage from "@/battlespage.jsx";
 
 /* =================== CONFIG =================== */
 const TELEGRAM_URL = "https://t.me/gsousa70";
@@ -1461,6 +1462,7 @@ export default function App() {
         {route === "hunts" && <BonusHuntsPage />}
         {route === "terms" && <Terms />}
         {route === "tournaments" && <TournamentsPage />}
+        {route === "battlespage" && <Battlespage />}
 
         {/* fallback */}
         {!(route === "home" ||
@@ -1473,6 +1475,7 @@ export default function App() {
            route === "about" ||
            route === "hunts" ||
            route === "tournaments" ||
+           route === "battlespage" ||
            route === "terms") &&
            !route.startsWith("hunts/") &&
            !route.startsWith("tournaments/") &&
