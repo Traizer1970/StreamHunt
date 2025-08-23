@@ -4,41 +4,17 @@ import { useTheme } from "@/contexts/auth-context";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import {
   Plus, Search, Calendar as CalendarIcon,
-  ChevronDown, ChevronUp, Loader2, Pencil, Trash2, Trophy, Eye,
+  ChevronDown, ChevronUp, Loader2, Pencil, Trash2, Trophy, Eye, Crown,
 } from "lucide-react";
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+} from "recharts";
 
-/* ───────────────────────── i18n ───────────────────────── */
+/* ───────────────────────── i18n (default: EN) ───────────────────────── */
 const DICT = {
-  pt: {
-    title: "Tournaments",
-    add: "Adicionar",
-    edit: "Editar",
-    delete: "Eliminar",
-    confirm: "Confirmar",
-    cancel: "Cancelar",
-    save: "Guardar",
-    creating: "A criar…",
-    saving: "A guardar…",
-    deleting: "A eliminar…",
-    searchPh: "Procurar por título…",
-    empty: "Ainda não há torneios.",
-    name: "Título",
-    status: "Estado",
-    prizepool: "Prize pool",
-    dates: "Datas",
-    actions: "Ações",
-    scheduled: "agendado",
-    running: "a decorrer",
-    finished: "terminado",
-    canceled: "cancelado",
-    editTournament: "Editar torneio",
-    newTournament: "Novo torneio",
-    description: "Descrição",
-    areYouSure: "Tens a certeza que queres eliminar este torneio? Esta ação não pode ser anulada.",
-    open: "Abrir",
-  },
   en: {
     title: "Tournaments",
     add: "Add",
@@ -50,6 +26,7 @@ const DICT = {
     creating: "Creating…",
     saving: "Saving…",
     deleting: "Deleting…",
+    loading: "Loading…",
     searchPh: "Search by title…",
     empty: "No tournaments yet.",
     name: "Title",
@@ -66,21 +43,21 @@ const DICT = {
     description: "Description",
     areYouSure: "Are you sure you want to delete this tournament? This cannot be undone.",
     open: "Open",
+    insights: "Insights",
+    topSlots: "Top Slots (all-time)",
+    topPlayer: "Top Player (wins)",
+    noData: "No data yet.",
   },
 };
 function useLang() {
-  const [lang] = React.useState(() => {
-    const ls = (typeof localStorage !== "undefined" && localStorage.getItem("lang")) || "";
-    const html = (typeof document !== "undefined" && document.documentElement.lang) || "";
-    const nav = (typeof navigator !== "undefined" && navigator.language) || "pt-PT";
-    return (ls || html || nav).toLowerCase().startsWith("pt") ? "pt" : "en";
-  });
-  const t = React.useCallback((k) => (DICT[lang] && DICT[lang][k]) || DICT.en[k] || k, [lang]);
+  // força EN por pedido do utilizador
+  const lang = "en";
+  const t = React.useCallback((k) => (DICT[lang] && DICT[lang][k]) || k, [lang]);
   return { t, lang };
 }
 
 /* ───────────────────────── utils ───────────────────────── */
-const LOCALE = "pt-PT";
+const LOCALE = "en-GB";
 const CURRENCY = "EUR";
 const numCls = "tabular-nums whitespace-nowrap";
 const fmtMoney = (n) =>
@@ -99,6 +76,105 @@ function useDebounced(v, delay = 300) {
     return () => clearTimeout(id);
   }, [v, delay]);
   return s;
+}
+const detectKey = (keys, candidates) =>
+  candidates.find((k) => keys.includes(k)) || null;
+
+/* ───────────────────────── Insights loader ───────────────────────── */
+async function loadInsights() {
+  // 1) Top slots (by appearances in tournament_entries)
+  const topSlots = [];
+  try {
+    // traz tudo (se for muito, limita)
+    const { data: entries } = await supabase
+      .from("tournament_entries")
+      .select("*")
+      .limit(5000);
+
+    const keys = entries?.[0] ? Object.keys(entries[0]) : [];
+    const slotNameKey = detectKey(keys, ["slot_name", "slot", "game_name", "slotName"]);
+    const slotIdKey = detectKey(keys, ["slot_id", "slotid", "game_id", "slotId"]);
+
+    // conta
+    const nameCounts = new Map();
+    const idToCount = new Map();
+    const ids = new Set();
+
+    for (const r of entries || []) {
+      const nm = slotNameKey ? (r[slotNameKey] || "").toString().trim() : "";
+      const sid = slotIdKey ? r[slotIdKey] : null;
+
+      if (nm) nameCounts.set(nm, (nameCounts.get(nm) || 0) + 1);
+      else if (sid != null) {
+        idToCount.set(sid, (idToCount.get(sid) || 0) + 1);
+        ids.add(sid);
+      }
+    }
+
+    // se só tivermos ids, tenta mapear no catálogo
+    let idToName = new Map();
+    if (ids.size && nameCounts.size === 0) {
+      const { data: cats } = await supabase
+        .from("slots_catalog")
+        .select('id, "NAME"')
+        .in("id", Array.from(ids));
+      for (const c of cats || []) idToName.set(c.id, c["NAME"] || `#${c.id}`);
+    }
+
+    const arr = [];
+    if (nameCounts.size) {
+      for (const [name, count] of nameCounts) arr.push({ name, count });
+    } else if (idToCount.size) {
+      for (const [sid, count] of idToCount) {
+        const name = idToName.get(sid) || `Slot ${sid}`;
+        arr.push({ name, count });
+      }
+    }
+
+    arr.sort((a, b) => b.count - a.count);
+    topSlots.push(...arr.slice(0, 10));
+  } catch (e) {
+    // deixa vazio
+  }
+
+  // 2) Top player by wins (tries multiple columns on tournaments)
+  let topPlayer = { name: "—", wins: 0 };
+  try {
+    const { data: ts } = await supabase
+      .from("tournaments")
+      .select("*")
+      .eq("status", "finished")
+      .limit(2000);
+
+    const keysT = ts?.[0] ? Object.keys(ts[0]) : [];
+    const winnerKey = detectKey(keysT, [
+      "winner_player",
+      "winner_name",
+      "winner",
+      "champion",
+      "champion_player",
+      "winner_username",
+      "winnerPlayer",
+    ]);
+
+    if (winnerKey) {
+      const counts = new Map();
+      for (const r of ts || []) {
+        const who = (r[winnerKey] || "").toString().trim();
+        if (!who) continue;
+        counts.set(who, (counts.get(who) || 0) + 1);
+      }
+      let best = null;
+      for (const [name, wins] of counts) {
+        if (!best || wins > best.wins) best = { name, wins };
+      }
+      if (best) topPlayer = best;
+    }
+  } catch (e) {
+    // fica "—"
+  }
+
+  return { topSlots, topPlayer };
 }
 
 /* ───────────────────────── Mini confirm ───────────────────────── */
@@ -159,7 +235,7 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
       onSaved && onSaved();
       onClose && onClose();
     } catch (e) {
-      alert(e.message || "Erro ao guardar.");
+      alert(e.message || "Failed to save.");
     } finally {
       setBusy(false);
     }
@@ -179,7 +255,7 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
             <button
               onClick={onClose}
               className="p-2 rounded-lg hover:bg-white/10 transition"
-              aria-label="Fechar"
+              aria-label="Close"
             >
               ✕
             </button>
@@ -187,14 +263,14 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
 
           <div className="space-y-5">
             <div>
-              <div className="text-[11px] font-semibold tracking-wide opacity-60 mb-2">DETALHES</div>
+              <div className="text-[11px] font-semibold tracking-wide opacity-60 mb-2">DETAILS</div>
               <div className="grid md:grid-cols-2 gap-3">
                 <div className="md:col-span-2">
                   <div className="text-xs opacity-70 mb-1">{t("name")}</div>
                   <Input
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="ex.: Summer Cup"
+                    placeholder="e.g., Summer Cup"
                     className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white"
                   />
                 </div>
@@ -223,7 +299,7 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
                       inputMode="decimal"
                       value={prizePool ?? ""}
                       onChange={(e) => setPrizePool(e.target.value)}
-                      placeholder="ex.: 500.00"
+                      placeholder="e.g., 500.00"
                       className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white pl-7"
                     />
                   </div>
@@ -236,7 +312,7 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
                     onChange={(e) => setDescription(e.target.value)}
                     rows={4}
                     className="w-full rounded-xl bg-zinc-900 border border-white/10 px-3 py-2 text-sm"
-                    placeholder="Notas / regras…"
+                    placeholder="Notes / rules…"
                   />
                 </div>
               </div>
@@ -274,6 +350,11 @@ export default function TournamentsPage() {
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [rowToDelete, setRowToDelete] = React.useState(null);
 
+  // insights
+  const [insBusy, setInsBusy] = React.useState(true);
+  const [topSlots, setTopSlots] = React.useState([]); // [{name,count}]
+  const [topPlayer, setTopPlayer] = React.useState({ name: "—", wins: 0 });
+
   const load = React.useCallback(async () => {
     try {
       setBusy(true);
@@ -283,13 +364,30 @@ export default function TournamentsPage() {
       setRows(data || []);
     } catch (e) {
       setRows([]);
-      setErr(e.message || "Falha a carregar torneios.");
+      setErr(e.message || "Failed to load tournaments.");
     } finally {
       setBusy(false);
     }
   }, []);
 
   React.useEffect(() => { load(); }, [load]);
+
+  React.useEffect(() => {
+    let cancel = false;
+    (async () => {
+      try {
+        setInsBusy(true);
+        const { topSlots, topPlayer } = await loadInsights();
+        if (!cancel) {
+          setTopSlots(topSlots);
+          setTopPlayer(topPlayer);
+        }
+      } finally {
+        if (!cancel) setInsBusy(false);
+      }
+    })();
+    return () => { cancel = true; };
+  }, []);
 
   const filtered = React.useMemo(() => {
     const needle = dSearch.trim().toLowerCase();
@@ -322,7 +420,7 @@ export default function TournamentsPage() {
       setRowToDelete(null);
       await load();
     } catch (e) {
-      alert(e.message || "Falha ao eliminar.");
+      alert(e.message || "Failed to delete.");
     }
   }
 
@@ -332,7 +430,7 @@ export default function TournamentsPage() {
       <button
         className={`flex items-center gap-1 ${right ? "justify-end" : ""}`}
         onClick={() => setSort((s) => ({ key: k, dir: is ? -s.dir : 1 }))}
-        title="Ordenar"
+        title="Sort"
       >
         <span>{children}</span>
         <span className="opacity-60">
@@ -370,7 +468,52 @@ export default function TournamentsPage() {
         </div>
       </div>
 
-      {/* Tabela */}
+      {/* Insights */}
+      <Card className={isDark ? "border-white/10 bg-white/5 mb-6" : "mb-6"}>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2">
+            <Crown className="h-4 w-4" /> {t("insights")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {insBusy ? (
+            <div className="text-sm opacity-70 flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" /> {t("loading")}
+            </div>
+          ) : (
+            <div className="grid lg:grid-cols-12 gap-6">
+              <div className="lg:col-span-8">
+                <div className="text-xs opacity-70 mb-2">{t("topSlots")}</div>
+                {topSlots.length === 0 ? (
+                  <div className="text-sm opacity-70">{DICT.en.noData}</div>
+                ) : (
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={topSlots} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-15} textAnchor="end" height={50} />
+                        <YAxis allowDecimals={false} />
+                        <Tooltip />
+                        <Bar dataKey="count" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+
+              <div className="lg:col-span-4">
+                <div className="text-xs opacity-70 mb-2">{t("topPlayer")}</div>
+                <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <div className="text-base font-semibold">{topPlayer.name || "—"}</div>
+                  <div className="text-sm opacity-70">{topPlayer.wins || 0} wins</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Table */}
       <div className={`rounded-xl border overflow-hidden ${isDark ? "border-white/10" : "border-zinc-200"}`}>
         <div className={`${isDark ? "bg-white/[0.04]" : "bg-zinc-50"} grid grid-cols-12 items-center px-4 py-3 text-xs font-semibold`}>
           <div className="col-span-6"><HeaderCell k="title">{t("name")}</HeaderCell></div>
@@ -381,7 +524,7 @@ export default function TournamentsPage() {
 
         {busy && (
           <div className="px-4 py-6 text-sm opacity-70 flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin" /> A carregar…
+            <Loader2 className="h-4 w-4 animate-spin" /> {t("loading")}
           </div>
         )}
 
@@ -400,13 +543,13 @@ export default function TournamentsPage() {
               key={r.id}
               className={`grid grid-cols-12 items-center px-4 py-3 border-t ${isDark ? "border-white/10" : "border-zinc-200"}`}
             >
-              {/* Título (com “respiro” na esquerda) */}
+              {/* Title */}
               <div className="col-span-6 min-w-0 pl-2">
                 <div className="font-medium truncate">{title}</div>
                 <div className="text-xs opacity-70 truncate">{r.description || ""}</div>
               </div>
 
-              {/* Estado alinhado por baixo do header */}
+              {/* Status */}
               <div className="col-span-2 text-center">
                 <span
                   className={`text-xs font-semibold rounded-full px-2 py-0.5 border ${
@@ -419,20 +562,20 @@ export default function TournamentsPage() {
                       : "border-white/20 text-white/70"
                   }`}
                 >
-                  {DICT.pt[status] || status}
+                  {t(status)}
                 </span>
               </div>
 
-              {/* Prize pool alinhado à direita */}
+              {/* Prize pool */}
               <div className={`col-span-2 text-right ${numCls}`}>{prize != null ? fmtMoney(prize) : "—"}</div>
 
-              {/* Ações: Abrir | Editar | Eliminar */}
+              {/* Actions */}
               <div className="col-span-2 flex items-center justify-end gap-2">
                 <Button
                   variant="outline"
                   size="icon"
                   className="h-8 w-8"
-                  title={DICT.pt.open}
+                  title={t("open")}
                   onClick={() => { window.location.hash = `#/tournaments/${r.id}`; }}
                 >
                   <Eye className="h-4 w-4" />
@@ -461,7 +604,7 @@ export default function TournamentsPage() {
         })}
       </div>
 
-      {/* Modais */}
+      {/* Modals */}
       <UpsertTournamentModal
         open={modalOpen}
         initial={editRow}
