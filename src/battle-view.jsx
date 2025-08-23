@@ -17,12 +17,11 @@ import {
   Palette,
   X,
   Save,
-  RotateCcw,
 } from "lucide-react";
 
 /* ───────────────────────── utils / style helpers ───────────────────────── */
 const cn = (...c) => c.filter(Boolean).join(" ");
-const LOCALE = "pt-PT"; // mantém formatação € com vírgula; troca para "en-GB" se quiseres 94.43 €
+const LOCALE = "pt-PT"; // usa "en-GB" se quiseres 94.43 €
 const fmtMoney = (n) =>
   Number.isFinite(Number(n))
     ? new Intl.NumberFormat(LOCALE, {
@@ -68,7 +67,7 @@ const DEFAULT_THEME = {
     "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji','Segoe UI Emoji'",
   fontScale: 100,
   fontWeight: 400,     // normal
-  strongWeight: 500,   // emphasis (set 400 to remove bold effect)
+  strongWeight: 500,   // emphasis (mete 400 para tirar o “bold”)
 
   showThumbs: true,
   shine: true,
@@ -88,12 +87,16 @@ const DEFAULT_LAYOUT = {
   },
 };
 
-/* Widget options (now with Bonus docking & Total alignment) */
+/* Widget options (Bonus docking, Total alignment + label modes) */
 const DEFAULT_OPTS = {
   bonusLabelMode: "label+value", // "label+value" | "value"
   bonusLabelText: "Bonus Buy",
-  bonusDock: "left",             // "left" | "right"  ← NEW
-  totalJustify: "center",        // "left" | "center" | "right" ← NEW
+  bonusDock: "left",             // "left" | "right"
+  totalJustify: "center",        // "left" | "center" | "right"
+
+  // NEW → Total paid controls
+  totalLabelMode: "label+value", // "label+value" | "value"
+  totalLabelText: "Total paid",
 };
 
 /* Presets */
@@ -108,12 +111,11 @@ const PRESETS = [
 
 /* ----------------------------- DB helpers ----------------------------- */
 async function dbLoadWidgetSettings(battleId) {
-  const { data, error } = await supabase
+  const { data } = await supabase
     .from("battle_widget_settings")
     .select("theme, layout, options")
     .eq("battle_id", battleId)
     .maybeSingle();
-  if (error) return { theme: null, layout: null, options: null };
   return {
     theme: data?.theme || null,
     layout: data?.layout || null,
@@ -122,12 +124,7 @@ async function dbLoadWidgetSettings(battleId) {
 }
 async function dbSaveWidgetSettings(battleId, theme, layout, options) {
   await supabase.from("battle_widget_settings").upsert([
-    {
-      battle_id: battleId,
-      theme,
-      layout,
-      options,
-    },
+    { battle_id: battleId, theme, layout, options },
   ]);
 }
 
@@ -399,15 +396,13 @@ function WidgetPreviewPanel({
     const pos = layout?.positions?.[id] || { x: 0, y: 0 };
     const onMouseDown = useDrag(containerRef, id, layout, setLayout);
     return (
-      <div
-        onMouseDown={onMouseDown}
-        style={{ position: "absolute", left: pos.x, top: pos.y, cursor: "grab" }}
-      >
+      <div onMouseDown={onMouseDown} style={{ position: "absolute", left: pos.x, top: pos.y, cursor: "grab" }}>
         {children}
       </div>
     );
   };
 
+  // Badges
   const BadgeBest = (
     <div
       className="px-3 py-1.5"
@@ -453,6 +448,39 @@ function WidgetPreviewPanel({
         <span>{opts?.bonusLabelText || "Bonus Buy"}</span>
         <span style={{ marginLeft: 8, color: theme.accent, fontWeight: theme.strongWeight }}>
           {badgeBonusValue}
+        </span>
+      </div>
+    );
+
+  // NEW → Total badge (label + value OR value only)
+  const TotalBadge =
+    opts?.totalLabelMode === "value" ? (
+      <div
+        className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
+        style={{
+          background: theme.totalBg,
+          border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`,
+          borderRadius: theme.pillRadius,
+          color: theme.accent,
+          fontWeight: theme.strongWeight,
+        }}
+      >
+        {fmtMoney(totalPay)}
+      </div>
+    ) : (
+      <div
+        className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
+        style={{
+          background: theme.totalBg,
+          border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`,
+          borderRadius: theme.pillRadius,
+          color: theme.text,
+          fontWeight: theme.fontWeight,
+        }}
+      >
+        <span>{opts?.totalLabelText || "Total paid"}</span>
+        <span style={{ marginLeft: 8, color: theme.accent, fontWeight: theme.strongWeight }}>
+          {fmtMoney(totalPay)}
         </span>
       </div>
     );
@@ -586,12 +614,7 @@ function WidgetPreviewPanel({
                 opts?.totalJustify === "left" ? "justify-start" : opts?.totalJustify === "right" ? "justify-end" : "justify-center"
               )}
             >
-              <div
-                className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
-                style={{ background: theme.totalBg, border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`, borderRadius: theme.pillRadius, color: theme.accent, fontWeight: theme.strongWeight }}
-              >
-                Total paid: {fmtMoney(totalPay)}
-              </div>
+              {TotalBadge}
             </div>
           </>
         )}
@@ -679,12 +702,7 @@ function WidgetPreviewPanel({
             </DragBox>
 
             <DragBox id="total">
-              <div
-                className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
-                style={{ background: theme.totalBg, border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`, borderRadius: theme.pillRadius, color: theme.accent, fontWeight: theme.strongWeight }}
-              >
-                Total paid: {fmtMoney(totalPay)}
-              </div>
+              {TotalBadge}
             </DragBox>
           </>
         )}
@@ -799,8 +817,6 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
       <div className="absolute inset-x-0 top-0 h-14 px-4 flex items-center justify-between border-b border-white/10 bg-zinc-950/60">
         <div className="flex items-center gap-2">
           <Palette className="h-5 w-5 text-white/80" />
-          <div>Widget Designer</div>
-          <div className="text-xs opacity-60">Battle #{battleId}</div>
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={() => { persist(); onClose(); }} className="h-9">
@@ -965,6 +981,39 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
                 <Input
                   value={opts.bonusLabelText}
                   onChange={(e) => setOpts((o) => ({ ...o, bonusLabelText: e.target.value }))}
+                  className="h-9 bg-zinc-900 border-white/10 text-white"
+                />
+              </div>
+            </div>
+
+            {/* NEW → Total badge label */}
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
+              <div className="text-xs opacity-70">Total badge</div>
+              <div className="flex flex-col gap-2 text-sm">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="totallabel"
+                    checked={opts.totalLabelMode === "label+value"}
+                    onChange={() => setOpts((o) => ({ ...o, totalLabelMode: "label+value" }))}
+                  />
+                  Label + Value
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="totallabel"
+                    checked={opts.totalLabelMode === "value"}
+                    onChange={() => setOpts((o) => ({ ...o, totalLabelMode: "value" }))}
+                  />
+                  Value only
+                </label>
+              </div>
+              <div>
+                <div className="text-xs opacity-70 mb-1">Label text</div>
+                <Input
+                  value={opts.totalLabelText}
+                  onChange={(e) => setOpts((o) => ({ ...o, totalLabelText: e.target.value }))}
                   className="h-9 bg-zinc-900 border-white/10 text-white"
                 />
               </div>
