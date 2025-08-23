@@ -21,7 +21,7 @@ import {
 
 /* ───────────────────────── utils / style helpers ───────────────────────── */
 const cn = (...c) => c.filter(Boolean).join(" ");
-const LOCALE = "pt-PT"; // usa "en-GB" se quiseres 94.43 €
+const LOCALE = "pt-PT"; // mantém €, vírgula decimal
 const fmtMoney = (n) =>
   Number.isFinite(Number(n))
     ? new Intl.NumberFormat(LOCALE, {
@@ -61,13 +61,13 @@ const DEFAULT_THEME = {
   neg: "#ef4444",
   vsBg: "rgba(99,102,241,0.35)",
 
-  radius: 18,      // boxes
-  pillRadius: 16,  // badges/total
+  radius: 18,
+  pillRadius: 16,
   fontFamily:
     "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji','Segoe UI Emoji'",
   fontScale: 100,
-  fontWeight: 400,     // normal
-  strongWeight: 500,   // emphasis (mete 400 para tirar o “bold”)
+  fontWeight: 400,
+  strongWeight: 500,
 
   showThumbs: true,
   shine: true,
@@ -87,19 +87,16 @@ const DEFAULT_LAYOUT = {
   },
 };
 
-/* Widget options (Bonus docking, Total alignment + label modes) */
+/* Widget options */
 const DEFAULT_OPTS = {
   bonusLabelMode: "label+value", // "label+value" | "value"
   bonusLabelText: "Bonus Buy",
   bonusDock: "left",             // "left" | "right"
   totalJustify: "center",        // "left" | "center" | "right"
-
-  // NEW → Total paid controls
   totalLabelMode: "label+value", // "label+value" | "value"
   totalLabelText: "Total paid",
 };
 
-/* Presets */
 const PRESETS = [
   { name: "Neon", t: { bgStart: "#0f0c29", bgEnd: "#302b63", accent: "#22d3ee", pos: "#10b981", neg: "#ef4444", vsBg: "rgba(34,211,238,0.35)" } },
   { name: "Sunset", t: { bgStart: "#1f0a26", bgEnd: "#3a0b2e", accent: "#fb7185", pos: "#f59e0b", neg: "#ef4444", vsBg: "rgba(251,113,133,0.35)" } },
@@ -402,7 +399,6 @@ function WidgetPreviewPanel({
     );
   };
 
-  // Badges
   const BadgeBest = (
     <div
       className="px-3 py-1.5"
@@ -452,7 +448,6 @@ function WidgetPreviewPanel({
       </div>
     );
 
-  // NEW → Total badge (label + value OR value only)
   const TotalBadge =
     opts?.totalLabelMode === "value" ? (
       <div
@@ -517,7 +512,7 @@ function WidgetPreviewPanel({
         {/* ---------- default layout (no drag) ---------- */}
         {layout?.mode !== "free" && (
           <>
-            {/* badges row (Bonus can be docked right) */}
+            {/* badges row */}
             {opts?.bonusDock === "right" ? (
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">{BadgeBest}</div>
@@ -817,6 +812,8 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
       <div className="absolute inset-x-0 top-0 h-14 px-4 flex items-center justify-between border-b border-white/10 bg-zinc-950/60">
         <div className="flex items-center gap-2">
           <Palette className="h-5 w-5 text-white/80" />
+          <div>Widget Designer</div>
+          <div className="text-xs opacity-60">Battle #{battleId}</div>
         </div>
         <div className="flex items-center gap-2">
           <Button onClick={() => { persist(); onClose(); }} className="h-9">
@@ -908,7 +905,6 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
               <label className="block text-sm">Font weight (strong): {theme.strongWeight}</label>
               <input type="range" min={300} max={800} step={50} value={theme.strongWeight} onChange={(e) => setTheme((t) => ({ ...t, strongWeight: Number(e.target.value) }))} className="w-full" />
 
-              {/* Auto-placement options */}
               <div className="border-t border-white/10 pt-3 mt-2 space-y-2">
                 <div className="text-xs opacity-70">Auto placement (default layout)</div>
 
@@ -986,7 +982,7 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
               </div>
             </div>
 
-            {/* NEW → Total badge label */}
+            {/* Total badge label */}
             <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
               <div className="text-xs opacity-70">Total badge</div>
               <div className="flex flex-col gap-2 text-sm">
@@ -1019,7 +1015,6 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
               </div>
             </div>
 
-            {/* Save */}
             <div className="flex gap-2 sticky bottom-3">
               <Button onClick={persist} className="h-10">
                 <Save className="h-4 w-4 mr-2" />
@@ -1077,18 +1072,36 @@ function WidgetCard({ battleId, sideA, sideB, playerA, playerB, bestOf, buyCost,
   return (
     <>
       <AccentCard title="Widget">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-sm opacity-80">Preview</div>
+        <div className="flex items-center justify-end mb-3">
           <div className="flex items-center gap-2">
-            <Button type="button" onClick={() => navigator.clipboard.writeText(url)} className="h-9">
+            <Button
+              type="button"
+              onClick={() => navigator.clipboard.writeText(url)}
+              className="h-9"
+              title="Copiar link da overlay"
+            >
               <Copy className="h-4 w-4 mr-2" />
               Copy URL
             </Button>
-            <Button type="button" variant="outline" className="h-9" onClick={() => window.open(url, "_blank", "noopener,noreferrer")}>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9"
+              title="Abre num novo separador e copia o link"
+              onClick={async () => {
+                try { await navigator.clipboard.writeText(url); } catch {}
+                window.open(url, "_blank", "noopener,noreferrer");
+              }}
+            >
               <ExternalLink className="h-4 w-4 mr-2" />
               Open overlay
             </Button>
-            <Button type="button" variant="secondary" className="h-9" onClick={() => setOpenDesigner(true)}>
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-9"
+              onClick={() => setOpenDesigner(true)}
+            >
               <SlidersHorizontal className="h-4 w-4 mr-2" />
               Open Designer
             </Button>
