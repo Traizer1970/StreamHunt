@@ -29,7 +29,7 @@ export function AuthProvider({ children }) {
       options: { data: extra }  // guarda nome/handle no user metadata
     });
 
-  const logout = () => supabase.auth.signOut();
+const logout = () => safeSignOut();
 
   return (
     <AuthCtx.Provider value={{ user, authLoading, login, register, logout }}>

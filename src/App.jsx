@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase } from "@/lib/supabase";
+import { supabase, safeSignOut } from "@/lib/supabase";
 import {
   Menu, Star, GaugeCircle, ListChecks, Coins, Users, ShieldCheck,
   Sparkles, Wallet, Trophy, Sun, Moon, Gem, Flame,
@@ -543,11 +543,11 @@ const Shell = ({ route, navigate, children }) => {
     }
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setProfile(null);
-    navigate("home");
-  };
+ const handleLogout = async () => {
+   await safeSignOut();
+   setProfile(null);
+   navigate("home");
+ };
 
   useEffect(() => {
     const p = getHashParams();
