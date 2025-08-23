@@ -1463,6 +1463,7 @@ export default function App() {
         {route === "terms" && <Terms />}
         {route === "tournaments" && <TournamentsPage />}
         {route === "battles" && <BattlesPage />}
+        {route.startsWith("battles/") && <BattleView />}
 
         {/* fallback */}
         {!(route === "home" ||
