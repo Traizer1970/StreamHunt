@@ -543,11 +543,11 @@ const Shell = ({ route, navigate, children }) => {
     }
   };
 
- const handleLogout = async () => {
-   await safeSignOut();
-   setProfile(null);
-   navigate("home");
- };
+  const handleLogout = async () => {
+    await safeSignOut();
+    setProfile(null);
+    navigate("home");
+  };
 
   useEffect(() => {
     const p = getHashParams();

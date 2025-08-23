@@ -7,22 +7,25 @@ export const supabase = createClient(url, anon, {
   auth: { persistSession: true, autoRefreshToken: true }
 });
 
-// Logout à prova de 403
+/**
+ * Faz signOut local e garante POST /auth/v1/logout com Authorization + apikey (evitando 403).
+ */
 export async function safeSignOut() {
-  // lê a sessão atual
-  const { data: { session } } = await supabase.auth.getSession();
-
-  // limpa imediatamente no cliente
-  await supabase.auth.signOut({ scope: "local" });
-
-  // revoga no servidor com os headers exigidos
-  if (session?.access_token) {
-    await fetch(`${url}/auth/v1/logout`, {
-      method: "POST",
-      headers: {
-        apikey: anon,
-        Authorization: `Bearer ${session.access_token}`,
-      },
-    }).catch(() => {});
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    // limpa sessão local (evita UI ficar "presa")
+    await supabase.auth.signOut({ scope: "local" });
+    if (session?.access_token) {
+      await fetch(`${url}/auth/v1/logout`, {
+        method: "POST",
+        headers: {
+          apikey: anon,
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+    }
+  } catch (e) {
+    // sem stress se falhar o fetch; o local já foi limpo
+    console.warn("safeSignOut warning:", e?.message || e);
   }
 }

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase, safeSignOut } from "@/lib/supabase";
 
 const AuthCtx = createContext(null);
 export const useAuth = () => useContext(AuthCtx);
@@ -29,7 +29,7 @@ export function AuthProvider({ children }) {
       options: { data: extra }  // guarda nome/handle no user metadata
     });
 
-const logout = () => safeSignOut();
+  const logout = () => safeSignOut();
 
   return (
     <AuthCtx.Provider value={{ user, authLoading, login, register, logout }}>
