@@ -38,6 +38,7 @@ const DEFAULT_THEME = {
   bgStart: "#0b1020",
   bgEnd: "#111827",
   panelBorder: "rgba(255,255,255,0.12)",
+  panelBorderW: 1,         // ← espessura da borda do painel
   text: "#e5e7eb",
   subtext: "#9ca3af",
   accent: "#7dd3fc",
@@ -45,17 +46,20 @@ const DEFAULT_THEME = {
   // chips (buys)
   chipBg: "rgba(255,255,255,0.08)",
   chipBorder: "rgba(255,255,255,0.18)",
+  chipBorderW: 1,          // ← espessura da borda do chip
   chipRadius: 12,
 
   // badges (Best of / Bonus Buy)
   badgeBg: "rgba(255,255,255,0.08)",
   badgeBorder: "rgba(255,255,255,0.18)",
+  badgeBorderW: 1,         // ← espessura da borda do badge
 
   // total ribbon
   totalBg: "rgba(255,255,255,0.10)",
   totalBorder: "rgba(255,255,255,0.18)",
+  totalBorderW: 1,         // ← espessura da borda do total
 
-  // semantic
+  // semântica
   pos: "#22c55e",
   neg: "#ef4444",
   vsBg: "rgba(99,102,241,0.35)",
@@ -65,6 +69,7 @@ const DEFAULT_THEME = {
   fontFamily:
     "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji','Segoe UI Emoji'",
   fontScale: 100, // %
+  useBold: true,  // ← permitir desactivar o bold
   showThumbs: true,
   shine: true,
   pulse: true,
@@ -283,7 +288,7 @@ function SlotsAutocomplete({ value, onSelect, placeholder = "Add a Slot" }) {
   );
 }
 
-/* ───────── Preview Panel (clean, subtotais em boxes, badges minimal) ───────── */
+/* ───────── Preview Panel ───────── */
 function WidgetPreviewPanel({
   theme,
   bestOf,
@@ -302,15 +307,16 @@ function WidgetPreviewPanel({
   const Chip = ({ amount, ok, i }) => (
     <span
       key={i}
-      className="inline-flex items-center gap-1.5 px-3 py-1 font-semibold mr-2 mb-2 shadow-[0_0_0_1px_rgba(0,0,0,0.25)_inset,0_6px_18px_rgba(0,0,0,.36)]"
+      className="inline-flex items-center gap-1.5 px-3 py-1 mr-2 mb-2 shadow-[0_0_0_1px_rgba(0,0,0,0.25)_inset,0_6px_18px_rgba(0,0,0,.36)]"
       style={{
         borderRadius: theme.chipRadius,
         background: ok ? `${theme.pos}1F` : `${theme.neg}1F`,
-        border: `1px solid ${ok ? theme.pos : theme.neg}`,
+        border: `${theme.chipBorderW}px solid ${ok ? theme.pos : theme.neg}`,
         color: ok ? theme.pos : theme.neg,
         animation: theme.pulse ? `pop .16s ease-out both` : "none",
         animationDelay: `${i * 45}ms`,
         fontSize: `calc(12px * ${theme.fontScale / 100})`,
+        fontWeight: theme.useBold ? 600 : 400,
       }}
       title={ok ? "Cobre o buy" : "Abaixo do buy"}
     >
@@ -337,7 +343,7 @@ function WidgetPreviewPanel({
         className="relative rounded-xl overflow-hidden p-5 sm:p-6"
         style={{
           background: `linear-gradient(135deg, ${theme.bgStart}, ${theme.bgEnd})`,
-          border: `1px solid ${theme.panelBorder}`,
+          border: `${theme.panelBorderW}px solid ${theme.panelBorder}`,
           borderRadius: theme.radius,
           color: theme.text,
           fontFamily: theme.fontFamily,
@@ -356,16 +362,30 @@ function WidgetPreviewPanel({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <div
-              className="px-3 py-1.5 rounded-full text-[12px] font-semibold"
-              style={{ background: theme.badgeBg, border: `1px solid ${theme.badgeBorder}`, color: theme.text }}
+              className="px-3 py-1.5 rounded-full text-[12px]"
+              style={{
+                background: theme.badgeBg,
+                border: `${theme.badgeBorderW}px solid ${theme.badgeBorder}`,
+                color: theme.text,
+                fontWeight: theme.useBold ? 600 : 400,
+              }}
             >
-              Best of <span className="font-bold ml-1">{bestOf}</span>
+              <span style={{ fontWeight: theme.useBold ? 600 : 400 }}>Best of</span>
+              <span className="ml-1" style={{ fontWeight: theme.useBold ? 700 : 400 }}>{bestOf}</span>
             </div>
             <div
-              className="px-3 py-1.5 rounded-full text-[12px] font-semibold"
-              style={{ background: theme.badgeBg, border: `1px solid ${theme.badgeBorder}`, color: theme.accent }}
+              className="px-3 py-1.5 rounded-full text-[12px]"
+              style={{
+                background: theme.badgeBg,
+                border: `${theme.badgeBorderW}px solid ${theme.badgeBorder}`,
+                color: theme.accent,
+                fontWeight: theme.useBold ? 600 : 400,
+              }}
             >
-              Bonus Buy <span className="font-bold ml-1">{fmtMoney(buyCost)}</span>
+              <span>Bonus Buy</span>
+              <span className="ml-2" style={{ color: theme.accent, fontWeight: theme.useBold ? 700 : 400 }}>
+                {fmtMoney(buyCost)}
+              </span>
             </div>
           </div>
         </div>
@@ -374,7 +394,7 @@ function WidgetPreviewPanel({
         <div className="mt-5 grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-5">
           <div className="flex items-center justify-end gap-3">
             <div className="min-w-0 text-right">
-              <div className="text-[22px] sm:text-2xl font-extrabold truncate" style={{ color: theme.text }}>
+              <div className="text-[22px] sm:text-2xl truncate" style={{ color: theme.text, fontWeight: theme.useBold ? 700 : 400 }}>
                 {playerA || "—"}
               </div>
               <div className="text-[12px] truncate" style={{ color: theme.subtext }}>
@@ -393,8 +413,8 @@ function WidgetPreviewPanel({
 
           <div className="flex justify-center">
             <div
-              className={cn("px-3 py-1 rounded-lg text-xs font-bold", theme.pulse ? "animate-pulse" : "")}
-              style={{ background: theme.vsBg, border: `1px solid ${theme.panelBorder}` }}
+              className={cn("px-3 py-1 rounded-lg text-xs", theme.pulse ? "animate-pulse" : "")}
+              style={{ background: theme.vsBg, border: `${theme.badgeBorderW}px solid ${theme.panelBorder}`, fontWeight: theme.useBold ? 600 : 400 }}
             >
               VS
             </div>
@@ -410,7 +430,7 @@ function WidgetPreviewPanel({
               </div>
             )}
             <div className="min-w-0 text-left">
-              <div className="text-[22px] sm:text-2xl font-extrabold truncate" style={{ color: theme.text }}>
+              <div className="text-[22px] sm:text-2xl truncate" style={{ color: theme.text, fontWeight: theme.useBold ? 700 : 400 }}>
                 {playerB || "—"}
               </div>
               <div className="text-[12px] truncate" style={{ color: theme.subtext }}>
@@ -420,7 +440,7 @@ function WidgetPreviewPanel({
           </div>
         </div>
 
-        {/* Chips + subtotais (em boxes) */}
+        {/* Chips + subtotais */}
         <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
           <div>
             <div className="flex flex-wrap">
@@ -429,16 +449,17 @@ function WidgetPreviewPanel({
               ))}
             </div>
             <div
-              className="inline-flex mt-3 items-center gap-2 px-3 py-1.5 text-[12px] font-semibold"
+              className="inline-flex mt-3 items-center gap-2 px-3 py-1.5 text-[12px]"
               style={{
                 background: theme.chipBg,
-                border: `1px solid ${theme.chipBorder}`,
+                border: `${theme.chipBorderW}px solid ${theme.chipBorder}`,
                 borderRadius: theme.radius,
                 color: theme.subtext,
+                fontWeight: theme.useBold ? 600 : 400,
               }}
             >
               <span>Subtotal</span>
-              <span className="font-bold" style={{ color: theme.text }}>
+              <span style={{ color: theme.text, fontWeight: theme.useBold ? 600 : 400 }}>
                 {fmtMoney(aTotal)}
               </span>
             </div>
@@ -451,30 +472,32 @@ function WidgetPreviewPanel({
               ))}
             </div>
             <div
-              className="inline-flex mt-3 items-center gap-2 px-3 py-1.5 text-[12px] font-semibold"
+              className="inline-flex mt-3 items-center gap-2 px-3 py-1.5 text-[12px]"
               style={{
                 background: theme.chipBg,
-                border: `1px solid ${theme.chipBorder}`,
+                border: `${theme.chipBorderW}px solid ${theme.chipBorder}`,
                 borderRadius: theme.radius,
                 color: theme.subtext,
+                fontWeight: theme.useBold ? 600 : 400,
               }}
             >
               <span>Subtotal</span>
-              <span className="font-bold" style={{ color: theme.text }}>
+              <span style={{ color: theme.text, fontWeight: theme.useBold ? 600 : 400 }}>
                 {fmtMoney(bTotal)}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Total Pay clean */}
+        {/* Total Pay */}
         <div className="mt-6 flex justify-center">
           <div
-            className="px-4 py-2 rounded-full text-sm font-extrabold shadow-[0_10px_30px_rgba(0,0,0,.35)]"
+            className="px-4 py-2 rounded-full text-sm shadow-[0_10px_30px_rgba(0,0,0,.35)]"
             style={{
               background: theme.totalBg,
-              border: `1px solid ${theme.totalBorder}`,
+              border: `${theme.totalBorderW}px solid ${theme.totalBorder}`,
               color: theme.accent,
+              fontWeight: theme.useBold ? 700 : 400,
             }}
           >
             Total pago: {fmtMoney(totalPay)}
@@ -500,7 +523,7 @@ function ColorField({ label, value, onChange }) {
   );
 }
 
-/* ───────── Designer (overlay com mais controlos) ───────── */
+/* ───────── Designer ───────── */
 function WidgetDesigner({ open, onClose, battleId, theme, setTheme, previewProps }) {
   if (!open) return null;
   return (
@@ -564,7 +587,8 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, previewProps
             </div>
 
             <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
-              <div className="text-xs opacity-70">Layout</div>
+              <div className="text-xs opacity-70">Layout & Tipografia</div>
+
               <label className="block text-sm">Border radius: {theme.radius}px</label>
               <input type="range" min={8} max={28} step={1} value={theme.radius} onChange={(e) => setTheme((t) => ({ ...t, radius: Number(e.target.value) }))} className="w-full" />
 
@@ -576,6 +600,24 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, previewProps
 
               <label className="block text-sm">Font family</label>
               <Input value={theme.fontFamily} onChange={(e) => setTheme((t) => ({ ...t, fontFamily: e.target.value }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
+
+              {/* NOVOS CONTROLOS DE ESPESSURA */}
+              <label className="block text-sm">Panel border width: {theme.panelBorderW}px</label>
+              <input type="range" min={0} max={3} step={1} value={theme.panelBorderW} onChange={(e) => setTheme((t) => ({ ...t, panelBorderW: Number(e.target.value) }))} className="w-full" />
+
+              <label className="block text-sm">Badge/VS border width: {theme.badgeBorderW}px</label>
+              <input type="range" min={0} max={3} step={1} value={theme.badgeBorderW} onChange={(e) => setTheme((t) => ({ ...t, badgeBorderW: Number(e.target.value) }))} className="w-full" />
+
+              <label className="block text-sm">Total border width: {theme.totalBorderW}px</label>
+              <input type="range" min={0} max={3} step={1} value={theme.totalBorderW} onChange={(e) => setTheme((t) => ({ ...t, totalBorderW: Number(e.target.value) }))} className="w-full" />
+
+              <label className="block text-sm">Chip border width: {theme.chipBorderW}px</label>
+              <input type="range" min={0} max={3} step={1} value={theme.chipBorderW} onChange={(e) => setTheme((t) => ({ ...t, chipBorderW: Number(e.target.value) }))} className="w-full" />
+
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={!!theme.useBold} onChange={(e) => setTheme((t) => ({ ...t, useBold: e.target.checked }))} />
+                Use bold text
+              </label>
 
               {[
                 ["showThumbs", "Show thumbnails"],
@@ -617,7 +659,7 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, previewProps
   );
 }
 
-/* ───────── Widget Card (Preview + Designer) ───────── */
+/* ───────── Widget Card ───────── */
 function WidgetCard({ battleId, sideA, sideB, playerA, playerB, bestOf, buyCost, totalPay, aPays = [], bPays = [] }) {
   const [theme, setTheme] = React.useState(() => loadTheme(battleId));
   React.useEffect(() => setTheme(loadTheme(battleId)), [battleId]);
@@ -898,7 +940,6 @@ export default function BattleView() {
             <h1 className="text-2xl font-semibold">Battle {row ? `#${row.id}` : ""}</h1>
             {row?.status ? <span className="ml-2 text-xs rounded-lg border border-white/10 bg-white/5 px-2 py-0.5">{row.status}</span> : null}
           </div>
-          <div className="text-sm opacity-70">{row?.created_at ? new Date(row.created_at).toLocaleDateString() : ""}</div>
         </div>
 
         {err ? <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{err}</div> : null}
