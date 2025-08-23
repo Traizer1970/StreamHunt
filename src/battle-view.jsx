@@ -22,7 +22,7 @@ import {
 
 /* ───────────────────────── utils / style helpers ───────────────────────── */
 const cn = (...c) => c.filter(Boolean).join(" ");
-const LOCALE = "pt-PT";
+const LOCALE = "pt-PT"; // mantém formatação € com vírgula; troca para "en-GB" se quiseres 94.43 €
 const fmtMoney = (n) =>
   Number.isFinite(Number(n))
     ? new Intl.NumberFormat(LOCALE, {
@@ -33,13 +33,13 @@ const fmtMoney = (n) =>
       }).format(Number(n))
     : "—";
 
-/* Tema por defeito (agora com espessura de bordas e tipografia) */
+/* Theme (with border widths & typography) */
 const DEFAULT_THEME = {
   bgStart: "#0b1020",
   bgEnd: "#111827",
 
   panelBorder: "rgba(255,255,255,0.12)",
-  panelBorderWidth: 1, // ← espessura do contorno do painel
+  panelBorderWidth: 1,
 
   text: "#e5e7eb",
   subtext: "#9ca3af",
@@ -62,23 +62,22 @@ const DEFAULT_THEME = {
   neg: "#ef4444",
   vsBg: "rgba(99,102,241,0.35)",
 
-  radius: 18,      // caixas
+  radius: 18,      // boxes
   pillRadius: 16,  // badges/total
   fontFamily:
     "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji','Segoe UI Emoji'",
   fontScale: 100,
-  fontWeight: 400,     // “normal” (tira o bold)
-  strongWeight: 500,   // “forte” (números, nomes) — mete 400 para tirar bold
+  fontWeight: 400,     // normal
+  strongWeight: 500,   // emphasis (set 400 to remove bold effect)
 
   showThumbs: true,
   shine: true,
   pulse: true,
 };
 
-/* Layout por defeito + opções extra (bónus) */
+/* Default layout + free drag positions */
 const DEFAULT_LAYOUT = {
   mode: "default", // "default" | "free"
-  // posições relativas ao container (px) quando em modo "free"
   positions: {
     badges: { x: 16, y: 12 },
     playerA: { x: 40, y: 92 },
@@ -89,12 +88,15 @@ const DEFAULT_LAYOUT = {
   },
 };
 
+/* Widget options (now with Bonus docking & Total alignment) */
 const DEFAULT_OPTS = {
   bonusLabelMode: "label+value", // "label+value" | "value"
   bonusLabelText: "Bonus Buy",
+  bonusDock: "left",             // "left" | "right"  ← NEW
+  totalJustify: "center",        // "left" | "center" | "right" ← NEW
 };
 
-/* presets rápidos */
+/* Presets */
 const PRESETS = [
   { name: "Neon", t: { bgStart: "#0f0c29", bgEnd: "#302b63", accent: "#22d3ee", pos: "#10b981", neg: "#ef4444", vsBg: "rgba(34,211,238,0.35)" } },
   { name: "Sunset", t: { bgStart: "#1f0a26", bgEnd: "#3a0b2e", accent: "#fb7185", pos: "#f59e0b", neg: "#ef4444", vsBg: "rgba(251,113,133,0.35)" } },
@@ -129,7 +131,7 @@ async function dbSaveWidgetSettings(battleId, theme, layout, options) {
   ]);
 }
 
-/* enriquecer slot (pega thumbnail/provider quando só existe name/id) */
+/* Enrich slot */
 async function enrichSlotInfo(slot) {
   if (!slot) return slot;
   if (slot.thumbnail && slot.provider) return slot;
@@ -243,7 +245,7 @@ function SlotsAutocomplete({ value, onSelect, placeholder = "Add a Slot" }) {
         if (!cancelled) setItems(data || []);
       } catch (e) {
         if (!cancelled) {
-          setErrorMsg(e?.message || "Erro na pesquisa.");
+          setErrorMsg(e?.message || "Search error.");
           setItems([]);
         }
       }
@@ -277,7 +279,7 @@ function SlotsAutocomplete({ value, onSelect, placeholder = "Add a Slot" }) {
         >
           {errorMsg && <div className="px-3 py-2 text-sm text-red-400">{errorMsg}</div>}
           {!errorMsg && items.length === 0 ? (
-            <div className="px-3 py-2 text-sm opacity-70">Sem resultados. Escreve o nome e clica fora para usar o texto.</div>
+            <div className="px-3 py-2 text-sm opacity-70">No results. Type the name and click outside to use free text.</div>
           ) : (
             <ul className="max-h-72 overflow-auto divide-y divide-white/5">
               {items.map((it) => (
@@ -316,8 +318,7 @@ function SlotsAutocomplete({ value, onSelect, placeholder = "Add a Slot" }) {
   );
 }
 
-/* ───────── Widget Preview (com layout livre por drag&drop) ───────── */
-
+/* ───────── Free-drag helper ───────── */
 function useDrag(containerRef, id, layout, setLayout) {
   const onMouseDown = (e) => {
     if (layout?.mode !== "free") return;
@@ -348,6 +349,7 @@ function useDrag(containerRef, id, layout, setLayout) {
   return onMouseDown;
 }
 
+/* ───────── Preview Panel ───────── */
 function WidgetPreviewPanel({
   theme,
   layout,
@@ -382,7 +384,7 @@ function WidgetPreviewPanel({
         fontFamily: theme.fontFamily,
         fontWeight: theme.strongWeight,
       }}
-      title={ok ? "Cobre o buy" : "Abaixo do buy"}
+      title={ok ? "Covers buy" : "Below buy"}
     >
       <span
         className="h-1.5 w-1.5 rounded-full"
@@ -399,12 +401,7 @@ function WidgetPreviewPanel({
     return (
       <div
         onMouseDown={onMouseDown}
-        style={{
-          position: "absolute",
-          left: pos.x,
-          top: pos.y,
-          cursor: "grab",
-        }}
+        style={{ position: "absolute", left: pos.x, top: pos.y, cursor: "grab" }}
       >
         {children}
       </div>
@@ -489,14 +486,21 @@ function WidgetPreviewPanel({
           />
         )}
 
-        {/* ------------ layout normal (grid) ------------- */}
+        {/* ---------- default layout (no drag) ---------- */}
         {layout?.mode !== "free" && (
           <>
-            {/* badges */}
-            <div className="flex flex-wrap items-center gap-2">
-              {BadgeBest}
-              {BadgeBonus}
-            </div>
+            {/* badges row (Bonus can be docked right) */}
+            {opts?.bonusDock === "right" ? (
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">{BadgeBest}</div>
+                <div>{BadgeBonus}</div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                {BadgeBest}
+                {BadgeBonus}
+              </div>
+            )}
 
             {/* players */}
             <div className="mt-5 grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-5">
@@ -542,7 +546,7 @@ function WidgetPreviewPanel({
               </div>
             </div>
 
-            {/* chips + subtotais */}
+            {/* chips + subtotals */}
             <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
                 <div className="flex flex-wrap">
@@ -575,22 +579,26 @@ function WidgetPreviewPanel({
               </div>
             </div>
 
-            {/* total */}
-            <div className="mt-6 flex justify-center">
+            {/* total (left/center/right) */}
+            <div
+              className={cn(
+                "mt-6 flex",
+                opts?.totalJustify === "left" ? "justify-start" : opts?.totalJustify === "right" ? "justify-end" : "justify-center"
+              )}
+            >
               <div
                 className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
                 style={{ background: theme.totalBg, border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`, borderRadius: theme.pillRadius, color: theme.accent, fontWeight: theme.strongWeight }}
               >
-                Total pago: {fmtMoney(totalPay)}
+                Total paid: {fmtMoney(totalPay)}
               </div>
             </div>
           </>
         )}
 
-        {/* ------------ layout livre (drag&drop) ------------- */}
+        {/* ---------- free layout (drag & drop) ---------- */}
         {layout?.mode === "free" && (
           <>
-            {/* “guides” suaves */}
             <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: "linear-gradient(transparent 95%, rgba(255,255,255,.05) 95%)", backgroundSize: "100% 40px" }} />
 
             <DragBox id="badges">
@@ -675,7 +683,7 @@ function WidgetPreviewPanel({
                 className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
                 style={{ background: theme.totalBg, border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`, borderRadius: theme.pillRadius, color: theme.accent, fontWeight: theme.strongWeight }}
               >
-                Total pago: {fmtMoney(totalPay)}
+                Total paid: {fmtMoney(totalPay)}
               </div>
             </DragBox>
           </>
@@ -685,8 +693,7 @@ function WidgetPreviewPanel({
   );
 }
 
-/* ───────── Color field (input + picker nativo) ───────── */
-/* ───────── Color field (popover fixo; nunca corta) ───────── */
+/* ───────── ColorField (fixed popover) ───────── */
 function ColorField({ label, value, onChange }) {
   const swatchRef = React.useRef(null);
   const [open, setOpen] = React.useState(false);
@@ -694,15 +701,12 @@ function ColorField({ label, value, onChange }) {
   const [tempHex, setTempHex] = React.useState("#ffffff");
   const [textValue, setTextValue] = React.useState(value || "");
 
-  React.useEffect(() => {
-    setTextValue(value || "");
-  }, [value]);
+  React.useEffect(() => setTextValue(value || ""), [value]);
 
   const toHex = React.useCallback((v) => {
     if (!v) return "#ffffff";
     v = String(v).trim();
     if (v.startsWith("#")) {
-      // #RGB -> #RRGGBB
       if (v.length === 4) {
         const r = v[1], g = v[2], b = v[3];
         return `#${r}${r}${g}${g}${b}${b}`;
@@ -713,29 +717,20 @@ function ColorField({ label, value, onChange }) {
     if (m) {
       const clamp = (n) => Math.max(0, Math.min(255, n | 0));
       const [r, g, b] = [clamp(+m[1]), clamp(+m[2]), clamp(+m[3])];
-      return (
-        "#" +
-        [r, g, b]
-          .map((x) => x.toString(16).padStart(2, "0"))
-          .join("")
-          .slice(0, 6)
-      );
+      return "#" + [r, g, b].map((x) => x.toString(16).padStart(2, "0")).join("").slice(0, 6);
     }
     return "#ffffff";
   }, []);
 
-  const openPicker = (e) => {
+  const openPicker = () => {
     const rect = swatchRef.current?.getBoundingClientRect();
     const panelW = 260;
     const panelH = 220;
     const pad = 8;
-    let left = (rect?.left ?? 0);
-    let top = (rect ? rect.bottom + pad : 0);
-
-    // clamp à viewport
+    let left = rect?.left ?? 0;
+    let top = rect ? rect.bottom + pad : 0;
     left = Math.max(pad, Math.min(window.innerWidth - panelW - pad, left));
     top = Math.max(pad, Math.min(window.innerHeight - panelH - pad, top));
-
     setAnchor({ left, top });
     setTempHex(toHex(textValue || value));
     setOpen(true);
@@ -757,7 +752,7 @@ function ColorField({ label, value, onChange }) {
           onClick={openPicker}
           className="h-9 w-9 rounded-lg border border-white/10 shadow-inner"
           style={{ background: textValue || value || "#ffffff" }}
-          title="Escolher cor"
+          title="Pick color"
         />
         <Input
           value={textValue}
@@ -769,38 +764,22 @@ function ColorField({ label, value, onChange }) {
         />
       </div>
 
-      {/* Popover fixo (fora de qualquer overflow) */}
       {open && (
-        <div
-          className="fixed inset-0 z-[9999]"
-          onMouseDown={() => setOpen(false)}
-        >
+        <div className="fixed inset-0 z-[9999]" onMouseDown={() => setOpen(false)}>
           <div
             onMouseDown={(e) => e.stopPropagation()}
             className="rounded-xl border border-white/10 bg-zinc-900/95 p-3 shadow-2xl"
-            style={{
-              position: "fixed",
-              left: anchor.left,
-              top: anchor.top,
-              width: 260,
-              height: 220,
-              backdropFilter: "blur(6px)",
-            }}
+            style={{ position: "fixed", left: anchor.left, top: anchor.top, width: 260, height: 220, backdropFilter: "blur(6px)" }}
           >
-            <div className="text-xs opacity-70 mb-2">Seleciona a cor</div>
+            <div className="text-xs opacity-70 mb-2">Pick a color</div>
             <input
               type="color"
               value={tempHex}
               onChange={(e) => setTempHex(e.target.value)}
-              className="block w-full h-40 rounded-lg border border-white/10 p-0 cursor-pointer"
-              style={{ background: "transparent" }}
+              className="block w-full h-40 rounded-lg border border-white/10 p-0 cursor-pointer bg-transparent"
             />
             <div className="mt-2 flex items-center gap-2">
-              <Input
-                value={tempHex}
-                onChange={(e) => setTempHex(e.target.value)}
-                className="h-9 bg-zinc-800 border-white/10 text-white"
-              />
+              <Input value={tempHex} onChange={(e) => setTempHex(e.target.value)} className="h-9 bg-zinc-800 border-white/10 text-white" />
               <Button type="button" className="h-9" onClick={applyAndClose}>
                 OK
               </Button>
@@ -812,8 +791,7 @@ function ColorField({ label, value, onChange }) {
   );
 }
 
-
-/* ───────── Designer (overlay) ───────── */
+/* ───────── Designer ───────── */
 function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setLayout, opts, setOpts, previewProps, persist }) {
   if (!open) return null;
   return (
@@ -827,11 +805,11 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
         <div className="flex items-center gap-2">
           <Button onClick={() => { persist(); onClose(); }} className="h-9">
             <Save className="h-4 w-4 mr-2" />
-            Guardar & Fechar
+            Save & Close
           </Button>
           <Button variant="outline" onClick={onClose} className="h-9">
             <X className="h-4 w-4 mr-2" />
-            Cancelar
+            Cancel
           </Button>
         </div>
       </div>
@@ -858,7 +836,7 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
               </div>
             </div>
 
-            {/* Cores */}
+            {/* Colors */}
             <div className="grid grid-cols-1 gap-4">
               <ColorField label="Background start" value={theme.bgStart} onChange={(v) => setTheme((t) => ({ ...t, bgStart: v }))} />
               <ColorField label="Background end" value={theme.bgEnd} onChange={(v) => setTheme((t) => ({ ...t, bgEnd: v }))} />
@@ -868,8 +846,8 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
               <ColorField label="Accent" value={theme.accent} onChange={(v) => setTheme((t) => ({ ...t, accent: v }))} />
               <ColorField label="Chip bg" value={theme.chipBg} onChange={(v) => setTheme((t) => ({ ...t, chipBg: v }))} />
               <ColorField label="Chip border" value={theme.chipBorder} onChange={(v) => setTheme((t) => ({ ...t, chipBorder: v }))} />
-              <ColorField label="OK (verde)" value={theme.pos} onChange={(v) => setTheme((t) => ({ ...t, pos: v }))} />
-              <ColorField label="NOK (vermelho)" value={theme.neg} onChange={(v) => setTheme((t) => ({ ...t, neg: v }))} />
+              <ColorField label="OK (green)" value={theme.pos} onChange={(v) => setTheme((t) => ({ ...t, pos: v }))} />
+              <ColorField label="NOK (red)" value={theme.neg} onChange={(v) => setTheme((t) => ({ ...t, neg: v }))} />
               <ColorField label="Badge bg" value={theme.badgeBg} onChange={(v) => setTheme((t) => ({ ...t, badgeBg: v }))} />
               <ColorField label="Badge border" value={theme.badgeBorder} onChange={(v) => setTheme((t) => ({ ...t, badgeBorder: v }))} />
               <ColorField label="Total bg" value={theme.totalBg} onChange={(v) => setTheme((t) => ({ ...t, totalBg: v }))} />
@@ -877,7 +855,7 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
               <ColorField label="VS bg" value={theme.vsBg} onChange={(v) => setTheme((t) => ({ ...t, vsBg: v }))} />
             </div>
 
-            {/* Layout / Tipografia */}
+            {/* Layout / Typography */}
             <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
               <div className="text-xs opacity-70 mb-1">Layout</div>
 
@@ -893,7 +871,7 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
               <label className="block text-sm">Chip border width: {theme.chipBorderWidth}px</label>
               <input type="range" min={0} max={4} step={1} value={theme.chipBorderWidth} onChange={(e) => setTheme((t) => ({ ...t, chipBorderWidth: Number(e.target.value) }))} className="w-full" />
 
-              <label className="block text-sm">Border radius (caixas): {theme.radius}px</label>
+              <label className="block text-sm">Border radius (boxes): {theme.radius}px</label>
               <input type="range" min={8} max={28} step={1} value={theme.radius} onChange={(e) => setTheme((t) => ({ ...t, radius: Number(e.target.value) }))} className="w-full" />
 
               <label className="block text-sm">Pill radius (Best/Bonus/Total): {theme.pillRadius}px</label>
@@ -911,12 +889,39 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
               <label className="block text-sm">Font weight (normal): {theme.fontWeight}</label>
               <input type="range" min={300} max={700} step={50} value={theme.fontWeight} onChange={(e) => setTheme((t) => ({ ...t, fontWeight: Number(e.target.value) }))} className="w-full" />
 
-              <label className="block text-sm">Font weight (forte): {theme.strongWeight}</label>
+              <label className="block text-sm">Font weight (strong): {theme.strongWeight}</label>
               <input type="range" min={300} max={800} step={50} value={theme.strongWeight} onChange={(e) => setTheme((t) => ({ ...t, strongWeight: Number(e.target.value) }))} className="w-full" />
 
-              <div className="border-t border-white/10 pt-3 mt-2">
-                <div className="mt-2 flex gap-2">
-            
+              {/* Auto-placement options */}
+              <div className="border-t border-white/10 pt-3 mt-2 space-y-2">
+                <div className="text-xs opacity-70">Auto placement (default layout)</div>
+
+                <div className="flex items-center gap-3">
+                  <div className="text-sm w-36">Bonus badge:</div>
+                  <label className="text-sm flex items-center gap-1">
+                    <input type="radio" checked={opts.bonusDock === "left"} onChange={() => setOpts((o) => ({ ...o, bonusDock: "left" }))} />
+                    Left
+                  </label>
+                  <label className="text-sm flex items-center gap-1">
+                    <input type="radio" checked={opts.bonusDock === "right"} onChange={() => setOpts((o) => ({ ...o, bonusDock: "right" }))} />
+                    Right
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="text-sm w-36">Total badge:</div>
+                  <label className="text-sm flex items-center gap-1">
+                    <input type="radio" checked={opts.totalJustify === "left"} onChange={() => setOpts((o) => ({ ...o, totalJustify: "left" }))} />
+                    Left
+                  </label>
+                  <label className="text-sm flex items-center gap-1">
+                    <input type="radio" checked={opts.totalJustify === "center"} onChange={() => setOpts((o) => ({ ...o, totalJustify: "center" }))} />
+                    Center
+                  </label>
+                  <label className="text-sm flex items-center gap-1">
+                    <input type="radio" checked={opts.totalJustify === "right"} onChange={() => setOpts((o) => ({ ...o, totalJustify: "right" }))} />
+                    Right
+                  </label>
                 </div>
               </div>
 
@@ -932,7 +937,7 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
               ))}
             </div>
 
-            {/* Bonus Buy – label */}
+            {/* Bonus Buy label */}
             <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
               <div className="text-xs opacity-70">Bonus Buy</div>
               <div className="flex flex-col gap-2 text-sm">
@@ -943,7 +948,7 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
                     checked={opts.bonusLabelMode === "label+value"}
                     onChange={() => setOpts((o) => ({ ...o, bonusLabelMode: "label+value" }))}
                   />
-                  Texto + Valor
+                  Label + Value
                 </label>
                 <label className="flex items-center gap-2">
                   <input
@@ -952,11 +957,11 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
                     checked={opts.bonusLabelMode === "value"}
                     onChange={() => setOpts((o) => ({ ...o, bonusLabelMode: "value" }))}
                   />
-                  Apenas Valor
+                  Value only
                 </label>
               </div>
               <div>
-                <div className="text-xs opacity-70 mb-1">Texto do rótulo</div>
+                <div className="text-xs opacity-70 mb-1">Label text</div>
                 <Input
                   value={opts.bonusLabelText}
                   onChange={(e) => setOpts((o) => ({ ...o, bonusLabelText: e.target.value }))}
@@ -965,11 +970,11 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
               </div>
             </div>
 
-            {/* Guardar */}
+            {/* Save */}
             <div className="flex gap-2 sticky bottom-3">
               <Button onClick={persist} className="h-10">
                 <Save className="h-4 w-4 mr-2" />
-                Guardar
+                Save
               </Button>
               <Button
                 variant="outline"
@@ -980,13 +985,13 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
                 }}
                 className="h-10"
               >
-                Restaurar padrão
+                Restore defaults
               </Button>
             </div>
           </div>
         </div>
 
-        {/* Preview vivo */}
+        {/* Live preview */}
         <div className="p-6 overflow-auto">
           <WidgetPreviewPanel theme={theme} layout={layout} setLayout={setLayout} opts={opts} {...previewProps} />
         </div>
@@ -995,7 +1000,7 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
   );
 }
 
-/* ───────── Widget Card (Preview + Designer + persistência Supabase) ───────── */
+/* ───────── Widget Card ───────── */
 function WidgetCard({ battleId, sideA, sideB, playerA, playerB, bestOf, buyCost, totalPay, aPays = [], bPays = [] }) {
   const [theme, setTheme] = React.useState(DEFAULT_THEME);
   const [layout, setLayout] = React.useState(DEFAULT_LAYOUT);
@@ -1028,15 +1033,15 @@ function WidgetCard({ battleId, sideA, sideB, playerA, playerB, bestOf, buyCost,
           <div className="flex items-center gap-2">
             <Button type="button" onClick={() => navigator.clipboard.writeText(url)} className="h-9">
               <Copy className="h-4 w-4 mr-2" />
-              Copiar URL
+              Copy URL
             </Button>
             <Button type="button" variant="outline" className="h-9" onClick={() => window.open(url, "_blank", "noopener,noreferrer")}>
               <ExternalLink className="h-4 w-4 mr-2" />
-              Abrir overlay
+              Open overlay
             </Button>
             <Button type="button" variant="secondary" className="h-9" onClick={() => setOpenDesigner(true)}>
               <SlidersHorizontal className="h-4 w-4 mr-2" />
-              Abrir Designer
+              Open Designer
             </Button>
           </div>
         </div>
@@ -1046,7 +1051,7 @@ function WidgetCard({ battleId, sideA, sideB, playerA, playerB, bestOf, buyCost,
         <div className="mt-3 flex justify-end">
           <Button onClick={persist} className="h-9">
             <Save className="h-4 w-4 mr-2" />
-            Guardar definições
+            Save settings
           </Button>
         </div>
       </AccentCard>
@@ -1068,12 +1073,10 @@ function WidgetCard({ battleId, sideA, sideB, playerA, playerB, bestOf, buyCost,
   );
 }
 
-/* ───────────────────────── Página ───────────────────────── */
-// ——— A PARTIR DAQUI É IGUAL AO TEU ECRÃ DE BATALHA (com pequenas melhorias)
+/* ───────────────────────── Page ───────────────────────── */
 export default function BattleView() {
   const { isDark } = useTheme();
 
-  // id a partir do hash
   const [battleId, setBattleId] = React.useState(null);
   React.useEffect(function () {
     function read() {
@@ -1155,7 +1158,6 @@ export default function BattleView() {
       const { data: ps } = await supabase.from("battle_payments").select("*").eq("battle_id", id).order("buy_idx", { ascending: true });
       setPays(ps || []);
 
-      // histórico (mantido)
       async function fetchSlotHistory(slotEntry) {
         try {
           let q = supabase.from("battle_entries").select("battle_id, slot_id, slot_name");
@@ -1226,7 +1228,7 @@ export default function BattleView() {
 
       await load(battleId);
     } catch (e) {
-      alert(e?.message || "Falha a guardar os lados");
+      alert(e?.message || "Failed to save sides");
     }
   }
 
@@ -1278,19 +1280,19 @@ export default function BattleView() {
             <div>{player || "—"}</div>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-            <div className="text-xs opacity-70">Buys registados</div>
+            <div className="text-xs opacity-70">Recorded buys</div>
             <div>{stats.count}</div>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-            <div className="text-xs opacity-70">Total pago</div>
+            <div className="text-xs opacity-70">Total paid</div>
             <div>{fmtMoney(stats.total)}</div>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-            <div className="text-xs opacity-70">Best win</div>
+            <div className="text-xs opacity-70">Best</div>
             <div>{fmtMoney(stats.best)}</div>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-            <div className="text-xs opacity-70">Worst payment</div>
+            <div className="text-xs opacity-70">Worst</div>
             <div>{fmtMoney(stats.worst)}</div>
           </div>
         </div>
@@ -1342,7 +1344,7 @@ export default function BattleView() {
 
             <AccentCard>
               <div className="grid grid-cols-3 gap-3">
-                <Kpi icon={<Coins className="h-5 w-5" />} label="Total Pay" value={fmtMoney(totalPay)} />
+                <Kpi icon={<Coins className="h-5 w-5" />} label="Total paid" value={fmtMoney(totalPay)} />
                 <Kpi icon={<Gamepad2 className="h-5 w-5" />} label="Score" value={aPays.length + bPays.length} />
                 <Kpi icon={<TrendingUp className="h-5 w-5" />} label="Profit" value={fmtMoney(profit)} tone={profitTone} />
               </div>
@@ -1362,7 +1364,7 @@ export default function BattleView() {
             />
           </div>
 
-          {/* RIGHT: sides + histórico + buys */}
+          {/* RIGHT: sides + history + buys */}
           <div className="space-y-4">
             <AccentCard title="Battle">
               <div className="grid md:grid-cols-2 gap-4">
@@ -1398,7 +1400,7 @@ export default function BattleView() {
               </div>
             </AccentCard>
 
-            {/* histórico dos slots (mantido) */}
+            {/* slot history */}
             <div className="grid md:grid-cols-2 gap-4">
               {[histA, histB].map((h, i) => (
                 <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-3">
