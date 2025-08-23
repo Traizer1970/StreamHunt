@@ -24,13 +24,7 @@ const DICT = {
     searchPh: "Search by title...",
     empty: "No tournaments yet.",
     name: "Title",
-    status: "Status",
-    prizepool: "Prize pool",
     actions: "Actions",
-    scheduled: "scheduled",
-    running: "running",
-    finished: "finished",
-    canceled: "canceled",
     open: "Open",
     insights: "Insights",
     topSlots: "Top Slots (all-time)",
@@ -41,8 +35,9 @@ const DICT = {
     wins: "wins",
     totalPrize: "Total prize won",
     lastPrize: "Last prize won",
+    prizes: "Prizes",
   },
-  pt: {} // mantido vazio para forçar inglês nesta página
+  pt: {}
 };
 const t = (k) => DICT.en[k] || k;
 
@@ -73,10 +68,9 @@ function useDebounced(v, delay = 300) {
   return s;
 }
 
-// tiny avatar placeholder (with initials)
+/* avatar placeholder */
 function Avatar({ name }) {
-  const initials = String(name || "?")
-    .split(/\s+/).map(p => p[0]).join("").slice(0,2).toUpperCase();
+  const initials = String(name || "?").split(/\s+/).map(p => p[0]).join("").slice(0,2).toUpperCase();
   return (
     <div className="h-8 w-8 rounded-full bg-gradient-to-br from-indigo-500 to-emerald-500 text-white grid place-items-center text-[11px] font-extrabold shadow ring-2 ring-black/20">
       {initials || "?"}
@@ -84,12 +78,9 @@ function Avatar({ name }) {
   );
 }
 
-/* ───────────────────────── Custom Chart (Recharts) ───────────────────────── */
-import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell
-} from "recharts";
-
-const BAR_COLORS = ["#6366F1", "#22C55E", "#F59E0B"]; // indigo, green, amber
+/* ───────────────────────── Recharts ───────────────────────── */
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from "recharts";
+const BAR_COLORS = ["#6366F1", "#22C55E", "#F59E0B"];
 
 function NiceTooltip({ active, payload, label }) {
   if (!active || !payload || !payload.length) return null;
@@ -103,7 +94,7 @@ function NiceTooltip({ active, payload, label }) {
   );
 }
 
-/* ───────────────────────── Mini confirm ───────────────────────── */
+/* ───────────────────────── Confirm ───────────────────────── */
 function Confirm({ open, title, body, confirmText, cancelText, onConfirm, onCancel }) {
   if (!open) return null;
   return (
@@ -123,122 +114,79 @@ function Confirm({ open, title, body, confirmText, cancelText, onConfirm, onCanc
   );
 }
 
-/* ───────────────────────── Create/Edit Modal ───────────────────────── */
+/* ───────────────────────── Modal ───────────────────────── */
 function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
   const [busy, setBusy] = React.useState(false);
-
   const [title, setTitle] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [status, setStatus] = React.useState("scheduled");
 
-  // prémios por posição (strings para os inputs)
+  // prizes by position
   const [p1, setP1] = React.useState("");
   const [p2, setP2] = React.useState("");
   const [p3, setP3] = React.useState("");
+  const total = (toNum(p1) || 0) + (toNum(p2) || 0) + (toNum(p3) || 0);
 
-  const totalPrizePool =
-    (toNum(p1) || 0) + (toNum(p2) || 0) + (toNum(p3) || 0);
-
-  // carregar dados do torneio + prémios existentes quando abrir
   React.useEffect(() => {
-    let cancelled = false;
-
-    async function loadPrizes(tournamentId) {
-      try {
-        const { data, error } = await supabase
-          .from("tournament_prizes")
-          .select("position, amount")
-          .eq("tournament_id", tournamentId);
-        if (error) throw error;
-
-        const byPos = new Map((data || []).map(r => [Number(r.position), r.amount]));
-        if (!cancelled) {
-          setP1(byPos.has(1) ? String(byPos.get(1) ?? "") : "");
-          setP2(byPos.has(2) ? String(byPos.get(2) ?? "") : "");
-          setP3(byPos.has(3) ? String(byPos.get(3) ?? "") : "");
-        }
-      } catch {
-        if (!cancelled) {
-          setP1(""); setP2(""); setP3("");
-        }
-      }
-    }
-
     if (!open) return;
-
     setTitle(initial?.title ?? initial?.name ?? "");
     setDescription(initial?.description ?? "");
     setStatus(initial?.status ?? "scheduled");
-
-    if (initial?.id) loadPrizes(initial.id);
-    else { setP1(""); setP2(""); setP3(""); }
-
-    return () => { cancelled = true; };
-  }, [open, initial]);
+    // load prizes for edit
+    (async () => {
+      if (initial?.id) {
+        const { data } = await supabase
+          .from("tournament_prizes")
+          .select("position,amount")
+          .eq("tournament_id", initial.id);
+        const map = new Map((data || []).map(r => [Number(r.position), Number(r.amount) || 0]));
+        setP1(map.get(1) ?? "");
+        setP2(map.get(2) ?? "");
+        setP3(map.get(3) ?? "");
+      } else {
+        setP1(""); setP2(""); setP3("");
+      }
+    })();
+  }, [open, initial?.id, initial?.title, initial?.name, initial?.description, initial?.status]);
 
   if (!open) return null;
-
-  async function persistPrizes(tournamentId, list) {
-    for (const { position, amount } of list) {
-      await supabase
-        .from("tournament_prizes")
-        .delete()
-        .eq("tournament_id", tournamentId)
-        .eq("position", position);
-
-      if (amount != null) {
-        await supabase
-          .from("tournament_prizes")
-          .insert({
-            tournament_id: tournamentId,
-            position,
-            amount: Number(amount) || 0,
-          });
-      }
-    }
-  }
 
   async function save() {
     try {
       setBusy(true);
-
+      // 1) create / update tournament
       const payload = {
         title: title || null,
         description: description || null,
         status: status || null,
-        prize_pool: totalPrizePool, // soma automática
+        prize_pool: total || null,
       };
 
-      // cria/atualiza torneio e obtém o ID
-      let tournamentId = initial?.id ?? null;
-
-      if (tournamentId) {
-        const { error } = await supabase
-          .from("tournaments")
-          .update(payload)
-          .eq("id", tournamentId);
+      let id = initial?.id ?? null;
+      if (id) {
+        const { error } = await supabase.from("tournaments").update(payload).eq("id", id);
         if (error) throw error;
       } else {
-        const { data, error } = await supabase
-          .from("tournaments")
-          .insert([payload])
-          .select()
-          .single();
+        const { data, error } = await supabase.from("tournaments").insert([payload]).select("id").single();
         if (error) throw error;
-        tournamentId = data.id;
+        id = data.id;
       }
 
-      // persiste prémios 1..3
-      await persistPrizes(tournamentId, [
-        { position: 1, amount: toNum(p1) },
-        { position: 2, amount: toNum(p2) },
-        { position: 3, amount: toNum(p3) },
-      ]);
+      // 2) upsert prizes 1..3
+      const rows = [
+        { tournament_id: id, position: 1, amount: toNum(p1) || 0 },
+        { tournament_id: id, position: 2, amount: toNum(p2) || 0 },
+        { tournament_id: id, position: 3, amount: toNum(p3) || 0 },
+      ];
+      const { error: e2 } = await supabase
+        .from("tournament_prizes")
+        .upsert(rows, { onConflict: "tournament_id,position" });
+      if (e2) throw e2;
 
       onSaved && onSaved();
       onClose && onClose();
     } catch (e) {
-      alert(e?.message || "Failed to save.");
+      alert(e.message || "Failed to save.");
     } finally {
       setBusy(false);
     }
@@ -255,13 +203,7 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
             <div className="text-lg font-semibold flex items-center gap-2">
               <Trophy className="h-5 w-5" /> {titleText}
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-lg hover:bg-white/10 transition"
-              aria-label="Close"
-            >
-              ✕
-            </button>
+            <button onClick={onClose} className="p-2 rounded-lg hover:bg-white/10 transition" aria-label="Close">✕</button>
           </div>
 
           <div className="space-y-6">
@@ -285,27 +227,24 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
                     onChange={(e) => setStatus(e.target.value)}
                     className="h-11 w-full rounded-xl bg-zinc-900 border border-white/10 px-3 text-sm"
                   >
-                    <option value="scheduled">{t("scheduled")}</option>
-                    <option value="running">{t("running")}</option>
-                    <option value="finished">{t("finished")}</option>
-                    <option value="canceled">{t("canceled")}</option>
+                    <option value="scheduled">scheduled</option>
+                    <option value="running">running</option>
+                    <option value="finished">finished</option>
+                    <option value="canceled">canceled</option>
                   </select>
                 </div>
 
-                {/* Prizes by position */}
                 <div className="md:col-span-2">
-                  <div className="text-[11px] font-semibold tracking-wide opacity-60 mb-2">
-                    PRIZES BY POSITION
-                  </div>
+                  <div className="text-[11px] font-semibold tracking-wide opacity-60 mb-2">PRIZES BY POSITION</div>
                   <div className="grid md:grid-cols-3 gap-3">
                     <div>
                       <div className="text-xs opacity-70 mb-1">1st place</div>
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">€</span>
                         <Input
+                          inputMode="decimal"
                           type="number"
                           step="0.01"
-                          inputMode="decimal"
                           value={p1}
                           onChange={(e) => setP1(e.target.value)}
                           placeholder="e.g., 80"
@@ -313,15 +252,14 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
                         />
                       </div>
                     </div>
-
                     <div>
                       <div className="text-xs opacity-70 mb-1">2nd place</div>
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">€</span>
                         <Input
+                          inputMode="decimal"
                           type="number"
                           step="0.01"
-                          inputMode="decimal"
                           value={p2}
                           onChange={(e) => setP2(e.target.value)}
                           placeholder="e.g., 30"
@@ -329,15 +267,14 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
                         />
                       </div>
                     </div>
-
                     <div>
                       <div className="text-xs opacity-70 mb-1">3rd place</div>
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">€</span>
                         <Input
+                          inputMode="decimal"
                           type="number"
                           step="0.01"
-                          inputMode="decimal"
                           value={p3}
                           onChange={(e) => setP3(e.target.value)}
                           placeholder="e.g., 13"
@@ -347,13 +284,15 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
                     </div>
                   </div>
 
-                  {/* Prize pool automático */}
-                  <div className="mt-3 grid md:grid-cols-2 gap-3">
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">{t("prizepool")} (auto)</div>
-                      <div className="h-11 rounded-xl bg-zinc-900 border border-white/10 px-3 grid items-center text-sm">
-                        <span className="font-semibold">{fmtMoney(totalPrizePool)}</span>
-                      </div>
+                  <div className="mt-3">
+                    <div className="text-xs opacity-70 mb-1">Prize pool (auto)</div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">€</span>
+                      <Input
+                        readOnly
+                        value={String(total).replace(".", ",")}
+                        className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white pl-7"
+                      />
                     </div>
                   </div>
                 </div>
@@ -386,7 +325,6 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
 }
 
 /* ───────────────────────── Bracket winner helpers ───────────────────────── */
-// Build bracket from ordered seed list and decide winners using payments map
 function computeTournamentWinner(entries, paymentsRows) {
   if (!Array.isArray(entries) || entries.length < 2) return null;
 
@@ -400,7 +338,6 @@ function computeTournamentWinner(entries, paymentsRows) {
   const filled = [...seedList];
   while (filled.length < p) filled.push(null);
 
-  // index payments -> map["R{r}M{m}-{L|R}-B{b}"] = amount
   const payMap = {};
   for (const r of paymentsRows || []) {
     const k = `R${r.round_idx}M${r.match_idx}-${(r.side || "").toUpperCase()}-B${r.buy_idx}`;
@@ -408,44 +345,33 @@ function computeTournamentWinner(entries, paymentsRows) {
   }
   const sumSide = (r, m, side, buys = 3) => {
     let s = 0;
-    for (let i = 1; i <= Math.max(1, buys); i++) {
-      const k = `R${r}M${m}-${side}-B${i}`;
-      s += Number(payMap[k] || 0);
-    }
+    for (let i = 1; i <= Math.max(1, buys); i++) s += Number(payMap[`R${r}M${m}-${side}-B${i}`] || 0);
     return s;
   };
 
   const rounds = [];
-  // round 0
   const r0 = [];
   for (let i=0; i<p; i+=2) {
     const Ls = filled[i];
     const Rs = filled[i+1];
-    r0.push({
-      leftSeed: Ls, rightSeed: Rs,
-      left: Ls ? bySeed[Ls] : null,
-      right: Rs ? bySeed[Rs] : null
-    });
+    r0.push({ leftSeed: Ls, rightSeed: Rs, left: Ls ? bySeed[Ls] : null, right: Rs ? bySeed[Rs] : null });
   }
   rounds.push(r0);
 
-  // propagate
   const totalRounds = Math.log2(p);
   for (let r=0; r<totalRounds-1; r++) {
     const cur = rounds[r];
-    const next = Array.from({length: Math.ceil(cur.length/2)}, () => ({
-      left: null, right: null, leftSeed: null, rightSeed: null
-    }));
+    const next = Array.from({length: Math.ceil(cur.length/2)}, () => ({ left: null, right: null, leftSeed: null, rightSeed: null }));
     for (let m=0; m<cur.length; m++) {
       const match = cur[m];
       const sumL = sumSide(r, m, "L");
       const sumR = sumSide(r, m, "R");
-      const winnerSide = sumL > sumR ? "L" : sumR > sumL ? "R" : null;
+      const w = sumL > sumR ? "L" : sumR > sumL ? "R" : null;
       const target = next[Math.floor(m/2)];
-      if (winnerSide === "L" && match.left) {
+      if (w === "L" && match.left) {
         if (m % 2 === 0) { target.left = match.left; target.leftSeed = match.leftSeed; }
         else { target.right = match.left; target.rightSeed = match.leftSeed; }
-      } else if (winnerSide === "R" && match.right) {
+      } else if (w === "R" && match.right) {
         if (m % 2 === 0) { target.left = match.right; target.leftSeed = match.rightSeed; }
         else { target.right = match.right; target.rightSeed = match.rightSeed; }
       }
@@ -457,12 +383,10 @@ function computeTournamentWinner(entries, paymentsRows) {
   const finalMatch = finalRound?.[0];
   if (!finalMatch) return null;
 
-  // winner of final by payments at last round index
   const lastR = rounds.length - 1;
   const finalSumL = sumSide(lastR, 0, "L");
   const finalSumR = sumSide(lastR, 0, "R");
-  const winner = finalSumL > finalSumR ? finalMatch.left : finalMatch.right;
-  return winner || null;
+  return finalSumL > finalSumR ? finalMatch.left : finalMatch.right;
 }
 
 /* ───────────────────────── Página ───────────────────────── */
@@ -476,11 +400,14 @@ export default function TournamentsPage() {
   const [search, setSearch] = React.useState("");
   const dSearch = useDebounced(search, 300);
 
-  const [sort, setSort] = React.useState({ key: "title", dir: 1 }); // 1 asc, -1 desc
+  const [sort, setSort] = React.useState({ key: "title", dir: 1 });
   const [modalOpen, setModalOpen] = React.useState(false);
   const [editRow, setEditRow] = React.useState(null);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [rowToDelete, setRowToDelete] = React.useState(null);
+
+  // prizes map: id -> {1,2,3}
+  const [prizesMap, setPrizesMap] = React.useState(new Map());
 
   // insights
   const [chartData, setChartData] = React.useState([]); // [{name, wins}]
@@ -491,16 +418,33 @@ export default function TournamentsPage() {
     try {
       setBusy(true);
       setErr("");
-      let { data, error } = await supabase.from("tournaments").select("*").limit(500);
+      const { data, error } = await supabase.from("tournaments").select("*").limit(500);
       if (error) throw error;
-      // order by created_at/starts_at desc for “last winner”
       const ordered = [...(data || [])].sort((a,b) => {
         const da = new Date(a?.created_at || a?.starts_at || 0).getTime();
         const db = new Date(b?.created_at || b?.starts_at || 0).getTime();
         return db - da;
       });
       setRows(ordered);
-      // compute insights
+
+      // fetch prizes for table + insights
+      const ids = ordered.map(t => t.id);
+      if (ids.length) {
+        const { data: pr } = await supabase
+          .from("tournament_prizes")
+          .select("tournament_id, position, amount")
+          .in("tournament_id", ids);
+        const m = new Map();
+        for (const r of pr || []) {
+          const cur = m.get(r.tournament_id) || {1:null,2:null,3:null};
+          cur[Number(r.position)] = Number(r.amount) || 0;
+          m.set(r.tournament_id, cur);
+        }
+        setPrizesMap(m);
+      } else {
+        setPrizesMap(new Map());
+      }
+
       await computeInsights(ordered);
     } catch (e) {
       setRows([]);
@@ -512,7 +456,6 @@ export default function TournamentsPage() {
 
   React.useEffect(() => { load(); }, [load]);
 
-  // compute chart + top player + last winner
   async function computeInsights(tournaments) {
     try {
       if (!tournaments?.length) {
@@ -521,50 +464,20 @@ export default function TournamentsPage() {
         setLastWinner({ player: "", slot: "" });
         return;
       }
-
       const ids = tournaments.map((t) => t.id);
-      if (!ids.length) {
-        setChartData([]);
-        setTopPlayer({ name: "", wins: 0, totalPrize: 0, lastPrize: 0 });
-        setLastWinner({ player: "", slot: "" });
-        return;
-      }
+      const { data: entries } = await supabase
+        .from("tournament_entries").select("*").in("tournament_id", ids).limit(5000);
+      const { data: pays } = await supabase
+        .from("tournament_payments").select("*").in("tournament_id", ids).limit(10000);
+      const { data: prizeRows } = await supabase
+        .from("tournament_prizes").select("tournament_id, position, amount").in("tournament_id", ids);
 
-      // LER TUDO e depois mapear colunas que existirem
-      const { data: entries, error: e1 } = await supabase
-        .from("tournament_entries")
-        .select("*")
-        .in("tournament_id", ids)
-        .limit(5000);
-      if (e1) throw e1;
-
-      const { data: pays, error: e2 } = await supabase
-        .from("tournament_payments")
-        .select("*")
-        .in("tournament_id", ids)
-        .limit(10000);
-      if (e2) throw e2;
-
-      const { data: prizeRows, error: e3 } = await supabase
-        .from("tournament_prizes")
-        .select("tournament_id, position, amount")
-        .in("tournament_id", ids)
-        .limit(5000);
-      if (e3) throw e3;
-
-      // map por torneio
       const byTournamentEntries = new Map();
       for (const r of entries || []) {
         const arr = byTournamentEntries.get(r.tournament_id) || [];
-        arr.push({
-          seed: r.seed,
-          player_name: r.player ?? r.player_name ?? "", // suporta ambas
-          slot_name: r.slot_name ?? "",
-          slot_id: r.slot_id ?? null,
-        });
+        arr.push({ seed: r.seed, player_name: r.player ?? r.player_name ?? "", slot_name: r.slot_name ?? "" });
         byTournamentEntries.set(r.tournament_id, arr);
       }
-
       const byTournamentPays = new Map();
       for (const p of pays || []) {
         const arr = byTournamentPays.get(p.tournament_id) || [];
@@ -572,57 +485,36 @@ export default function TournamentsPage() {
         byTournamentPays.set(p.tournament_id, arr);
       }
 
-      // vencedores por torneio
       const winners = [];
       for (const t of tournaments) {
-        const w = computeTournamentWinner(
-          byTournamentEntries.get(t.id) || [],
-          byTournamentPays.get(t.id) || []
-        );
+        const w = computeTournamentWinner(byTournamentEntries.get(t.id) || [], byTournamentPays.get(t.id) || []);
         if (w) winners.push({ tournament_id: t.id, player: w.player_name || "", slot: w.slot_name || "" });
       }
 
-      // TOP 3 slots
       const slotCount = new Map();
       for (const w of winners) slotCount.set(w.slot, (slotCount.get(w.slot) || 0) + 1);
-      const topSlots = [...slotCount.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 3)
-        .map(([name, wins]) => ({ name: name || "—", wins }));
+      const topSlots = [...slotCount.entries()].sort((a,b) => b[1]-a[1]).slice(0,3).map(([name, wins]) => ({ name: name || "—", wins }));
       setChartData(topSlots);
 
-      // TOP player (wins)
       const playerCount = new Map();
       for (const w of winners) playerCount.set(w.player, (playerCount.get(w.player) || 0) + 1);
-      const topP = [...playerCount.entries()].sort((a, b) => b[1] - a[1])[0];
+      const topP = [...playerCount.entries()].sort((a,b)=>b[1]-a[1])[0];
       const topPlayerName = topP?.[0] || "";
       const topPlayerWins = topP?.[1] || 0;
 
-      // prémios (1º lugar em tournament_prizes; fallback prize_pool)
       const prizeByTournament = new Map();
-      for (const r of prizeRows || []) {
-        if (Number(r.position) === 1) prizeByTournament.set(r.tournament_id, Number(r.amount) || 0);
-      }
-      for (const t of tournaments) {
-        if (!prizeByTournament.has(t.id)) {
-          const v = Number(t.prize_pool);
-          if (Number.isFinite(v)) prizeByTournament.set(t.id, v);
-        }
+      for (const r of prizeRows || []) if (Number(r.position) === 1) prizeByTournament.set(r.tournament_id, Number(r.amount) || 0);
+      for (const t of tournaments) if (!prizeByTournament.has(t.id)) {
+        const v = Number(t.prize_pool); if (Number.isFinite(v)) prizeByTournament.set(t.id, v);
       }
 
       let totalPrize = 0;
-      for (const w of winners) {
-        if (w.player === topPlayerName) totalPrize += prizeByTournament.get(w.tournament_id) || 0;
-      }
+      for (const w of winners) if (w.player === topPlayerName) totalPrize += prizeByTournament.get(w.tournament_id) || 0;
 
-      // último vencedor (torneio mais recente com winner)
       let last = null;
       for (const t of tournaments) {
-        const w = winners.find((x) => x.tournament_id === t.id);
-        if (w) {
-          last = { ...w, prize: prizeByTournament.get(t.id) || 0 };
-          break;
-        }
+        const w = winners.find(x => x.tournament_id === t.id);
+        if (w) { last = { ...w, prize: prizeByTournament.get(t.id) || 0 }; break; }
       }
 
       setTopPlayer({
@@ -631,13 +523,8 @@ export default function TournamentsPage() {
         totalPrize,
         lastPrize: last?.player === topPlayerName ? (last?.prize || 0) : 0,
       });
-
-      setLastWinner({
-        player: last?.player || "",
-        slot: last?.slot || "",
-      });
-    } catch (err) {
-      console.error("computeInsights:", err);
+      setLastWinner({ player: last?.player || "", slot: last?.slot || "" });
+    } catch {
       setChartData([]);
       setTopPlayer({ name: "", wins: 0, totalPrize: 0, lastPrize: 0 });
       setLastWinner({ player: "", slot: "" });
@@ -647,18 +534,10 @@ export default function TournamentsPage() {
   const filtered = React.useMemo(() => {
     const needle = dSearch.trim().toLowerCase();
     let arr = [...rows];
-    if (needle) {
-      arr = arr.filter((r) => String(r.title || r.name || "").toLowerCase().includes(needle));
-    }
-    const get = (r, k) => {
-      if (k === "title") return String(r.title || r.name || "");
-      if (k === "status") return String(r.status || "");
-      if (k === "prize_pool") return Number(r.prize_pool ?? r.prizepool) || 0;
-      return 0;
-    };
+    if (needle) arr = arr.filter((r) => String(r.title || r.name || "").toLowerCase().includes(needle));
+    const get = (r, k) => (k === "title" ? String(r.title || r.name || "") : 0);
     arr.sort((a, b) => {
-      const A = get(a, sort.key);
-      const B = get(b, sort.key);
+      const A = get(a, sort.key), B = get(b, sort.key);
       if (typeof A === "string" || typeof B === "string") return A.localeCompare(B) * sort.dir;
       return (A - B) * sort.dir;
     });
@@ -695,6 +574,16 @@ export default function TournamentsPage() {
     );
   };
 
+  const PrizeBadge = ({ kind, value }) => {
+    const label = kind === 1 ? "🥇" : kind === 2 ? "🥈" : "🥉";
+    return (
+      <span className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs">
+        <span>{label}</span>
+        <span className="font-semibold">{value != null ? fmtMoney(value) : "—"}</span>
+      </span>
+    );
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
       {/* Topbar */}
@@ -728,7 +617,7 @@ export default function TournamentsPage() {
         </div>
 
         <div className="grid lg:grid-cols-[1fr_360px] gap-4">
-          {/* left: chart */}
+          {/* chart */}
           <div className="rounded-xl border border-white/10 p-3">
             <div className="text-sm opacity-70 mb-2">{t("topSlots")}</div>
             <div className="h-[260px]">
@@ -747,7 +636,7 @@ export default function TournamentsPage() {
             </div>
           </div>
 
-          {/* right: cards */}
+          {/* right cards */}
           <div className="space-y-4">
             <div className="rounded-xl border border-white/10 p-4">
               <div className="text-sm opacity-70 mb-2">{t("topPlayer")}</div>
@@ -786,9 +675,8 @@ export default function TournamentsPage() {
       {/* Table */}
       <div className={`rounded-xl border overflow-hidden ${isDark ? "border-white/10" : "border-zinc-200"}`}>
         <div className={`${isDark ? "bg-white/[0.04]" : "bg-zinc-50"} grid grid-cols-12 items-center px-4 py-3 text-xs font-semibold`}>
-          <div className="col-span-6"><HeaderCell k="title">{t("name")}</HeaderCell></div>
-          <div className="col-span-2 text-center"><HeaderCell k="status">{t("status")}</HeaderCell></div>
-          <div className="col-span-2 text-right"><HeaderCell k="prize_pool" right>{t("prizepool")}</HeaderCell></div>
+          <div className="col-span-7"><HeaderCell k="title">{t("name")}</HeaderCell></div>
+          <div className="col-span-3 text-right">{t("prizes")}</div>
           <div className="col-span-2 text-right">{t("actions")}</div>
         </div>
 
@@ -805,37 +693,24 @@ export default function TournamentsPage() {
 
         {filtered.map((r) => {
           const title = r.title || r.name || "—";
-          const status = r.status || "scheduled";
-          const prize = r.prize_pool ?? r.prizepool;
+          const prizes = prizesMap.get(r.id) || {1:null,2:null,3:null};
 
           return (
-            <div
-              key={r.id}
-              className={`grid grid-cols-12 items-center px-4 py-3 border-t ${isDark ? "border-white/10" : "border-zinc-200"}`}
-            >
-              <div className="col-span-6 min-w-0 pl-2">
+            <div key={r.id} className={`grid grid-cols-12 items-center px-4 py-3 border-t ${isDark ? "border-white/10" : "border-zinc-200"}`}>
+              {/* Title */}
+              <div className="col-span-7 min-w-0 pl-2">
                 <div className="font-medium truncate">{title}</div>
                 <div className="text-xs opacity-70 truncate">{r.description || ""}</div>
               </div>
 
-              <div className="col-span-2 text-center">
-                <span
-                  className={`text-xs font-semibold rounded-full px-2 py-0.5 border ${
-                    status === "running"
-                      ? "border-emerald-400/50 text-emerald-300"
-                      : status === "finished"
-                      ? "border-blue-400/50 text-blue-300"
-                      : status === "canceled"
-                      ? "border-red-400/50 text-red-300"
-                      : "border-white/20 text-white/70"
-                  }`}
-                >
-                  {t(status)}
-                </span>
+              {/* Prizes */}
+              <div className={`col-span-3 flex items-center justify-end gap-2 ${numCls}`}>
+                <PrizeBadge kind={1} value={prizes[1]} />
+                <PrizeBadge kind={2} value={prizes[2]} />
+                <PrizeBadge kind={3} value={prizes[3]} />
               </div>
 
-              <div className={`col-span-2 text-right ${numCls}`}>{prize != null ? fmtMoney(prize) : "—"}</div>
-
+              {/* Actions */}
               <div className="col-span-2 flex items-center justify-end gap-2">
                 <Button
                   variant="outline"
