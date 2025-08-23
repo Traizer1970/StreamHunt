@@ -21,7 +21,7 @@ import {
 
 /* ───────────────────────── utils / style helpers ───────────────────────── */
 const cn = (...c) => c.filter(Boolean).join(" ");
-const LOCALE = "pt-PT"; // mantém €, vírgula decimal
+const LOCALE = "pt-PT";
 const fmtMoney = (n) =>
   Number.isFinite(Number(n))
     ? new Intl.NumberFormat(LOCALE, {
@@ -87,16 +87,21 @@ const DEFAULT_LAYOUT = {
   },
 };
 
-/* Widget options */
+/* Widget options (inclui docking e overlayPath) */
 const DEFAULT_OPTS = {
   bonusLabelMode: "label+value", // "label+value" | "value"
   bonusLabelText: "Bonus Buy",
-  bonusDock: "left",             // "left" | "right"
-  totalJustify: "center",        // "left" | "center" | "right"
+  bonusDock: "left", // "left" | "right"
+  totalJustify: "center", // "left" | "center" | "right"
+
   totalLabelMode: "label+value", // "label+value" | "value"
   totalLabelText: "Total paid",
+
+  // rota (após o domínio) para a overlay — por omissão usa plural 'widgets'
+  overlayPath: "#/widgets/battle/",
 };
 
+/* Presets */
 const PRESETS = [
   { name: "Neon", t: { bgStart: "#0f0c29", bgEnd: "#302b63", accent: "#22d3ee", pos: "#10b981", neg: "#ef4444", vsBg: "rgba(34,211,238,0.35)" } },
   { name: "Sunset", t: { bgStart: "#1f0a26", bgEnd: "#3a0b2e", accent: "#fb7185", pos: "#f59e0b", neg: "#ef4444", vsBg: "rgba(251,113,133,0.35)" } },
@@ -108,11 +113,12 @@ const PRESETS = [
 
 /* ----------------------------- DB helpers ----------------------------- */
 async function dbLoadWidgetSettings(battleId) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("battle_widget_settings")
     .select("theme, layout, options")
     .eq("battle_id", battleId)
     .maybeSingle();
+  if (error) return { theme: null, layout: null, options: null };
   return {
     theme: data?.theme || null,
     layout: data?.layout || null,
@@ -130,11 +136,20 @@ async function enrichSlotInfo(slot) {
   if (!slot) return slot;
   if (slot.thumbnail && slot.provider) return slot;
   try {
-    let q = supabase.from("slots_catalog").select('id, "NAME", "PROVIDER", "THUMBNAIL"').limit(1);
+    let q = supabase
+      .from("slots_catalog")
+      .select('id, "NAME", "PROVIDER", "THUMBNAIL"')
+      .limit(1);
     if (slot.id) q = q.eq("id", slot.id);
     else if (slot.name) q = q.ilike("NAME", `%${slot.name}%`);
     const { data } = await q.maybeSingle();
-    if (data) return { id: data.id, name: data["NAME"], provider: data["PROVIDER"], thumbnail: data["THUMBNAIL"] };
+    if (data)
+      return {
+        id: data.id,
+        name: data["NAME"],
+        provider: data["PROVIDER"],
+        thumbnail: data["THUMBNAIL"],
+      };
   } catch {}
   return slot;
 }
@@ -143,7 +158,13 @@ async function enrichSlotInfo(slot) {
 function AccentCard({ title, children, className }) {
   const { isDark } = useTheme();
   return (
-    <div className={cn("relative rounded-xl", isDark ? "bg-white/5 border border-white/10" : "bg-white border border-zinc-200", className)}>
+    <div
+      className={cn(
+        "relative rounded-xl",
+        isDark ? "bg-white/5 border border-white/10" : "bg-white border border-zinc-200",
+        className
+      )}
+    >
       <div className="absolute inset-x-0 top-0 h-[2px] bg-sky-500/70 shadow-[0_0_12px_2px_rgba(56,189,248,0.35)]" />
       {title && <div className="px-4 pt-4 pb-1 text-xs opacity-80">{title}</div>}
       <div className="px-4 pt-5 pb-4">{children}</div>
@@ -151,7 +172,12 @@ function AccentCard({ title, children, className }) {
   );
 }
 function Kpi({ icon, label, value, tone = "neutral" }) {
-  const toneCls = tone === "positive" ? "text-emerald-400" : tone === "negative" ? "text-rose-400" : "text-white";
+  const toneCls =
+    tone === "positive"
+      ? "text-emerald-400"
+      : tone === "negative"
+      ? "text-rose-400"
+      : "text-white";
   return (
     <div className="rounded-xl border border-white/10 bg-white/5 p-3 flex items-center gap-3">
       <div className="rounded-lg bg-black/40 p-2 border border-white/10">{icon}</div>
@@ -175,14 +201,25 @@ function useDebounced(v, delay) {
 function SlotsAutocomplete({ value, onSelect, placeholder = "Add a Slot" }) {
   const { isDark } = useTheme();
   const [open, setOpen] = React.useState(false);
-  const [query, setQuery] = React.useState(typeof value === "object" && value !== null ? value.name ?? "" : typeof value === "string" ? value : "");
+  const [query, setQuery] = React.useState(
+    typeof value === "object" && value !== null
+      ? value.name ?? ""
+      : typeof value === "string"
+      ? value
+      : ""
+  );
   const [items, setItems] = React.useState([]);
   const [errorMsg, setErrorMsg] = React.useState("");
   const boxRef = React.useRef(null);
   const dQuery = useDebounced(query, 250);
 
   const currentValueName = React.useMemo(
-    () => (typeof value === "object" && value !== null ? value.name ?? "" : typeof value === "string" ? value : ""),
+    () =>
+      typeof value === "object" && value !== null
+        ? value.name ?? ""
+        : typeof value === "string"
+        ? value
+        : "",
     [value]
   );
   React.useEffect(() => setQuery(currentValueName), [currentValueName]);
@@ -268,12 +305,18 @@ function SlotsAutocomplete({ value, onSelect, placeholder = "Add a Slot" }) {
         <div
           className={cn(
             "absolute z-40 mt-2 w-full rounded-xl overflow-hidden border",
-            isDark ? "bg-zinc-950/95 border-white/10 shadow-2xl" : "bg-white border-zinc-200 shadow-xl"
+            isDark
+              ? "bg-zinc-950/95 border-white/10 shadow-2xl"
+              : "bg-white border-zinc-200 shadow-xl"
           )}
         >
-          {errorMsg && <div className="px-3 py-2 text-sm text-red-400">{errorMsg}</div>}
+          {errorMsg && (
+            <div className="px-3 py-2 text-sm text-red-400">{errorMsg}</div>
+          )}
           {!errorMsg && items.length === 0 ? (
-            <div className="px-3 py-2 text-sm opacity-70">No results. Type the name and click outside to use free text.</div>
+            <div className="px-3 py-2 text-sm opacity-70">
+              No results. Type the name and click outside to use free text.
+            </div>
           ) : (
             <ul className="max-h-72 overflow-auto divide-y divide-white/5">
               {items.map((it) => (
@@ -293,13 +336,19 @@ function SlotsAutocomplete({ value, onSelect, placeholder = "Add a Slot" }) {
                     }}
                   >
                     {it["THUMBNAIL"] ? (
-                      <img src={it["THUMBNAIL"]} alt="" className="h-6 w-6 rounded object-contain" />
+                      <img
+                        src={it["THUMBNAIL"]}
+                        alt=""
+                        className="h-6 w-6 rounded object-contain"
+                      />
                     ) : (
                       <div className="h-6 w-6 rounded bg-white/10" />
                     )}
                     <div className="min-w-0">
                       <div className="truncate text-sm">{it["NAME"]}</div>
-                      <div className="text-[11px] opacity-60 truncate">{it["PROVIDER"] || "—"}</div>
+                      <div className="text-[11px] opacity-60 truncate">
+                        {it["PROVIDER"] || "—"}
+                      </div>
                     </div>
                   </button>
                 </li>
@@ -370,7 +419,9 @@ function WidgetPreviewPanel({
       style={{
         borderRadius: theme.chipRadius,
         background: ok ? `${theme.pos}1F` : `${theme.neg}1F`,
-        border: `${theme.chipBorderWidth}px solid ${ok ? theme.pos : theme.neg}`,
+        border: `${theme.chipBorderWidth}px solid ${
+          ok ? theme.pos : theme.neg
+        }`,
         color: ok ? theme.pos : theme.neg,
         animation: theme.pulse ? `pop .16s ease-out both` : "none",
         animationDelay: `${i * 45}ms`,
@@ -382,7 +433,10 @@ function WidgetPreviewPanel({
     >
       <span
         className="h-1.5 w-1.5 rounded-full"
-        style={{ background: ok ? theme.pos : theme.neg, boxShadow: `0 0 0 2px ${ok ? theme.pos : theme.neg}26` }}
+        style={{
+          background: ok ? theme.pos : theme.neg,
+          boxShadow: `0 0 0 2px ${ok ? theme.pos : theme.neg}26`,
+        }}
       />
       {fmtMoney(Number(amount || 0))}
     </span>
@@ -393,7 +447,10 @@ function WidgetPreviewPanel({
     const pos = layout?.positions?.[id] || { x: 0, y: 0 };
     const onMouseDown = useDrag(containerRef, id, layout, setLayout);
     return (
-      <div onMouseDown={onMouseDown} style={{ position: "absolute", left: pos.x, top: pos.y, cursor: "grab" }}>
+      <div
+        onMouseDown={onMouseDown}
+        style={{ position: "absolute", left: pos.x, top: pos.y, cursor: "grab" }}
+      >
         {children}
       </div>
     );
@@ -411,7 +468,9 @@ function WidgetPreviewPanel({
       }}
     >
       <span>Best of</span>
-      <span style={{ marginLeft: 6, fontWeight: theme.strongWeight }}>{bestOf}</span>
+      <span style={{ marginLeft: 6, fontWeight: theme.strongWeight }}>
+        {bestOf}
+      </span>
     </div>
   );
 
@@ -442,40 +501,14 @@ function WidgetPreviewPanel({
         }}
       >
         <span>{opts?.bonusLabelText || "Bonus Buy"}</span>
-        <span style={{ marginLeft: 8, color: theme.accent, fontWeight: theme.strongWeight }}>
+        <span
+          style={{
+            marginLeft: 8,
+            color: theme.accent,
+            fontWeight: theme.strongWeight,
+          }}
+        >
           {badgeBonusValue}
-        </span>
-      </div>
-    );
-
-  const TotalBadge =
-    opts?.totalLabelMode === "value" ? (
-      <div
-        className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
-        style={{
-          background: theme.totalBg,
-          border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`,
-          borderRadius: theme.pillRadius,
-          color: theme.accent,
-          fontWeight: theme.strongWeight,
-        }}
-      >
-        {fmtMoney(totalPay)}
-      </div>
-    ) : (
-      <div
-        className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
-        style={{
-          background: theme.totalBg,
-          border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`,
-          borderRadius: theme.pillRadius,
-          color: theme.text,
-          fontWeight: theme.fontWeight,
-        }}
-      >
-        <span>{opts?.totalLabelText || "Total paid"}</span>
-        <span style={{ marginLeft: 8, color: theme.accent, fontWeight: theme.strongWeight }}>
-          {fmtMoney(totalPay)}
         </span>
       </div>
     );
@@ -512,7 +545,7 @@ function WidgetPreviewPanel({
         {/* ---------- default layout (no drag) ---------- */}
         {layout?.mode !== "free" && (
           <>
-            {/* badges row */}
+            {/* badges row (Bonus can be docked right) */}
             {opts?.bonusDock === "right" ? (
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">{BadgeBest}</div>
@@ -529,16 +562,37 @@ function WidgetPreviewPanel({
             <div className="mt-5 grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-5">
               <div className="flex items-center justify-end gap-3">
                 <div className="min-w-0 text-right">
-                  <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
+                  <div
+                    className="truncate"
+                    style={{
+                      fontSize: "22px",
+                      color: theme.text,
+                      fontWeight: theme.strongWeight,
+                    }}
+                  >
                     {playerA || "—"}
                   </div>
-                  <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>
+                  <div
+                    className="text-[12px] truncate"
+                    style={{ color: theme.subtext, fontWeight: theme.fontWeight }}
+                  >
                     {sideA?.name || "—"}
                   </div>
                 </div>
                 {theme.showThumbs && (
-                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
-                    {sideA?.thumbnail ? <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
+                  <div
+                    className="h-14 w-14 overflow-hidden ring-1 bg-white/5"
+                    style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}
+                  >
+                    {sideA?.thumbnail ? (
+                      <img
+                        src={sideA.thumbnail}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-full w-full" />
+                    )}
                   </div>
                 )}
               </div>
@@ -546,7 +600,12 @@ function WidgetPreviewPanel({
               <div className="flex justify-center">
                 <div
                   className={cn("px-3 py-1 text-xs", theme.pulse ? "animate-pulse" : "")}
-                  style={{ background: theme.vsBg, border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`, borderRadius: 10, fontWeight: theme.strongWeight }}
+                  style={{
+                    background: theme.vsBg,
+                    border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
+                    borderRadius: 10,
+                    fontWeight: theme.strongWeight,
+                  }}
                 >
                   VS
                 </div>
@@ -554,15 +613,36 @@ function WidgetPreviewPanel({
 
               <div className="flex items-center gap-3">
                 {theme.showThumbs && (
-                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
-                    {sideB?.thumbnail ? <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
+                  <div
+                    className="h-14 w-14 overflow-hidden ring-1 bg-white/5"
+                    style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}
+                  >
+                    {sideB?.thumbnail ? (
+                      <img
+                        src={sideB.thumbnail}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-full w-full" />
+                    )}
                   </div>
                 )}
                 <div className="min-w-0 text-left">
-                  <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
+                  <div
+                    className="truncate"
+                    style={{
+                      fontSize: "22px",
+                      color: theme.text,
+                      fontWeight: theme.strongWeight,
+                    }}
+                  >
                     {playerB || "—"}
                   </div>
-                  <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>
+                  <div
+                    className="text-[12px] truncate"
+                    style={{ color: theme.subtext, fontWeight: theme.fontWeight }}
+                  >
                     {sideB?.name || "—"}
                   </div>
                 </div>
@@ -574,30 +654,60 @@ function WidgetPreviewPanel({
               <div>
                 <div className="flex flex-wrap">
                   {aPays.map((p, i) => (
-                    <Chip key={`a-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
+                    <Chip
+                      key={`a-${i}`}
+                      amount={p.amount}
+                      ok={Number(p.amount || 0) >= Number(buyCost || 0)}
+                      i={i}
+                    />
                   ))}
                 </div>
                 <div
                   className="inline-flex mt-3 items-center gap-2 px-3 py-1.5 text-[12px]"
-                  style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}
+                  style={{
+                    background: theme.chipBg,
+                    border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
+                    borderRadius: theme.radius,
+                    color: theme.subtext,
+                    fontWeight: theme.fontWeight,
+                  }}
                 >
                   <span>Subtotal</span>
-                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(aTotal)}</span>
+                  <span
+                    style={{ color: theme.text, fontWeight: theme.strongWeight }}
+                  >
+                    {fmtMoney(aTotal)}
+                  </span>
                 </div>
               </div>
 
               <div>
                 <div className="flex flex-wrap">
                   {bPays.map((p, i) => (
-                    <Chip key={`b-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
+                    <Chip
+                      key={`b-${i}`}
+                      amount={p.amount}
+                      ok={Number(p.amount || 0) >= Number(buyCost || 0)}
+                      i={i}
+                    />
                   ))}
                 </div>
                 <div
                   className="inline-flex mt-3 items-center gap-2 px-3 py-1.5 text-[12px]"
-                  style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}
+                  style={{
+                    background: theme.chipBg,
+                    border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
+                    borderRadius: theme.radius,
+                    color: theme.subtext,
+                    fontWeight: theme.fontWeight,
+                  }}
                 >
                   <span>Subtotal</span>
-                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(bTotal)}</span>
+                  <span
+                    style={{ color: theme.text, fontWeight: theme.strongWeight }}
+                  >
+                    {fmtMoney(bTotal)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -606,10 +716,27 @@ function WidgetPreviewPanel({
             <div
               className={cn(
                 "mt-6 flex",
-                opts?.totalJustify === "left" ? "justify-start" : opts?.totalJustify === "right" ? "justify-end" : "justify-center"
+                opts?.totalJustify === "left"
+                  ? "justify-start"
+                  : opts?.totalJustify === "right"
+                  ? "justify-end"
+                  : "justify-center"
               )}
             >
-              {TotalBadge}
+              <div
+                className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
+                style={{
+                  background: theme.totalBg,
+                  border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`,
+                  borderRadius: theme.pillRadius,
+                  color: theme.accent,
+                  fontWeight: theme.strongWeight,
+                }}
+              >
+                {opts?.totalLabelMode === "value"
+                  ? fmtMoney(totalPay)
+                  : `${opts?.totalLabelText || "Total paid"}: ${fmtMoney(totalPay)}`}
+              </div>
             </div>
           </>
         )}
@@ -617,7 +744,14 @@ function WidgetPreviewPanel({
         {/* ---------- free layout (drag & drop) ---------- */}
         {layout?.mode === "free" && (
           <>
-            <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: "linear-gradient(transparent 95%, rgba(255,255,255,.05) 95%)", backgroundSize: "100% 40px" }} />
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                backgroundImage:
+                  "linear-gradient(transparent 95%, rgba(255,255,255,.05) 95%)",
+                backgroundSize: "100% 40px",
+              }}
+            />
 
             <DragBox id="badges">
               <div className="flex items-center gap-2">
@@ -629,16 +763,37 @@ function WidgetPreviewPanel({
             <DragBox id="playerA">
               <div className="flex items-center justify-end gap-3">
                 <div className="min-w-0 text-right">
-                  <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
+                  <div
+                    className="truncate"
+                    style={{
+                      fontSize: "22px",
+                      color: theme.text,
+                      fontWeight: theme.strongWeight,
+                    }}
+                  >
                     {playerA || "—"}
                   </div>
-                  <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>
+                  <div
+                    className="text-[12px] truncate"
+                    style={{ color: theme.subtext, fontWeight: theme.fontWeight }}
+                  >
                     {sideA?.name || "—"}
                   </div>
                 </div>
                 {theme.showThumbs && (
-                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
-                    {sideA?.thumbnail ? <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
+                  <div
+                    className="h-14 w-14 overflow-hidden ring-1 bg-white/5"
+                    style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}
+                  >
+                    {sideA?.thumbnail ? (
+                      <img
+                        src={sideA.thumbnail}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-full w-full" />
+                    )}
                   </div>
                 )}
               </div>
@@ -647,15 +802,36 @@ function WidgetPreviewPanel({
             <DragBox id="playerB">
               <div className="flex items-center gap-3">
                 {theme.showThumbs && (
-                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
-                    {sideB?.thumbnail ? <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
+                  <div
+                    className="h-14 w-14 overflow-hidden ring-1 bg-white/5"
+                    style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}
+                  >
+                    {sideB?.thumbnail ? (
+                      <img
+                        src={sideB.thumbnail}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-full w-full" />
+                    )}
                   </div>
                 )}
                 <div className="min-w-0 text-left">
-                  <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
+                  <div
+                    className="truncate"
+                    style={{
+                      fontSize: "22px",
+                      color: theme.text,
+                      fontWeight: theme.strongWeight,
+                    }}
+                  >
                     {playerB || "—"}
                   </div>
-                  <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>
+                  <div
+                    className="text-[12px] truncate"
+                    style={{ color: theme.subtext, fontWeight: theme.fontWeight }}
+                  >
                     {sideB?.name || "—"}
                   </div>
                 </div>
@@ -666,15 +842,30 @@ function WidgetPreviewPanel({
               <div>
                 <div className="flex flex-wrap">
                   {aPays.map((p, i) => (
-                    <Chip key={`fa-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
+                    <Chip
+                      key={`fa-${i}`}
+                      amount={p.amount}
+                      ok={Number(p.amount || 0) >= Number(buyCost || 0)}
+                      i={i}
+                    />
                   ))}
                 </div>
                 <div
                   className="inline-flex mt-2 items-center gap-2 px-3 py-1.5 text-[12px]"
-                  style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}
+                  style={{
+                    background: theme.chipBg,
+                    border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
+                    borderRadius: theme.radius,
+                    color: theme.subtext,
+                    fontWeight: theme.fontWeight,
+                  }}
                 >
                   <span>Subtotal</span>
-                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(aTotal)}</span>
+                  <span
+                    style={{ color: theme.text, fontWeight: theme.strongWeight }}
+                  >
+                    {fmtMoney(aTotal)}
+                  </span>
                 </div>
               </div>
             </DragBox>
@@ -683,21 +874,49 @@ function WidgetPreviewPanel({
               <div>
                 <div className="flex flex-wrap">
                   {bPays.map((p, i) => (
-                    <Chip key={`fb-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
+                    <Chip
+                      key={`fb-${i}`}
+                      amount={p.amount}
+                      ok={Number(p.amount || 0) >= Number(buyCost || 0)}
+                      i={i}
+                    />
                   ))}
                 </div>
                 <div
                   className="inline-flex mt-2 items-center gap-2 px-3 py-1.5 text-[12px]"
-                  style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}
+                  style={{
+                    background: theme.chipBg,
+                    border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
+                    borderRadius: theme.radius,
+                    color: theme.subtext,
+                    fontWeight: theme.fontWeight,
+                  }}
                 >
                   <span>Subtotal</span>
-                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(bTotal)}</span>
+                  <span
+                    style={{ color: theme.text, fontWeight: theme.strongWeight }}
+                  >
+                    {fmtMoney(bTotal)}
+                  </span>
                 </div>
               </div>
             </DragBox>
 
             <DragBox id="total">
-              {TotalBadge}
+              <div
+                className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
+                style={{
+                  background: theme.totalBg,
+                  border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`,
+                  borderRadius: theme.pillRadius,
+                  color: theme.accent,
+                  fontWeight: theme.strongWeight,
+                }}
+              >
+                {opts?.totalLabelMode === "value"
+                  ? fmtMoney(totalPay)
+                  : `${opts?.totalLabelText || "Total paid"}: ${fmtMoney(totalPay)}`}
+              </div>
             </DragBox>
           </>
         )}
@@ -721,7 +940,9 @@ function ColorField({ label, value, onChange }) {
     v = String(v).trim();
     if (v.startsWith("#")) {
       if (v.length === 4) {
-        const r = v[1], g = v[2], b = v[3];
+        const r = v[1],
+          g = v[2],
+          b = v[3];
         return `#${r}${r}${g}${g}${b}${b}`;
       }
       return v.slice(0, 7);
@@ -730,7 +951,13 @@ function ColorField({ label, value, onChange }) {
     if (m) {
       const clamp = (n) => Math.max(0, Math.min(255, n | 0));
       const [r, g, b] = [clamp(+m[1]), clamp(+m[2]), clamp(+m[3])];
-      return "#" + [r, g, b].map((x) => x.toString(16).padStart(2, "0")).join("").slice(0, 6);
+      return (
+        "#" +
+        [r, g, b]
+          .map((x) => x.toString(16).padStart(2, "0"))
+          .join("")
+          .slice(0, 6)
+      );
     }
     return "#ffffff";
   }, []);
@@ -782,7 +1009,14 @@ function ColorField({ label, value, onChange }) {
           <div
             onMouseDown={(e) => e.stopPropagation()}
             className="rounded-xl border border-white/10 bg-zinc-900/95 p-3 shadow-2xl"
-            style={{ position: "fixed", left: anchor.left, top: anchor.top, width: 260, height: 220, backdropFilter: "blur(6px)" }}
+            style={{
+              position: "fixed",
+              left: anchor.left,
+              top: anchor.top,
+              width: 260,
+              height: 220,
+              backdropFilter: "blur(6px)",
+            }}
           >
             <div className="text-xs opacity-70 mb-2">Pick a color</div>
             <input
@@ -792,7 +1026,11 @@ function ColorField({ label, value, onChange }) {
               className="block w-full h-40 rounded-lg border border-white/10 p-0 cursor-pointer bg-transparent"
             />
             <div className="mt-2 flex items-center gap-2">
-              <Input value={tempHex} onChange={(e) => setTempHex(e.target.value)} className="h-9 bg-zinc-800 border-white/10 text-white" />
+              <Input
+                value={tempHex}
+                onChange={(e) => setTempHex(e.target.value)}
+                className="h-9 bg-zinc-800 border-white/10 text-white"
+              />
               <Button type="button" className="h-9" onClick={applyAndClose}>
                 OK
               </Button>
@@ -805,7 +1043,19 @@ function ColorField({ label, value, onChange }) {
 }
 
 /* ───────── Designer ───────── */
-function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setLayout, opts, setOpts, previewProps, persist }) {
+function WidgetDesigner({
+  open,
+  onClose,
+  battleId,
+  theme,
+  setTheme,
+  layout,
+  setLayout,
+  opts,
+  setOpts,
+  previewProps,
+  persist,
+}) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm">
@@ -816,7 +1066,13 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
           <div className="text-xs opacity-60">Battle #{battleId}</div>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={() => { persist(); onClose(); }} className="h-9">
+          <Button
+            onClick={() => {
+              persist();
+              onClose();
+            }}
+            className="h-9"
+          >
             <Save className="h-4 w-4 mr-2" />
             Save & Close
           </Button>
@@ -842,8 +1098,17 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
                     className="rounded-lg overflow-hidden border border-white/10 hover:ring-2 hover:ring-sky-400 transition"
                     title={p.name}
                   >
-                    <div className="h-10" style={{ background: `linear-gradient(135deg, ${p.t.bgStart || theme.bgStart}, ${p.t.bgEnd || theme.bgEnd})` }} />
-                    <div className="px-2 py-1 text-[11px] opacity-80">{p.name}</div>
+                    <div
+                      className="h-10"
+                      style={{
+                        background: `linear-gradient(135deg, ${
+                          p.t.bgStart || theme.bgStart
+                        }, ${p.t.bgEnd || theme.bgEnd})`,
+                      }}
+                    />
+                    <div className="px-2 py-1 text-[11px] opacity-80">
+                      {p.name}
+                    </div>
                   </button>
                 ))}
               </div>
@@ -851,71 +1116,281 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
 
             {/* Colors */}
             <div className="grid grid-cols-1 gap-4">
-              <ColorField label="Background start" value={theme.bgStart} onChange={(v) => setTheme((t) => ({ ...t, bgStart: v }))} />
-              <ColorField label="Background end" value={theme.bgEnd} onChange={(v) => setTheme((t) => ({ ...t, bgEnd: v }))} />
-              <ColorField label="Panel/Line border" value={theme.panelBorder} onChange={(v) => setTheme((t) => ({ ...t, panelBorder: v }))} />
-              <ColorField label="Text" value={theme.text} onChange={(v) => setTheme((t) => ({ ...t, text: v }))} />
-              <ColorField label="Subtext" value={theme.subtext} onChange={(v) => setTheme((t) => ({ ...t, subtext: v }))} />
-              <ColorField label="Accent" value={theme.accent} onChange={(v) => setTheme((t) => ({ ...t, accent: v }))} />
-              <ColorField label="Chip bg" value={theme.chipBg} onChange={(v) => setTheme((t) => ({ ...t, chipBg: v }))} />
-              <ColorField label="Chip border" value={theme.chipBorder} onChange={(v) => setTheme((t) => ({ ...t, chipBorder: v }))} />
-              <ColorField label="OK (green)" value={theme.pos} onChange={(v) => setTheme((t) => ({ ...t, pos: v }))} />
-              <ColorField label="NOK (red)" value={theme.neg} onChange={(v) => setTheme((t) => ({ ...t, neg: v }))} />
-              <ColorField label="Badge bg" value={theme.badgeBg} onChange={(v) => setTheme((t) => ({ ...t, badgeBg: v }))} />
-              <ColorField label="Badge border" value={theme.badgeBorder} onChange={(v) => setTheme((t) => ({ ...t, badgeBorder: v }))} />
-              <ColorField label="Total bg" value={theme.totalBg} onChange={(v) => setTheme((t) => ({ ...t, totalBg: v }))} />
-              <ColorField label="Total border" value={theme.totalBorder} onChange={(v) => setTheme((t) => ({ ...t, totalBorder: v }))} />
-              <ColorField label="VS bg" value={theme.vsBg} onChange={(v) => setTheme((t) => ({ ...t, vsBg: v }))} />
+              <ColorField
+                label="Background start"
+                value={theme.bgStart}
+                onChange={(v) => setTheme((t) => ({ ...t, bgStart: v }))}
+              />
+              <ColorField
+                label="Background end"
+                value={theme.bgEnd}
+                onChange={(v) => setTheme((t) => ({ ...t, bgEnd: v }))}
+              />
+              <ColorField
+                label="Panel/Line border"
+                value={theme.panelBorder}
+                onChange={(v) => setTheme((t) => ({ ...t, panelBorder: v }))}
+              />
+              <ColorField
+                label="Text"
+                value={theme.text}
+                onChange={(v) => setTheme((t) => ({ ...t, text: v }))}
+              />
+              <ColorField
+                label="Subtext"
+                value={theme.subtext}
+                onChange={(v) => setTheme((t) => ({ ...t, subtext: v }))}
+              />
+              <ColorField
+                label="Accent"
+                value={theme.accent}
+                onChange={(v) => setTheme((t) => ({ ...t, accent: v }))}
+              />
+              <ColorField
+                label="Chip bg"
+                value={theme.chipBg}
+                onChange={(v) => setTheme((t) => ({ ...t, chipBg: v }))}
+              />
+              <ColorField
+                label="Chip border"
+                value={theme.chipBorder}
+                onChange={(v) => setTheme((t) => ({ ...t, chipBorder: v }))}
+              />
+              <ColorField
+                label="OK (green)"
+                value={theme.pos}
+                onChange={(v) => setTheme((t) => ({ ...t, pos: v }))}
+              />
+              <ColorField
+                label="NOK (red)"
+                value={theme.neg}
+                onChange={(v) => setTheme((t) => ({ ...t, neg: v }))}
+              />
+              <ColorField
+                label="Badge bg"
+                value={theme.badgeBg}
+                onChange={(v) => setTheme((t) => ({ ...t, badgeBg: v }))}
+              />
+              <ColorField
+                label="Badge border"
+                value={theme.badgeBorder}
+                onChange={(v) => setTheme((t) => ({ ...t, badgeBorder: v }))}
+              />
+              <ColorField
+                label="Total bg"
+                value={theme.totalBg}
+                onChange={(v) => setTheme((t) => ({ ...t, totalBg: v }))}
+              />
+              <ColorField
+                label="Total border"
+                value={theme.totalBorder}
+                onChange={(v) => setTheme((t) => ({ ...t, totalBorder: v }))}
+              />
+              <ColorField
+                label="VS bg"
+                value={theme.vsBg}
+                onChange={(v) => setTheme((t) => ({ ...t, vsBg: v }))}
+              />
             </div>
 
             {/* Layout / Typography */}
             <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
               <div className="text-xs opacity-70 mb-1">Layout</div>
 
-              <label className="block text-sm">Panel border width: {theme.panelBorderWidth}px</label>
-              <input type="range" min={0} max={4} step={1} value={theme.panelBorderWidth} onChange={(e) => setTheme((t) => ({ ...t, panelBorderWidth: Number(e.target.value) }))} className="w-full" />
+              <label className="block text-sm">
+                Panel border width: {theme.panelBorderWidth}px
+              </label>
+              <input
+                type="range"
+                min={0}
+                max={4}
+                step={1}
+                value={theme.panelBorderWidth}
+                onChange={(e) =>
+                  setTheme((t) => ({
+                    ...t,
+                    panelBorderWidth: Number(e.target.value),
+                  }))
+                }
+                className="w-full"
+              />
 
-              <label className="block text-sm">Badge border width: {theme.badgeBorderWidth}px</label>
-              <input type="range" min={0} max={4} step={1} value={theme.badgeBorderWidth} onChange={(e) => setTheme((t) => ({ ...t, badgeBorderWidth: Number(e.target.value) }))} className="w-full" />
+              <label className="block text-sm">
+                Badge border width: {theme.badgeBorderWidth}px
+              </label>
+              <input
+                type="range"
+                min={0}
+                max={4}
+                step={1}
+                value={theme.badgeBorderWidth}
+                onChange={(e) =>
+                  setTheme((t) => ({
+                    ...t,
+                    badgeBorderWidth: Number(e.target.value),
+                  }))
+                }
+                className="w-full"
+              />
 
-              <label className="block text-sm">Total border width: {theme.totalBorderWidth}px</label>
-              <input type="range" min={0} max={4} step={1} value={theme.totalBorderWidth} onChange={(e) => setTheme((t) => ({ ...t, totalBorderWidth: Number(e.target.value) }))} className="w-full" />
+              <label className="block text-sm">
+                Total border width: {theme.totalBorderWidth}px
+              </label>
+              <input
+                type="range"
+                min={0}
+                max={4}
+                step={1}
+                value={theme.totalBorderWidth}
+                onChange={(e) =>
+                  setTheme((t) => ({
+                    ...t,
+                    totalBorderWidth: Number(e.target.value),
+                  }))
+                }
+                className="w-full"
+              />
 
-              <label className="block text-sm">Chip border width: {theme.chipBorderWidth}px</label>
-              <input type="range" min={0} max={4} step={1} value={theme.chipBorderWidth} onChange={(e) => setTheme((t) => ({ ...t, chipBorderWidth: Number(e.target.value) }))} className="w-full" />
+              <label className="block text-sm">
+                Border radius (boxes): {theme.radius}px
+              </label>
+              <input
+                type="range"
+                min={8}
+                max={28}
+                step={1}
+                value={theme.radius}
+                onChange={(e) =>
+                  setTheme((t) => ({ ...t, radius: Number(e.target.value) }))
+                }
+                className="w-full"
+              />
 
-              <label className="block text-sm">Border radius (boxes): {theme.radius}px</label>
-              <input type="range" min={8} max={28} step={1} value={theme.radius} onChange={(e) => setTheme((t) => ({ ...t, radius: Number(e.target.value) }))} className="w-full" />
+              <label className="block text-sm">
+                Pill radius (Best/Bonus/Total): {theme.pillRadius}px
+              </label>
+              <input
+                type="range"
+                min={8}
+                max={30}
+                step={1}
+                value={theme.pillRadius}
+                onChange={(e) =>
+                  setTheme((t) => ({
+                    ...t,
+                    pillRadius: Number(e.target.value),
+                  }))
+                }
+                className="w-full"
+              />
 
-              <label className="block text-sm">Pill radius (Best/Bonus/Total): {theme.pillRadius}px</label>
-              <input type="range" min={8} max={30} step={1} value={theme.pillRadius} onChange={(e) => setTheme((t) => ({ ...t, pillRadius: Number(e.target.value) }))} className="w-full" />
+              <label className="block text-sm">
+                Chip radius: {theme.chipRadius}px
+              </label>
+              <input
+                type="range"
+                min={8}
+                max={20}
+                step={1}
+                value={theme.chipRadius}
+                onChange={(e) =>
+                  setTheme((t) => ({
+                    ...t,
+                    chipRadius: Number(e.target.value),
+                  }))
+                }
+                className="w-full"
+              />
 
-              <label className="block text-sm">Chip radius: {theme.chipRadius}px</label>
-              <input type="range" min={8} max={20} step={1} value={theme.chipRadius} onChange={(e) => setTheme((t) => ({ ...t, chipRadius: Number(e.target.value) }))} className="w-full" />
-
-              <label className="block text-sm">Font size: {theme.fontScale}%</label>
-              <input type="range" min={80} max={130} step={1} value={theme.fontScale} onChange={(e) => setTheme((t) => ({ ...t, fontScale: Number(e.target.value) }))} className="w-full" />
+              <label className="block text-sm">
+                Font size: {theme.fontScale}%
+              </label>
+              <input
+                type="range"
+                min={80}
+                max={130}
+                step={1}
+                value={theme.fontScale}
+                onChange={(e) =>
+                  setTheme((t) => ({
+                    ...t,
+                    fontScale: Number(e.target.value),
+                  }))
+                }
+                className="w-full"
+              />
 
               <label className="block text-sm">Font family</label>
-              <Input value={theme.fontFamily} onChange={(e) => setTheme((t) => ({ ...t, fontFamily: e.target.value }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
+              <Input
+                value={theme.fontFamily}
+                onChange={(e) =>
+                  setTheme((t) => ({ ...t, fontFamily: e.target.value }))
+                }
+                className="h-9 bg-zinc-900 border-white/10 text-white"
+              />
 
-              <label className="block text-sm">Font weight (normal): {theme.fontWeight}</label>
-              <input type="range" min={300} max={700} step={50} value={theme.fontWeight} onChange={(e) => setTheme((t) => ({ ...t, fontWeight: Number(e.target.value) }))} className="w-full" />
+              <label className="block text-sm">
+                Font weight (normal): {theme.fontWeight}
+              </label>
+              <input
+                type="range"
+                min={300}
+                max={700}
+                step={50}
+                value={theme.fontWeight}
+                onChange={(e) =>
+                  setTheme((t) => ({
+                    ...t,
+                    fontWeight: Number(e.target.value),
+                  }))
+                }
+                className="w-full"
+              />
 
-              <label className="block text-sm">Font weight (strong): {theme.strongWeight}</label>
-              <input type="range" min={300} max={800} step={50} value={theme.strongWeight} onChange={(e) => setTheme((t) => ({ ...t, strongWeight: Number(e.target.value) }))} className="w-full" />
+              <label className="block text-sm">
+                Font weight (strong): {theme.strongWeight}
+              </label>
+              <input
+                type="range"
+                min={300}
+                max={800}
+                step={50}
+                value={theme.strongWeight}
+                onChange={(e) =>
+                  setTheme((t) => ({
+                    ...t,
+                    strongWeight: Number(e.target.value),
+                  }))
+                }
+                className="w-full"
+              />
 
+              {/* Auto-placement options */}
               <div className="border-t border-white/10 pt-3 mt-2 space-y-2">
-                <div className="text-xs opacity-70">Auto placement (default layout)</div>
+                <div className="text-xs opacity-70">
+                  Auto placement (default layout)
+                </div>
 
                 <div className="flex items-center gap-3">
                   <div className="text-sm w-36">Bonus badge:</div>
                   <label className="text-sm flex items-center gap-1">
-                    <input type="radio" checked={opts.bonusDock === "left"} onChange={() => setOpts((o) => ({ ...o, bonusDock: "left" }))} />
+                    <input
+                      type="radio"
+                      checked={opts.bonusDock === "left"}
+                      onChange={() =>
+                        setOpts((o) => ({ ...o, bonusDock: "left" }))
+                      }
+                    />
                     Left
                   </label>
                   <label className="text-sm flex items-center gap-1">
-                    <input type="radio" checked={opts.bonusDock === "right"} onChange={() => setOpts((o) => ({ ...o, bonusDock: "right" }))} />
+                    <input
+                      type="radio"
+                      checked={opts.bonusDock === "right"}
+                      onChange={() =>
+                        setOpts((o) => ({ ...o, bonusDock: "right" }))
+                      }
+                    />
                     Right
                   </label>
                 </div>
@@ -923,17 +1398,51 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
                 <div className="flex items-center gap-3">
                   <div className="text-sm w-36">Total badge:</div>
                   <label className="text-sm flex items-center gap-1">
-                    <input type="radio" checked={opts.totalJustify === "left"} onChange={() => setOpts((o) => ({ ...o, totalJustify: "left" }))} />
+                    <input
+                      type="radio"
+                      checked={opts.totalJustify === "left"}
+                      onChange={() =>
+                        setOpts((o) => ({ ...o, totalJustify: "left" }))
+                      }
+                    />
                     Left
                   </label>
                   <label className="text-sm flex items-center gap-1">
-                    <input type="radio" checked={opts.totalJustify === "center"} onChange={() => setOpts((o) => ({ ...o, totalJustify: "center" }))} />
+                    <input
+                      type="radio"
+                      checked={opts.totalJustify === "center"}
+                      onChange={() =>
+                        setOpts((o) => ({ ...o, totalJustify: "center" }))
+                      }
+                    />
                     Center
                   </label>
                   <label className="text-sm flex items-center gap-1">
-                    <input type="radio" checked={opts.totalJustify === "right"} onChange={() => setOpts((o) => ({ ...o, totalJustify: "right" }))} />
+                    <input
+                      type="radio"
+                      checked={opts.totalJustify === "right"}
+                      onChange={() =>
+                        setOpts((o) => ({ ...o, totalJustify: "right" }))
+                      }
+                    />
                     Right
                   </label>
+                </div>
+              </div>
+
+              {/* Overlay link path */}
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
+                <div className="text-xs opacity-70">Overlay link (after domain)</div>
+                <Input
+                  value={opts.overlayPath}
+                  onChange={(e) =>
+                    setOpts((o) => ({ ...o, overlayPath: e.target.value }))
+                  }
+                  placeholder="#/widgets/battle/"
+                  className="h-9 bg-zinc-900 border-white/10 text-white"
+                />
+                <div className="text-[11px] opacity-60">
+                  Ex.: <code>#/widgets/battle/</code> ou <code>#/overlay/battle/</code>
                 </div>
               </div>
 
@@ -943,7 +1452,13 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
                 ["pulse", "VS/Chips pulse"],
               ].map(([k, label]) => (
                 <label key={k} className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={!!theme[k]} onChange={(e) => setTheme((t) => ({ ...t, [k]: e.target.checked }))} />
+                  <input
+                    type="checkbox"
+                    checked={!!theme[k]}
+                    onChange={(e) =>
+                      setTheme((t) => ({ ...t, [k]: e.target.checked }))
+                    }
+                  />
                   {label}
                 </label>
               ))}
@@ -958,7 +1473,9 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
                     type="radio"
                     name="bonuslabel"
                     checked={opts.bonusLabelMode === "label+value"}
-                    onChange={() => setOpts((o) => ({ ...o, bonusLabelMode: "label+value" }))}
+                    onChange={() =>
+                      setOpts((o) => ({ ...o, bonusLabelMode: "label+value" }))
+                    }
                   />
                   Label + Value
                 </label>
@@ -967,7 +1484,9 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
                     type="radio"
                     name="bonuslabel"
                     checked={opts.bonusLabelMode === "value"}
-                    onChange={() => setOpts((o) => ({ ...o, bonusLabelMode: "value" }))}
+                    onChange={() =>
+                      setOpts((o) => ({ ...o, bonusLabelMode: "value" }))
+                    }
                   />
                   Value only
                 </label>
@@ -976,22 +1495,26 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
                 <div className="text-xs opacity-70 mb-1">Label text</div>
                 <Input
                   value={opts.bonusLabelText}
-                  onChange={(e) => setOpts((o) => ({ ...o, bonusLabelText: e.target.value }))}
+                  onChange={(e) =>
+                    setOpts((o) => ({ ...o, bonusLabelText: e.target.value }))
+                  }
                   className="h-9 bg-zinc-900 border-white/10 text-white"
                 />
               </div>
             </div>
 
-            {/* Total badge label */}
+            {/* Total label */}
             <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
-              <div className="text-xs opacity-70">Total badge</div>
+              <div className="text-xs opacity-70">Total paid</div>
               <div className="flex flex-col gap-2 text-sm">
                 <label className="flex items-center gap-2">
                   <input
                     type="radio"
                     name="totallabel"
                     checked={opts.totalLabelMode === "label+value"}
-                    onChange={() => setOpts((o) => ({ ...o, totalLabelMode: "label+value" }))}
+                    onChange={() =>
+                      setOpts((o) => ({ ...o, totalLabelMode: "label+value" }))
+                    }
                   />
                   Label + Value
                 </label>
@@ -1000,7 +1523,9 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
                     type="radio"
                     name="totallabel"
                     checked={opts.totalLabelMode === "value"}
-                    onChange={() => setOpts((o) => ({ ...o, totalLabelMode: "value" }))}
+                    onChange={() =>
+                      setOpts((o) => ({ ...o, totalLabelMode: "value" }))
+                    }
                   />
                   Value only
                 </label>
@@ -1009,12 +1534,15 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
                 <div className="text-xs opacity-70 mb-1">Label text</div>
                 <Input
                   value={opts.totalLabelText}
-                  onChange={(e) => setOpts((o) => ({ ...o, totalLabelText: e.target.value }))}
+                  onChange={(e) =>
+                    setOpts((o) => ({ ...o, totalLabelText: e.target.value }))
+                  }
                   className="h-9 bg-zinc-900 border-white/10 text-white"
                 />
               </div>
             </div>
 
+            {/* Save */}
             <div className="flex gap-2 sticky bottom-3">
               <Button onClick={persist} className="h-10">
                 <Save className="h-4 w-4 mr-2" />
@@ -1037,7 +1565,13 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
 
         {/* Live preview */}
         <div className="p-6 overflow-auto">
-          <WidgetPreviewPanel theme={theme} layout={layout} setLayout={setLayout} opts={opts} {...previewProps} />
+          <WidgetPreviewPanel
+            theme={theme}
+            layout={layout}
+            setLayout={setLayout}
+            opts={opts}
+            {...previewProps}
+          />
         </div>
       </div>
     </div>
@@ -1045,19 +1579,51 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
 }
 
 /* ───────── Widget Card ───────── */
-function WidgetCard({ battleId, sideA, sideB, playerA, playerB, bestOf, buyCost, totalPay, aPays = [], bPays = [] }) {
+function WidgetCard({
+  battleId,
+  sideA,
+  sideB,
+  playerA,
+  playerB,
+  bestOf,
+  buyCost,
+  totalPay,
+  aPays = [],
+  bPays = [],
+}) {
   const [theme, setTheme] = React.useState(DEFAULT_THEME);
   const [layout, setLayout] = React.useState(DEFAULT_LAYOUT);
   const [opts, setOpts] = React.useState(DEFAULT_OPTS);
   const [openDesigner, setOpenDesigner] = React.useState(false);
-  const url = `${window.location.origin}/#/widget/battle/${battleId}`;
 
-  const previewProps = { bestOf, buyCost, totalPay, sideA, sideB, playerA, playerB, aPays, bPays };
+  // helper para montar o link da overlay a partir do overlayPath
+  const buildOverlayUrl = React.useCallback(
+    (id) => {
+      const base = (opts?.overlayPath || "#/widgets/battle/").replace(/^\/+/, "");
+      return `${window.location.origin}/${base}${id}`;
+    },
+    [opts?.overlayPath]
+  );
+
+  const url = buildOverlayUrl(battleId);
+
+  const previewProps = {
+    bestOf,
+    buyCost,
+    totalPay,
+    sideA,
+    sideB,
+    playerA,
+    playerB,
+    aPays,
+    bPays,
+  };
 
   React.useEffect(() => {
     (async () => {
       if (!battleId) return;
-      const { theme: t, layout: l, options: o } = await dbLoadWidgetSettings(battleId);
+      const { theme: t, layout: l, options: o } =
+        await dbLoadWidgetSettings(battleId);
       if (t) setTheme({ ...DEFAULT_THEME, ...t });
       if (l) setLayout({ ...DEFAULT_LAYOUT, ...l });
       if (o) setOpts({ ...DEFAULT_OPTS, ...o });
@@ -1072,43 +1638,52 @@ function WidgetCard({ battleId, sideA, sideB, playerA, playerB, bestOf, buyCost,
   return (
     <>
       <AccentCard title="Widget">
-        <div className="flex items-center justify-end mb-3">
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              onClick={() => navigator.clipboard.writeText(url)}
-              className="h-9"
-              title="Copiar link da overlay"
-            >
-              <Copy className="h-4 w-4 mr-2" />
-              Copy URL
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-9"
-              title="Abre num novo separador e copia o link"
-              onClick={async () => {
-                try { await navigator.clipboard.writeText(url); } catch {}
-                window.open(url, "_blank", "noopener,noreferrer");
-              }}
-            >
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Open overlay
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              className="h-9"
-              onClick={() => setOpenDesigner(true)}
-            >
-              <SlidersHorizontal className="h-4 w-4 mr-2" />
-              Open Designer
-            </Button>
-          </div>
+        {/* Botões — ocupam toda a largura (3 colunas) */}
+        <div className="mb-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <Button
+            type="button"
+            onClick={() => navigator.clipboard.writeText(url)}
+            className="h-9 w-full"
+            title="Copiar link da overlay"
+          >
+            <Copy className="h-4 w-4 mr-2" />
+            Copy URL
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            className="h-9 w-full"
+            title="Abre num novo separador e copia o link"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(url);
+              } catch {}
+              window.open(url, "_blank", "noopener,noreferrer");
+            }}
+          >
+            <ExternalLink className="h-4 w-4 mr-2" />
+            Open overlay
+          </Button>
+
+          <Button
+            type="button"
+            variant="secondary"
+            className="h-9 w-full"
+            onClick={() => setOpenDesigner(true)}
+          >
+            <SlidersHorizontal className="h-4 w-4 mr-2" />
+            Open Designer
+          </Button>
         </div>
 
-        <WidgetPreviewPanel theme={theme} layout={layout} setLayout={setLayout} opts={opts} {...previewProps} />
+        <WidgetPreviewPanel
+          theme={theme}
+          layout={layout}
+          setLayout={setLayout}
+          opts={opts}
+          {...previewProps}
+        />
 
         <div className="mt-3 flex justify-end">
           <Button onClick={persist} className="h-9">
@@ -1149,7 +1724,9 @@ export default function BattleView() {
     }
     read();
     window.addEventListener("hashchange", read);
-    return function () { window.removeEventListener("hashchange", read); };
+    return function () {
+      window.removeEventListener("hashchange", read);
+    };
   }, []);
 
   const [busy, setBusy] = React.useState(true);
@@ -1175,8 +1752,12 @@ export default function BattleView() {
   const profit = totalPay - totalCost;
   const profitTone = profit > 0 ? "positive" : profit < 0 ? "negative" : "neutral";
 
-  const aPays = (pays || []).filter((r) => String(r.side || "").toUpperCase() === "L");
-  const bPays = (pays || []).filter((r) => String(r.side || "").toUpperCase() === "R");
+  const aPays = (pays || []).filter(
+    (r) => String(r.side || "").toUpperCase() === "L"
+  );
+  const bPays = (pays || []).filter(
+    (r) => String(r.side || "").toUpperCase() === "R"
+  );
 
   const aStats = {
     count: aPays.length,
@@ -1194,18 +1775,30 @@ export default function BattleView() {
   const load = React.useCallback(async function (id) {
     if (!id) return;
     try {
-      setBusy(true); setErr("");
+      setBusy(true);
+      setErr("");
 
-      const { data: battle, error } = await supabase.from("battles").select("*").eq("id", id).maybeSingle();
+      const { data: battle, error } = await supabase
+        .from("battles")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
       if (error) throw error;
       setRow(battle);
       setBestOf(Number(battle?.best_of) || 1);
       setBuyCost(Number(battle?.buy_cost) || 0);
 
-      const { data: es } = await supabase.from("battle_entries").select("seed, slot_name, slot_id, player_name").eq("battle_id", id);
+      const { data: es } = await supabase
+        .from("battle_entries")
+        .select("seed, slot_name, slot_id, player_name")
+        .eq("battle_id", id);
 
-      const A = (es || []).find((e) => String(e.seed).toUpperCase() === "A");
-      const B = (es || []).find((e) => String(e.seed).toUpperCase() === "B");
+      const A = (es || []).find(
+        (e) => String(e.seed).toUpperCase() === "A"
+      );
+      const B = (es || []).find(
+        (e) => String(e.seed).toUpperCase() === "B"
+      );
 
       let aBase = A ? { id: A.slot_id ?? null, name: A.slot_name || "" } : null;
       let bBase = B ? { id: B.slot_id ?? null, name: B.slot_name || "" } : null;
@@ -1217,19 +1810,31 @@ export default function BattleView() {
       setSideB(bBase);
       setPlayerB(B?.player_name || "");
 
-      const { data: ps } = await supabase.from("battle_payments").select("*").eq("battle_id", id).order("buy_idx", { ascending: true });
+      const { data: ps } = await supabase
+        .from("battle_payments")
+        .select("*")
+        .eq("battle_id", id)
+        .order("buy_idx", { ascending: true });
       setPays(ps || []);
 
+      // histórico (opcional)
       async function fetchSlotHistory(slotEntry) {
         try {
-          let q = supabase.from("battle_entries").select("battle_id, slot_id, slot_name");
+          let q = supabase
+            .from("battle_entries")
+            .select("battle_id, slot_id, slot_name");
           if (slotEntry?.slot_id) q = q.eq("slot_id", slotEntry.slot_id);
-          else if (slotEntry?.slot_name) q = q.ilike("slot_name", `%${slotEntry.slot_name}%`);
+          else if (slotEntry?.slot_name)
+            q = q.ilike("slot_name", `%${slotEntry.slot_name}%`);
           const { data: ents } = await q.limit(200);
-          if (!ents?.length) return { times: 0, total: 0, best: 0, worst: 0, last: "—" };
+          if (!ents?.length)
+            return { times: 0, total: 0, best: 0, worst: 0, last: "—" };
 
           const battleIds = [...new Set(ents.map((e) => e.battle_id))];
-          const { data: paysRows } = await supabase.from("battle_payments").select("*").in("battle_id", battleIds);
+          const { data: paysRows } = await supabase
+            .from("battle_payments")
+            .select("*")
+            .in("battle_id", battleIds);
           const am = (paysRows || []).map((p) => Number(p.amount || 0));
           const total = am.reduce((a, b) => a + b, 0);
           const best = am.length ? Math.max(...am) : 0;
@@ -1242,7 +1847,9 @@ export default function BattleView() {
             .order("created_at", { ascending: false })
             .limit(1);
           const last = battles?.[0]?.created_at
-            ? new Intl.DateTimeFormat(LOCALE, { dateStyle: "medium" }).format(new Date(battles[0].created_at))
+            ? new Intl.DateTimeFormat(LOCALE, { dateStyle: "medium" }).format(
+                new Date(battles[0].created_at)
+              )
             : "—";
 
           return { times: am.length, total, best, worst, last };
@@ -1257,18 +1864,27 @@ export default function BattleView() {
       else setHistB(null);
     } catch (e) {
       setErr(e.message || "Failed to load battle");
-      setRow(null); setPays([]);
+      setRow(null);
+      setPays([]);
     } finally {
       setBusy(false);
     }
   }, []);
 
-  React.useEffect(() => { if (battleId) load(battleId); }, [battleId, load]);
+  React.useEffect(() => {
+    if (battleId) load(battleId);
+  }, [battleId, load]);
 
   async function saveSettings() {
     if (!battleId) return;
     try {
-      await supabase.from("battles").update({ best_of: Number(bestOf) || 1, buy_cost: Number(buyCost) || 0 }).eq("id", battleId);
+      await supabase
+        .from("battles")
+        .update({
+          best_of: Number(bestOf) || 1,
+          buy_cost: Number(buyCost) || 0,
+        })
+        .eq("id", battleId);
       await load(battleId);
     } catch (e) {
       alert(e.message || "Failed to save settings");
@@ -1280,12 +1896,26 @@ export default function BattleView() {
     try {
       const rows = [];
       if (sideA?.name)
-        rows.push({ battle_id: battleId, seed: "A", player_name: playerA || null, slot_name: sideA.name, slot_id: sideA.id ?? null });
+        rows.push({
+          battle_id: battleId,
+          seed: "A",
+          player_name: playerA || null,
+          slot_name: sideA.name,
+          slot_id: sideA.id ?? null,
+        });
       if (sideB?.name)
-        rows.push({ battle_id: battleId, seed: "B", player_name: playerB || null, slot_name: sideB.name, slot_id: sideB.id ?? null });
+        rows.push({
+          battle_id: battleId,
+          seed: "B",
+          player_name: playerB || null,
+          slot_name: sideB.name,
+          slot_id: sideB.id ?? null,
+        });
       if (!rows.length) return;
 
-      const { error } = await supabase.from("battle_entries").upsert(rows, { onConflict: "battle_id,seed" });
+      const { error } = await supabase
+        .from("battle_entries")
+        .upsert(rows, { onConflict: "battle_id,seed" });
       if (error) throw error;
 
       await load(battleId);
@@ -1296,10 +1926,25 @@ export default function BattleView() {
 
   async function setBuy(side, idx, amount) {
     if (!battleId) return;
-    const payload = { battle_id: battleId, round_idx: 0, match_idx: 0, side, buy_idx: idx, amount: Number(amount) || 0 };
+    const payload = {
+      battle_id: battleId,
+      round_idx: 0,
+      match_idx: 0,
+      side,
+      buy_idx: idx,
+      amount: Number(amount) || 0,
+    };
     try {
-      await supabase.from("battle_payments").upsert([payload], { onConflict: "battle_id,round_idx,match_idx,side,buy_idx" });
-      const { data: ps } = await supabase.from("battle_payments").select("*").eq("battle_id", battleId).order("buy_idx", { ascending: true });
+      await supabase
+        .from("battle_payments")
+        .upsert([payload], {
+          onConflict: "battle_id,round_idx,match_idx,side,buy_idx",
+        });
+      const { data: ps } = await supabase
+        .from("battle_payments")
+        .select("*")
+        .eq("battle_id", battleId)
+        .order("buy_idx", { ascending: true });
       setPays(ps || []);
     } catch (e) {
       alert(e.message || "Failed to save buy");
@@ -1309,7 +1954,9 @@ export default function BattleView() {
   function BuysEditor({ side, stats, player }) {
     const isLeft = side === "L";
     const label = isLeft ? "Side A" : "Side B";
-    const buys = (pays || []).filter((p) => String(p.side || "").toUpperCase() === side);
+    const buys = (pays || []).filter(
+      (p) => String(p.side || "").toUpperCase() === side
+    );
 
     const inputs = [];
     const maxN = Math.max(plannedBuys / 2, buys.length, 3);
@@ -1370,12 +2017,22 @@ export default function BattleView() {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl">Battle {row ? `#${row.id}` : ""}</h1>
-            {row?.status ? <span className="ml-2 text-xs rounded-lg border border-white/10 bg-white/5 px-2 py-0.5">{row.status}</span> : null}
+            {row?.status ? (
+              <span className="ml-2 text-xs rounded-lg border border-white/10 bg-white/5 px-2 py-0.5">
+                {row.status}
+              </span>
+            ) : null}
           </div>
-          <div className="text-sm opacity-70">{row?.created_at ? new Date(row.created_at).toLocaleDateString() : ""}</div>
+          <div className="text-sm opacity-70">
+            {row?.created_at ? new Date(row.created_at).toLocaleDateString() : ""}
+          </div>
         </div>
 
-        {err ? <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{err}</div> : null}
+        {err ? (
+          <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            {err}
+          </div>
+        ) : null}
 
         {/* grid */}
         <div className="grid lg:grid-cols-[520px_1fr] gap-6">
@@ -1385,22 +2042,39 @@ export default function BattleView() {
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <div className="text-xs opacity-70 mb-1">Best Of</div>
-                  <select value={bestOf} onChange={(e) => setBestOf(e.target.value)} className="h-11 w-full rounded-xl bg-zinc-900 border border-white/10 px-3 text-sm">
+                  <select
+                    value={bestOf}
+                    onChange={(e) => setBestOf(e.target.value)}
+                    className="h-11 w-full rounded-xl bg-zinc-900 border border-white/10 px-3 text-sm"
+                  >
                     {[1, 3, 5, 7, 9].map((n) => (
-                      <option key={n} value={n}>{n}</option>
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
                     ))}
                   </select>
                 </div>
                 <div>
                   <div className="text-xs opacity-70 mb-1">Buy cost</div>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">€</span>
-                    <Input inputMode="decimal" type="number" step="0.01" value={buyCost} onChange={(e) => setBuyCost(e.target.value)} className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white pl-7" />
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">
+                      €
+                    </span>
+                    <Input
+                      inputMode="decimal"
+                      type="number"
+                      step="0.01"
+                      value={buyCost}
+                      onChange={(e) => setBuyCost(e.target.value)}
+                      className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white pl-7"
+                    />
                   </div>
                 </div>
               </div>
               <div className="mt-3 flex justify-end">
-                <Button onClick={saveSettings} className="h-10">Save settings</Button>
+                <Button onClick={saveSettings} className="h-10">
+                  Save settings
+                </Button>
               </div>
             </AccentCard>
 
@@ -1435,10 +2109,19 @@ export default function BattleView() {
                     <Shield className="h-4 w-4" /> Side A
                   </div>
                   <div className="space-y-2">
-                    <SlotsAutocomplete value={sideA} onSelect={(v) => setSideA(v)} placeholder="Add a Slot" />
+                    <SlotsAutocomplete
+                      value={sideA}
+                      onSelect={(v) => setSideA(v)}
+                      placeholder="Add a Slot"
+                    />
                     <div>
                       <div className="text-xs opacity-70 mb-1">Player</div>
-                      <Input value={playerA} onChange={(e) => setPlayerA(e.target.value)} placeholder="Player name" className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white" />
+                      <Input
+                        value={playerA}
+                        onChange={(e) => setPlayerA(e.target.value)}
+                        placeholder="Player name"
+                        className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white"
+                      />
                     </div>
                   </div>
                 </div>
@@ -1448,17 +2131,28 @@ export default function BattleView() {
                     <Users className="h-4 w-4" /> Side B
                   </div>
                   <div className="space-y-2">
-                    <SlotsAutocomplete value={sideB} onSelect={(v) => setSideB(v)} placeholder="Add a Slot" />
+                    <SlotsAutocomplete
+                      value={sideB}
+                      onSelect={(v) => setSideB(v)}
+                      placeholder="Add a Slot"
+                    />
                     <div>
                       <div className="text-xs opacity-70 mb-1">Player</div>
-                      <Input value={playerB} onChange={(e) => setPlayerB(e.target.value)} placeholder="Player name" className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white" />
+                      <Input
+                        value={playerB}
+                        onChange={(e) => setPlayerB(e.target.value)}
+                        placeholder="Player name"
+                        className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white"
+                      />
                     </div>
                   </div>
                 </div>
               </div>
 
               <div className="mt-4 flex justify-end">
-                <Button onClick={saveSides} className="h-10">Save sides</Button>
+                <Button onClick={saveSides} className="h-10">
+                  Save sides
+                </Button>
               </div>
             </AccentCard>
 
@@ -1468,19 +2162,24 @@ export default function BattleView() {
                 <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-3">
                   <div className="grid grid-cols-2 gap-2">
                     <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-                      <div className="text-xs opacity-70">Times</div><div>{h?.times ?? 0}</div>
+                      <div className="text-xs opacity-70">Times</div>
+                      <div>{h?.times ?? 0}</div>
                     </div>
                     <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-                      <div className="text-xs opacity-70">Total</div><div>{fmtMoney(h?.total ?? 0)}</div>
+                      <div className="text-xs opacity-70">Total</div>
+                      <div>{fmtMoney(h?.total ?? 0)}</div>
                     </div>
                     <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-                      <div className="text-xs opacity-70">Best</div><div>{fmtMoney(h?.best ?? 0)}</div>
+                      <div className="text-xs opacity-70">Best</div>
+                      <div>{fmtMoney(h?.best ?? 0)}</div>
                     </div>
                     <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-                      <div className="text-xs opacity-70">Worst</div><div>{fmtMoney(h?.worst ?? 0)}</div>
+                      <div className="text-xs opacity-70">Worst</div>
+                      <div>{fmtMoney(h?.worst ?? 0)}</div>
                     </div>
                     <div className="rounded-lg border border-white/10 bg-white/5 p-2 col-span-2">
-                      <div className="text-xs opacity-70">Last</div><div>{h?.last ?? "—"}</div>
+                      <div className="text-xs opacity-70">Last</div>
+                      <div>{h?.last ?? "—"}</div>
                     </div>
                   </div>
                 </div>
