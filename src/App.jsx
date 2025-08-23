@@ -1462,7 +1462,7 @@ export default function App() {
         {route === "hunts" && <BonusHuntsPage />}
         {route === "terms" && <Terms />}
         {route === "tournaments" && <TournamentsPage />}
-        {route === "battles" && <Battlespage />}
+        {route === "battles" && <BattlesPage />}
 
         {/* fallback */}
         {!(route === "home" ||
