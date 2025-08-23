@@ -28,7 +28,7 @@ import { redirectIfLoggedToApp } from "@/guards/redirect-if-logged";
 import { ThemeCtx, AuthCtx, useTheme, useAuth } from "@/contexts/auth-context";
 import TournamentsPage from "@/tournaments";
 import TournamentDetail from "@/tournament-detail.jsx";
-import BattlesPage from "@/battlespage.jsx";
+import BattlesPage from "./battlespage.jsx";
 
 /* =================== CONFIG =================== */
 const TELEGRAM_URL = "https://t.me/gsousa70";
