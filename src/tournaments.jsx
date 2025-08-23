@@ -170,7 +170,7 @@ function Confirm({
   );
 }
 
-/* ───────────────────────── Helpers: per-user next number ───────────────────────── */
+/* ───────────────────────── Helpers: next tournament number per user ───────────────────────── */
 async function getNextTournamentNo() {
   const { data: auth, error: uErr } = await supabase.auth.getUser();
   if (uErr) throw uErr;
@@ -189,7 +189,7 @@ async function getNextTournamentNo() {
   return prev + 1;
 }
 
-/* ───────────────────────── Modal (Create/Edit) ───────────────────────── */
+/* ───────────────────────── Modal ───────────────────────── */
 function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
   const [busy, setBusy] = React.useState(false);
   const [title, setTitle] = React.useState("");
@@ -207,6 +207,7 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
     setTitle(initial?.title ?? initial?.name ?? "");
     setDescription(initial?.description ?? "");
     setStatus(initial?.status ?? "scheduled");
+    // load prizes for edit
     (async () => {
       if (initial?.id) {
         const { data } = await supabase
@@ -232,6 +233,7 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
   async function save() {
     try {
       setBusy(true);
+      // 1) create / update tournament
       const payload = {
         title: title || null,
         description: description || null,
@@ -241,13 +243,14 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
 
       let id = initial?.id ?? null;
       if (id) {
+        // EDIT
         const { error } = await supabase
           .from("tournaments")
           .update(payload)
           .eq("id", id);
         if (error) throw error;
       } else {
-        // include per-user sequential number and created_by
+        // CREATE — include per-user sequential number and created_by
         const nextNo = await getNextTournamentNo();
         const { data: auth } = await supabase.auth.getUser();
         const created_by = auth?.user?.id || null;
@@ -261,7 +264,7 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
         id = data.id;
       }
 
-      // prizes 1..3
+      // 2) upsert prizes 1..3
       const rows = [
         { tournament_id: id, position: 1, amount: toNum(p1) || 0 },
         { tournament_id: id, position: 2, amount: toNum(p2) || 0 },
@@ -544,8 +547,6 @@ export default function TournamentsPage() {
 
   // prizes map: id -> {1,2,3}
   const [prizesMap, setPrizesMap] = React.useState(new Map());
-  // per-user displayed number (#1, #2, …) even if DB column `no` is missing
-  const [noMap, setNoMap] = React.useState(new Map());
 
   // insights
   const [chartData, setChartData] = React.useState([]); // [{name, wins}]
@@ -561,39 +562,17 @@ export default function TournamentsPage() {
     try {
       setBusy(true);
       setErr("");
-
-      // who is the current user (for per-account numbering)
-      const { data: auth } = await supabase.auth.getUser();
-      const uid = auth?.user?.id ?? null;
-
       const { data, error } = await supabase
         .from("tournaments")
         .select("*")
         .limit(500);
       if (error) throw error;
-
       const ordered = [...(data || [])].sort((a, b) => {
         const da = new Date(a?.created_at || a?.starts_at || 0).getTime();
         const db = new Date(b?.created_at || b?.starts_at || 0).getTime();
         return db - da;
       });
       setRows(ordered);
-
-      // compute per-user sequential numbers to show (fallback when `no` is null)
-      const mine = ordered
-        .filter((r) => (uid ? r.created_by === uid : false))
-        .sort(
-          (a, b) =>
-            new Date(a.created_at || 0).getTime() -
-            new Date(b.created_at || 0).getTime()
-        );
-      const noTmp = new Map();
-      let seq = 1;
-      for (const r of mine) {
-        noTmp.set(r.id, r.no ?? seq);
-        seq++;
-      }
-      setNoMap(noTmp);
 
       // fetch prizes for table + insights
       const ids = ordered.map((t) => t.id);
@@ -964,9 +943,6 @@ export default function TournamentsPage() {
         {filtered.map((r) => {
           const title = r.title || r.name || "—";
           const prizes = prizesMap.get(r.id) || { 1: null, 2: null, 3: null };
-          const displayNo =
-            (noMap && noMap.get(r.id)) ??
-            (Number.isFinite(Number(r.no)) ? Number(r.no) : null);
 
           return (
             <div
@@ -978,9 +954,9 @@ export default function TournamentsPage() {
               {/* Title + per-user number badge */}
               <div className="col-span-7 min-w-0 pl-2">
                 <div className="flex items-center gap-2">
-                  {displayNo != null && (
+                  {Number.isFinite(Number(r.no)) && Number(r.no) > 0 && (
                     <span className="inline-flex items-center rounded-lg border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold tabular-nums">
-                      #{displayNo}
+                      #{r.no}
                     </span>
                   )}
                   <div className="font-medium truncate">{title}</div>
