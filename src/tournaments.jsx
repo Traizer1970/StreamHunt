@@ -14,6 +14,7 @@ import {
   Trash2,
   Trophy,
   Eye,
+  Crown,
 } from "lucide-react";
 
 /* ───────────────────────── i18n ───────────────────────── */
@@ -834,8 +835,8 @@ export default function TournamentsPage() {
           </div>
         </div>
 
-        {/* Insights (accent azul) — sem título */}
-        <AccentCard className="mb-6">
+        {/* Insights (accent azul) */}
+        <AccentCard title={t("insights")} className="mb-6">
           <div className="grid lg:grid-cols-[1fr_360px] gap-4">
             {/* chart */}
             <div className="rounded-xl border border-white/10 p-3">
@@ -896,14 +897,23 @@ export default function TournamentsPage() {
 
               <div className="rounded-xl border border-white/10 p-4">
                 <div className="text-sm opacity-70 mb-2">{t("lastWinner")}</div>
-                <div className="text-sm">
-                  <span className="opacity-70">{t("player")}: </span>
-                  <span className="font-medium">{lastWinner.player || "—"}</span>
-                </div>
-                <div className="text-sm">
-                  <span className="opacity-70">{t("slot")}: </span>
-                  <span className="font-medium">{lastWinner.slot || "—"}</span>
-                </div>
+                {lastWinner.player ? (
+                  <div className="flex items-start gap-3">
+                    <Avatar name={lastWinner.player} />
+                    <div>
+                      <div className="text-sm">
+                        <span className="opacity-70">{t("player")}: </span>
+                        <span className="font-medium">{lastWinner.player}</span>
+                      </div>
+                      <div className="text-sm">
+                        <span className="opacity-70">{t("slot")}: </span>
+                        <span className="font-medium">{lastWinner.slot || "—"}</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm opacity-60">—</div>
+                )}
               </div>
             </div>
           </div>
