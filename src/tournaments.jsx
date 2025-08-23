@@ -676,7 +676,7 @@ export default function TournamentsPage() {
       <div className={`rounded-xl border overflow-hidden ${isDark ? "border-white/10" : "border-zinc-200"}`}>
         <div className={`${isDark ? "bg-white/[0.04]" : "bg-zinc-50"} grid grid-cols-12 items-center px-4 py-3 text-xs font-semibold`}>
           <div className="col-span-7"><HeaderCell k="title">{t("name")}</HeaderCell></div>
-          <div className="col-span-3 text-right">{t("prizes")}</div>
+          <div className="col-span-3 text-center">{t("prizes")}</div>
           <div className="col-span-2 text-right">{t("actions")}</div>
         </div>
 
@@ -704,7 +704,7 @@ export default function TournamentsPage() {
               </div>
 
               {/* Prizes */}
-              <div className={`col-span-3 flex items-center justify-end gap-2 ${numCls}`}>
+              <div className={`col-span-3 flex items-center justify-center gap-2 ${numCls}`}>
                 <PrizeBadge kind={1} value={prizes[1]} />
                 <PrizeBadge kind={2} value={prizes[2]} />
                 <PrizeBadge kind={3} value={prizes[3]} />
