@@ -385,7 +385,9 @@ export default function TournamentsPage() {
   React.useEffect(() => { load(); }, [load]);
 
   // compute chart + top player + last winner
-  async function computeInsights(tournaments) {
+// --- substitui a função computeInsights existente por esta ---
+async function computeInsights(tournaments) {
+  try {
     if (!tournaments?.length) {
       setChartData([]);
       setTopPlayer({ name: "", wins: 0, totalPrize: 0, lastPrize: 0 });
@@ -393,31 +395,49 @@ export default function TournamentsPage() {
       return;
     }
 
-    // prefetch all entries & payments for these tournaments
-    const ids = tournaments.map(t => t.id);
-    const { data: entries } = await supabase
+    const ids = tournaments.map((t) => t.id);
+    if (!ids.length) {
+      setChartData([]);
+      setTopPlayer({ name: "", wins: 0, totalPrize: 0, lastPrize: 0 });
+      setLastWinner({ player: "", slot: "" });
+      return;
+    }
+
+    // LER TUDO e depois mapear colunas que existirem
+    const { data: entries, error: e1 } = await supabase
       .from("tournament_entries")
-      .select("id,tournament_id,seed,player:player_name,player_name,slot_name,slot_id")
+      .select("*")
       .in("tournament_id", ids)
       .limit(5000);
+    if (e1) throw e1;
 
-    const { data: pays } = await supabase
+    const { data: pays, error: e2 } = await supabase
       .from("tournament_payments")
       .select("*")
       .in("tournament_id", ids)
       .limit(10000);
+    if (e2) throw e2;
 
+    const { data: prizeRows, error: e3 } = await supabase
+      .from("tournament_prizes")
+      .select("tournament_id, position, amount")
+      .in("tournament_id", ids)
+      .limit(5000);
+    if (e3) throw e3;
+
+    // map por torneio
     const byTournamentEntries = new Map();
-    for (const e of entries || []) {
-      const arr = byTournamentEntries.get(e.tournament_id) || [];
+    for (const r of entries || []) {
+      const arr = byTournamentEntries.get(r.tournament_id) || [];
       arr.push({
-        seed: e.seed,
-        player_name: e.player ?? e.player_name ?? "",
-        slot_name: e.slot_name ?? "",
-        slot_id: e.slot_id ?? null
+        seed: r.seed,
+        player_name: r.player ?? r.player_name ?? "", // suporta ambas
+        slot_name: r.slot_name ?? "",
+        slot_id: r.slot_id ?? null,
       });
-      byTournamentEntries.set(e.tournament_id, arr);
+      byTournamentEntries.set(r.tournament_id, arr);
     }
+
     const byTournamentPays = new Map();
     for (const p of pays || []) {
       const arr = byTournamentPays.get(p.tournament_id) || [];
@@ -425,43 +445,37 @@ export default function TournamentsPage() {
       byTournamentPays.set(p.tournament_id, arr);
     }
 
-    // winners list [{player, slot, tournament_id}]
+    // vencedores por torneio
     const winners = [];
     for (const t of tournaments) {
-      const w = computeTournamentWinner(byTournamentEntries.get(t.id) || [], byTournamentPays.get(t.id) || []);
+      const w = computeTournamentWinner(
+        byTournamentEntries.get(t.id) || [],
+        byTournamentPays.get(t.id) || []
+      );
       if (w) winners.push({ tournament_id: t.id, player: w.player_name || "", slot: w.slot_name || "" });
     }
 
-    // Top slots (count wins)
+    // TOP 3 slots
     const slotCount = new Map();
     for (const w of winners) slotCount.set(w.slot, (slotCount.get(w.slot) || 0) + 1);
     const topSlots = [...slotCount.entries()]
-      .sort((a,b) => b[1]-a[1])
+      .sort((a, b) => b[1] - a[1])
       .slice(0, 3)
       .map(([name, wins]) => ({ name: name || "—", wins }));
     setChartData(topSlots);
 
-    // Top player by wins
+    // TOP player (wins)
     const playerCount = new Map();
     for (const w of winners) playerCount.set(w.player, (playerCount.get(w.player) || 0) + 1);
-    const topP = [...playerCount.entries()].sort((a,b) => b[1]-a[1])[0];
-    let topPlayerName = topP?.[0] || "";
-    let topPlayerWins = topP?.[1] || 0;
+    const topP = [...playerCount.entries()].sort((a, b) => b[1] - a[1])[0];
+    const topPlayerName = topP?.[0] || "";
+    const topPlayerWins = topP?.[1] || 0;
 
-    // prizes: try tournament_prizes.position=1, fallback to tournaments.prize_pool
-    const { data: prizeRows } = await supabase
-      .from("tournament_prizes")
-      .select("tournament_id, position, amount")
-      .in("tournament_id", ids)
-      .limit(5000);
-
+    // prémios (1º lugar em tournament_prizes; fallback prize_pool)
     const prizeByTournament = new Map();
     for (const r of prizeRows || []) {
-      if (Number(r.position) === 1) {
-        prizeByTournament.set(r.tournament_id, Number(r.amount) || 0);
-      }
+      if (Number(r.position) === 1) prizeByTournament.set(r.tournament_id, Number(r.amount) || 0);
     }
-    // fallback
     for (const t of tournaments) {
       if (!prizeByTournament.has(t.id)) {
         const v = Number(t.prize_pool);
@@ -469,17 +483,19 @@ export default function TournamentsPage() {
       }
     }
 
-    // total prize for top player
     let totalPrize = 0;
     for (const w of winners) {
       if (w.player === topPlayerName) totalPrize += prizeByTournament.get(w.tournament_id) || 0;
     }
 
-    // last tournament winner (most recent from list that has winner)
+    // último vencedor (torneio mais recente com winner)
     let last = null;
     for (const t of tournaments) {
-      const w = winners.find(x => x.tournament_id === t.id);
-      if (w) { last = { ...w, prize: prizeByTournament.get(t.id) || 0 }; break; }
+      const w = winners.find((x) => x.tournament_id === t.id);
+      if (w) {
+        last = { ...w, prize: prizeByTournament.get(t.id) || 0 };
+        break;
+      }
     }
 
     setTopPlayer({
@@ -491,9 +507,15 @@ export default function TournamentsPage() {
 
     setLastWinner({
       player: last?.player || "",
-      slot: last?.slot || ""
+      slot: last?.slot || "",
     });
+  } catch (err) {
+    console.error("computeInsights:", err);
+    setChartData([]);
+    setTopPlayer({ name: "", wins: 0, totalPrize: 0, lastPrize: 0 });
+    setLastWinner({ player: "", slot: "" });
   }
+}
 
   const filtered = React.useMemo(() => {
     const needle = dSearch.trim().toLowerCase();
