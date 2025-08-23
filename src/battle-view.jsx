@@ -686,19 +686,132 @@ function WidgetPreviewPanel({
 }
 
 /* ───────── Color field (input + picker nativo) ───────── */
+/* ───────── Color field (popover fixo; nunca corta) ───────── */
 function ColorField({ label, value, onChange }) {
-  const ref = React.useRef(null);
+  const swatchRef = React.useRef(null);
+  const [open, setOpen] = React.useState(false);
+  const [anchor, setAnchor] = React.useState({ left: 0, top: 0 });
+  const [tempHex, setTempHex] = React.useState("#ffffff");
+  const [textValue, setTextValue] = React.useState(value || "");
+
+  React.useEffect(() => {
+    setTextValue(value || "");
+  }, [value]);
+
+  const toHex = React.useCallback((v) => {
+    if (!v) return "#ffffff";
+    v = String(v).trim();
+    if (v.startsWith("#")) {
+      // #RGB -> #RRGGBB
+      if (v.length === 4) {
+        const r = v[1], g = v[2], b = v[3];
+        return `#${r}${r}${g}${g}${b}${b}`;
+      }
+      return v.slice(0, 7);
+    }
+    const m = v.match(/rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+    if (m) {
+      const clamp = (n) => Math.max(0, Math.min(255, n | 0));
+      const [r, g, b] = [clamp(+m[1]), clamp(+m[2]), clamp(+m[3])];
+      return (
+        "#" +
+        [r, g, b]
+          .map((x) => x.toString(16).padStart(2, "0"))
+          .join("")
+          .slice(0, 6)
+      );
+    }
+    return "#ffffff";
+  }, []);
+
+  const openPicker = (e) => {
+    const rect = swatchRef.current?.getBoundingClientRect();
+    const panelW = 260;
+    const panelH = 220;
+    const pad = 8;
+    let left = (rect?.left ?? 0);
+    let top = (rect ? rect.bottom + pad : 0);
+
+    // clamp à viewport
+    left = Math.max(pad, Math.min(window.innerWidth - panelW - pad, left));
+    top = Math.max(pad, Math.min(window.innerHeight - panelH - pad, top));
+
+    setAnchor({ left, top });
+    setTempHex(toHex(textValue || value));
+    setOpen(true);
+  };
+
+  const applyAndClose = () => {
+    onChange?.(tempHex);
+    setTextValue(tempHex);
+    setOpen(false);
+  };
+
   return (
     <div className="rounded-xl border border-white/10 bg-white/5 p-3">
       <div className="text-xs opacity-70 mb-1">{label}</div>
       <div className="flex items-center gap-3">
-        <button type="button" onClick={() => ref.current?.click()} className="h-9 w-9 rounded-lg border border-white/10 shadow-inner" style={{ background: value }} />
-        <Input value={value} onChange={(e) => onChange(e.target.value)} className="h-9 bg-zinc-900 border-white/10 text-white" />
-        <input ref={ref} type="color" value={value.startsWith("#") ? value : "#ffffff"} onChange={(e) => onChange(e.target.value)} className="sr-only" />
+        <button
+          ref={swatchRef}
+          type="button"
+          onClick={openPicker}
+          className="h-9 w-9 rounded-lg border border-white/10 shadow-inner"
+          style={{ background: textValue || value || "#ffffff" }}
+          title="Escolher cor"
+        />
+        <Input
+          value={textValue}
+          onChange={(e) => {
+            setTextValue(e.target.value);
+            onChange?.(e.target.value);
+          }}
+          className="h-9 bg-zinc-900 border-white/10 text-white"
+        />
       </div>
+
+      {/* Popover fixo (fora de qualquer overflow) */}
+      {open && (
+        <div
+          className="fixed inset-0 z-[9999]"
+          onMouseDown={() => setOpen(false)}
+        >
+          <div
+            onMouseDown={(e) => e.stopPropagation()}
+            className="rounded-xl border border-white/10 bg-zinc-900/95 p-3 shadow-2xl"
+            style={{
+              position: "fixed",
+              left: anchor.left,
+              top: anchor.top,
+              width: 260,
+              height: 220,
+              backdropFilter: "blur(6px)",
+            }}
+          >
+            <div className="text-xs opacity-70 mb-2">Seleciona a cor</div>
+            <input
+              type="color"
+              value={tempHex}
+              onChange={(e) => setTempHex(e.target.value)}
+              className="block w-full h-40 rounded-lg border border-white/10 p-0 cursor-pointer"
+              style={{ background: "transparent" }}
+            />
+            <div className="mt-2 flex items-center gap-2">
+              <Input
+                value={tempHex}
+                onChange={(e) => setTempHex(e.target.value)}
+                className="h-9 bg-zinc-800 border-white/10 text-white"
+              />
+              <Button type="button" className="h-9" onClick={applyAndClose}>
+                OK
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
 
 /* ───────── Designer (overlay) ───────── */
 function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setLayout, opts, setOpts, previewProps, persist }) {
