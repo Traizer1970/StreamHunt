@@ -13,6 +13,7 @@ import {
   Users,
   Copy,
   ExternalLink,
+  SlidersHorizontal,
 } from "lucide-react";
 
 /* ───────────────────────── utils / style helpers ───────────────────────── */
@@ -29,7 +30,43 @@ const fmtMoney = (n) =>
       }).format(Number(n))
     : "—";
 
-// Enriquecer um objeto {id,name} com provider/thumbnail da slots_catalog
+/* Tema por defeito do widget (customizável) */
+const DEFAULT_THEME = {
+  bgStart: "#0b1020",
+  bgEnd: "#111827",
+  panelBg: "rgba(255,255,255,0.06)",
+  panelBorder: "rgba(255,255,255,0.12)",
+  text: "#e5e7eb",
+  subtext: "#9ca3af",
+  accent: "#60a5fa",
+  chipBg: "rgba(255,255,255,0.08)",
+  chipBorder: "rgba(255,255,255,0.18)",
+  pos: "#34d399",
+  neg: "#f87171",
+  vsBg: "rgba(99,102,241,0.35)",
+  radius: 18,
+  showThumbs: true,
+  shine: true,
+  pulse: true,
+};
+
+/* helpers: tema em localStorage (sem BD) */
+const THEME_KEY = (id) => `battle_theme_${id}`;
+const loadTheme = (battleId) => {
+  try {
+    const raw = localStorage.getItem(THEME_KEY(battleId));
+    return raw ? { ...DEFAULT_THEME, ...JSON.parse(raw) } : { ...DEFAULT_THEME };
+  } catch {
+    return { ...DEFAULT_THEME };
+  }
+};
+const saveTheme = (battleId, theme) => {
+  try {
+    localStorage.setItem(THEME_KEY(battleId), JSON.stringify(theme));
+  } catch {}
+};
+
+/* Enriquecer um objeto {id,name} com provider/thumbnail da slots_catalog */
 async function enrichSlotInfo(slot) {
   if (!slot) return slot;
   if (slot.thumbnail && slot.provider) return slot;
@@ -253,8 +290,8 @@ function SlotsAutocomplete({ value, onSelect, placeholder = "Add a Slot" }) {
   );
 }
 
-/* ───────────────────────── Widget Preview (OBS) ───────────────────────── */
-function WidgetPreview({
+/* ───────────────────────── Widget Preview + Customize ───────────────────────── */
+function WidgetCard({
   battleId,
   sideA,
   sideB,
@@ -267,120 +304,312 @@ function WidgetPreview({
   aPays = [],
   bPays = [],
 }) {
-  const url = `${window.location.origin}/#/widget/battle/${battleId}`;
-  const tone = profit > 0 ? "text-emerald-400" : profit < 0 ? "text-rose-400" : "text-sky-300";
+  const [tab, setTab] = React.useState("preview"); // 'preview' | 'customize'
+  const [theme, setTheme] = React.useState(() => loadTheme(battleId));
+  React.useEffect(() => setTheme(loadTheme(battleId)), [battleId]);
 
-  const styles = `
-  @keyframes sweep { 0% { transform: translateX(-120%);} 100% { transform: translateX(120%);} }
-  @keyframes pop { 0% { transform: scale(.96); opacity: 0;} 100% { transform: scale(1); opacity: 1;} }`;
+  const url = `${window.location.origin}/#/widget/battle/${battleId}`;
+  const profitColor = profit > 0 ? theme.pos : profit < 0 ? theme.neg : theme.accent;
 
   const chip = (v, i) => (
     <span
       key={i}
-      className="inline-flex items-center rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold mr-1 mb-1"
-      style={{ animation: "pop .18s ease-out both", animationDelay: `${i * 40}ms` }}
+      className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold mr-1 mb-1"
+      style={{
+        background: theme.chipBg,
+        border: `1px solid ${theme.chipBorder}`,
+        color: theme.text,
+        animation: theme.pulse ? `pop .16s ease-out both` : "none",
+        animationDelay: `${i * 45}ms`,
+      }}
     >
       {fmtMoney(Number(v?.amount || 0))}
     </span>
   );
 
   return (
-    <AccentCard title="Widget preview (OBS)">
-      <style>{styles}</style>
-
-      <div className="relative rounded-xl overflow-hidden border border-white/10 bg-black/80 text-white p-4">
-        {/* brilho a varrer */}
-        <div
-          className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/10 to-transparent"
-          style={{ animation: "sweep 4.5s linear infinite" }}
-        />
-
-        {/* topo: info + profit */}
-        <div className="flex items-center justify-between text-xs opacity-80">
-          <div>Best of {bestOf} • Buy {fmtMoney(buyCost)}</div>
-          <div className={cn("font-semibold", tone)}>Profit: {fmtMoney(profit)}</div>
+    <AccentCard title="Widget">
+      {/* tabs header */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex gap-2">
+          <button
+            onClick={() => setTab("preview")}
+            className={cn(
+              "px-3 py-1.5 rounded-lg text-sm border",
+              tab === "preview"
+                ? "bg-indigo-500/20 border-indigo-400/40 text-indigo-200"
+                : "bg-white/5 border-white/10 text-white/70 hover:bg-white/10"
+            )}
+          >
+            Preview
+          </button>
+          <button
+            onClick={() => setTab("customize")}
+            className={cn(
+              "px-3 py-1.5 rounded-lg text-sm border inline-flex items-center gap-2",
+              tab === "customize"
+                ? "bg-indigo-500/20 border-indigo-400/40 text-indigo-200"
+                : "bg-white/5 border-white/10 text-white/70 hover:bg-white/10"
+            )}
+          >
+            <SlidersHorizontal className="h-4 w-4" /> Customize
+          </button>
         </div>
 
-        {/* miolo */}
-        <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
-          {/* LEFT */}
-          <div className="flex items-center justify-end gap-3">
-            <div className="min-w-0 text-right">
-              <div className="text-lg font-extrabold truncate">{playerA || "—"}</div>
-              <div className="text-[11px] opacity-70 truncate">{sideA?.name || "—"}</div>
-            </div>
-            <div className="h-12 w-12 rounded-lg overflow-hidden ring-1 ring-white/10 bg-white/5">
-              {sideA?.thumbnail ? (
-                <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <div className="h-full w-full" />
-              )}
-            </div>
+        {/* actions */}
+        {tab === "preview" && (
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              onClick={() => navigator.clipboard.writeText(url)}
+              className="h-9"
+              title="Copiar URL para o OBS (Browser Source)"
+            >
+              <Copy className="h-4 w-4 mr-2" />
+              Copiar URL
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9"
+              onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+              title="Abrir overlay numa nova janela"
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Abrir overlay
+            </Button>
           </div>
-
-          {/* VS */}
-          <div className="px-2">
-            <div className="px-2 py-1 rounded-lg border border-white/15 bg-white/10 text-xs font-bold animate-pulse">
-              VS
-            </div>
-          </div>
-
-          {/* RIGHT */}
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-lg overflow-hidden ring-1 ring-white/10 bg-white/5">
-              {sideB?.thumbnail ? (
-                <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <div className="h-full w-full" />
-              )}
-            </div>
-            <div className="min-w-0 text-left">
-              <div className="text-lg font-extrabold truncate">{playerB || "—"}</div>
-              <div className="text-[11px] opacity-70 truncate">{sideB?.name || "—"}</div>
-            </div>
-          </div>
-        </div>
-
-        {/* buys */}
-        <div className="mt-4 grid grid-cols-2 gap-4">
-          <div>
-            <div className="text-[11px] opacity-70 mb-1">Buys (Side A)</div>
-            <div className="flex flex-wrap">{aPays.map(chip)}</div>
-          </div>
-          <div>
-            <div className="text-[11px] opacity-70 mb-1">Buys (Side B)</div>
-            <div className="flex flex-wrap">{bPays.map(chip)}</div>
-          </div>
-        </div>
-
-        {/* total */}
-        <div className="mt-3 text-xs opacity-80">
-          Total: <span className="font-semibold text-white">{fmtMoney(totalPay)}</span>
-        </div>
+        )}
       </div>
 
-      {/* ações */}
-      <div className="mt-3 flex gap-2">
-        <Button
-          type="button"
-          onClick={() => navigator.clipboard.writeText(url)}
-          className="h-9"
-          title="Copiar URL para o OBS (Browser Source)"
-        >
-          <Copy className="h-4 w-4 mr-2" />
-          Copiar URL
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="h-9"
-          onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
-          title="Abrir overlay numa nova janela"
-        >
-          <ExternalLink className="h-4 w-4 mr-2" />
-          Abrir overlay
-        </Button>
-      </div>
+      {tab === "preview" ? (
+        <>
+          {/* Keyframes (inline para não depender de CSS global) */}
+          <style>{`
+            @keyframes sweep { 0% { transform: translateX(-120%);} 100% { transform: translateX(120%);} }
+            @keyframes pop { 0% { transform: scale(.96); opacity: 0;} 100% { transform: scale(1); opacity: 1;} }
+            @keyframes glow { 0% { box-shadow: 0 0 0 rgba(0,0,0,0);} 100% { box-shadow: 0 15px 40px rgba(0,0,0,.45);} }
+          `}</style>
+
+          <div
+            className="relative rounded-xl overflow-hidden p-4"
+            style={{
+              background: `linear-gradient(135deg, ${theme.bgStart}, ${theme.bgEnd})`,
+              border: `1px solid ${theme.panelBorder}`,
+              borderRadius: theme.radius,
+              color: theme.text,
+              animation: "glow .3s ease-out both",
+            }}
+          >
+            {/* shine */}
+            {theme.shine && (
+              <div
+                className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+                style={{ animation: "sweep 4.8s linear infinite" }}
+              />
+            )}
+
+            {/* header */}
+            <div className="flex items-center justify-between text-xs" style={{ color: theme.subtext }}>
+              <div>
+                Best of {bestOf} • Buy <span style={{ color: theme.text }}>{fmtMoney(buyCost)}</span>
+              </div>
+              <div className="font-semibold" style={{ color: profitColor }}>
+                Profit: {fmtMoney(profit)}
+              </div>
+            </div>
+
+            {/* players row */}
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-4">
+              {/* LEFT */}
+              <div className="flex items-center justify-end gap-3">
+                <div className="min-w-0 text-right">
+                  <div className="text-xl font-extrabold truncate" style={{ color: theme.text }}>
+                    {playerA || "—"}
+                  </div>
+                  <div className="text-[12px] truncate" style={{ color: theme.subtext }}>
+                    {sideA?.name || "—"}
+                  </div>
+                </div>
+                {theme.showThumbs && (
+                  <div
+                    className="h-14 w-14 rounded-xl overflow-hidden ring-1 bg-white/5"
+                    style={{ borderColor: theme.panelBorder }}
+                  >
+                    {sideA?.thumbnail ? (
+                      <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="h-full w-full" />
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* VS */}
+              <div className="flex justify-center">
+                <div
+                  className={cn(
+                    "px-3 py-1 rounded-lg text-xs font-bold",
+                    theme.pulse ? "animate-pulse" : ""
+                  )}
+                  style={{ background: theme.vsBg, border: `1px solid ${theme.panelBorder}` }}
+                >
+                  VS
+                </div>
+              </div>
+
+              {/* RIGHT */}
+              <div className="flex items-center gap-3">
+                {theme.showThumbs && (
+                  <div
+                    className="h-14 w-14 rounded-xl overflow-hidden ring-1 bg-white/5"
+                    style={{ borderColor: theme.panelBorder }}
+                  >
+                    {sideB?.thumbnail ? (
+                      <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="h-full w-full" />
+                    )}
+                  </div>
+                )}
+                <div className="min-w-0 text-left">
+                  <div className="text-xl font-extrabold truncate" style={{ color: theme.text }}>
+                    {playerB || "—"}
+                  </div>
+                  <div className="text-[12px] truncate" style={{ color: theme.subtext }}>
+                    {sideB?.name || "—"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* buys */}
+            <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <div className="text-[12px] mb-1" style={{ color: theme.subtext }}>
+                  Buys (Side A)
+                </div>
+                <div className="flex flex-wrap">{aPays.map(chip)}</div>
+              </div>
+              <div>
+                <div className="text-[12px] mb-1" style={{ color: theme.subtext }}>
+                  Buys (Side B)
+                </div>
+                <div className="flex flex-wrap">{bPays.map(chip)}</div>
+              </div>
+            </div>
+
+            {/* total */}
+            <div className="mt-4 text-xs" style={{ color: theme.subtext }}>
+              Total: <span className="font-semibold" style={{ color: theme.text }}>
+                {fmtMoney(totalPay)}
+              </span>
+            </div>
+          </div>
+        </>
+      ) : (
+        /* CUSTOMIZE TAB */
+        <div className="space-y-4">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* cores */}
+            {[
+              ["bgStart", "Background start"],
+              ["bgEnd", "Background end"],
+              ["panelBg", "Panel bg (chips)"],
+              ["panelBorder", "Panel border"],
+              ["text", "Text"],
+              ["subtext", "Subtext"],
+              ["accent", "Accent"],
+              ["chipBg", "Chip bg"],
+              ["chipBorder", "Chip border"],
+              ["pos", "Profit +"],
+              ["neg", "Profit −"],
+              ["vsBg", "VS bg"],
+            ].map(([key, label]) => (
+              <div key={key} className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <div className="text-xs opacity-70 mb-1">{label}</div>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={theme[key]}
+                    onChange={(e) => setTheme((t) => ({ ...t, [key]: e.target.value }))}
+                    className="h-9 w-12 rounded"
+                    style={{ background: "#111827", border: "1px solid rgba(255,255,255,.12)" }}
+                  />
+                  <Input
+                    value={theme[key]}
+                    onChange={(e) => setTheme((t) => ({ ...t, [key]: e.target.value }))}
+                    className="h-9 bg-zinc-900 border-white/10 text-white"
+                  />
+                </div>
+              </div>
+            ))}
+
+            {/* radius */}
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <div className="text-xs opacity-70 mb-1">Border radius</div>
+              <input
+                type="range"
+                min={8}
+                max={28}
+                step={1}
+                value={theme.radius}
+                onChange={(e) => setTheme((t) => ({ ...t, radius: Number(e.target.value) }))}
+                className="w-full"
+              />
+              <div className="text-xs mt-1 opacity-70">{theme.radius}px</div>
+            </div>
+
+            {/* toggles */}
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <div className="text-xs opacity-70 mb-2">Toggles</div>
+              {[
+                ["showThumbs", "Show thumbnails"],
+                ["shine", "Shine sweep"],
+                ["pulse", "VS/Chips pulse"],
+              ].map(([k, label]) => (
+                <label key={k} className="flex items-center gap-2 text-sm mb-1">
+                  <input
+                    type="checkbox"
+                    checked={!!theme[k]}
+                    onChange={(e) => setTheme((t) => ({ ...t, [k]: e.target.checked }))}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button
+              onClick={() => {
+                saveTheme(battleId, theme);
+              }}
+              className="h-10"
+            >
+              Guardar tema
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const base = { ...DEFAULT_THEME };
+                setTheme(base);
+                saveTheme(battleId, base);
+              }}
+              className="h-10"
+            >
+              Restaurar padrão
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => setTab("preview")}
+              className="h-10"
+            >
+              Ver preview
+            </Button>
+          </div>
+        </div>
+      )}
     </AccentCard>
   );
 }
@@ -708,7 +937,7 @@ export default function BattleView() {
 
         {/* grid  */}
         <div className="grid lg:grid-cols-[520px_1fr] gap-6">
-          {/* LEFT: overview + stats + widget preview */}
+          {/* LEFT: overview + stats + widget */}
           <div className="space-y-4">
             <AccentCard>
               {/* settings */}
@@ -762,8 +991,8 @@ export default function BattleView() {
               </div>
             </AccentCard>
 
-            {/* PREVIEW DO WIDGET */}
-            <WidgetPreview
+            {/* WIDGET (Preview + Customize) */}
+            <WidgetCard
               battleId={battleId}
               sideA={sideA}
               sideB={sideB}
@@ -778,7 +1007,7 @@ export default function BattleView() {
             />
           </div>
 
-          {/* RIGHT: seleção de lados + buys */}
+          {/* RIGHT: seleção de lados + histórico + buys */}
           <div className="space-y-4">
             <AccentCard title="Battle">
               <div className="grid md:grid-cols-2 gap-4">
@@ -790,9 +1019,7 @@ export default function BattleView() {
                   <div className="space-y-2">
                     <SlotsAutocomplete
                       value={sideA}
-                      onSelect={(v) => {
-                        setSideA(v);
-                      }}
+                      onSelect={(v) => setSideA(v)}
                       placeholder="Add a Slot"
                     />
                     <div>
@@ -815,9 +1042,7 @@ export default function BattleView() {
                   <div className="space-y-2">
                     <SlotsAutocomplete
                       value={sideB}
-                      onSelect={(v) => {
-                        setSideB(v);
-                      }}
+                      onSelect={(v) => setSideB(v)}
                       placeholder="Add a Slot"
                     />
                     <div>
