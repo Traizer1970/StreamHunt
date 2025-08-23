@@ -126,41 +126,119 @@ function Confirm({ open, title, body, confirmText, cancelText, onConfirm, onCanc
 /* ───────────────────────── Create/Edit Modal ───────────────────────── */
 function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
   const [busy, setBusy] = React.useState(false);
+
   const [title, setTitle] = React.useState("");
   const [description, setDescription] = React.useState("");
   const [status, setStatus] = React.useState("scheduled");
-  const [prizePool, setPrizePool] = React.useState("");
 
+  // prémios por posição (strings para os inputs)
+  const [p1, setP1] = React.useState("");
+  const [p2, setP2] = React.useState("");
+  const [p3, setP3] = React.useState("");
+
+  const totalPrizePool =
+    (toNum(p1) || 0) + (toNum(p2) || 0) + (toNum(p3) || 0);
+
+  // carregar dados do torneio + prémios existentes quando abrir
   React.useEffect(() => {
+    let cancelled = false;
+
+    async function loadPrizes(tournamentId) {
+      try {
+        const { data, error } = await supabase
+          .from("tournament_prizes")
+          .select("position, amount")
+          .eq("tournament_id", tournamentId);
+        if (error) throw error;
+
+        const byPos = new Map((data || []).map(r => [Number(r.position), r.amount]));
+        if (!cancelled) {
+          setP1(byPos.has(1) ? String(byPos.get(1) ?? "") : "");
+          setP2(byPos.has(2) ? String(byPos.get(2) ?? "") : "");
+          setP3(byPos.has(3) ? String(byPos.get(3) ?? "") : "");
+        }
+      } catch {
+        if (!cancelled) {
+          setP1(""); setP2(""); setP3("");
+        }
+      }
+    }
+
     if (!open) return;
+
     setTitle(initial?.title ?? initial?.name ?? "");
     setDescription(initial?.description ?? "");
     setStatus(initial?.status ?? "scheduled");
-    setPrizePool(initial?.prize_pool ?? initial?.prizepool ?? "");
+
+    if (initial?.id) loadPrizes(initial.id);
+    else { setP1(""); setP2(""); setP3(""); }
+
+    return () => { cancelled = true; };
   }, [open, initial]);
 
   if (!open) return null;
 
+  async function persistPrizes(tournamentId, list) {
+    for (const { position, amount } of list) {
+      await supabase
+        .from("tournament_prizes")
+        .delete()
+        .eq("tournament_id", tournamentId)
+        .eq("position", position);
+
+      if (amount != null) {
+        await supabase
+          .from("tournament_prizes")
+          .insert({
+            tournament_id: tournamentId,
+            position,
+            amount: Number(amount) || 0,
+          });
+      }
+    }
+  }
+
   async function save() {
     try {
       setBusy(true);
+
       const payload = {
         title: title || null,
         description: description || null,
         status: status || null,
-        prize_pool: prizePool === "" ? null : Number(prizePool),
+        prize_pool: totalPrizePool, // soma automática
       };
-      if (initial?.id) {
-        const { error } = await supabase.from("tournaments").update(payload).eq("id", initial.id);
+
+      // cria/atualiza torneio e obtém o ID
+      let tournamentId = initial?.id ?? null;
+
+      if (tournamentId) {
+        const { error } = await supabase
+          .from("tournaments")
+          .update(payload)
+          .eq("id", tournamentId);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("tournaments").insert([payload]);
+        const { data, error } = await supabase
+          .from("tournaments")
+          .insert([payload])
+          .select()
+          .single();
         if (error) throw error;
+        tournamentId = data.id;
       }
+
+      // persiste prémios 1..3
+      await persistPrizes(tournamentId, [
+        { position: 1, amount: toNum(p1) },
+        { position: 2, amount: toNum(p2) },
+        { position: 3, amount: toNum(p3) },
+      ]);
+
       onSaved && onSaved();
       onClose && onClose();
     } catch (e) {
-      alert(e.message || "Failed to save.");
+      alert(e?.message || "Failed to save.");
     } finally {
       setBusy(false);
     }
@@ -186,7 +264,7 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
             </button>
           </div>
 
-          <div className="space-y-5">
+          <div className="space-y-6">
             <div>
               <div className="text-[11px] font-semibold tracking-wide opacity-60 mb-2">DETAILS</div>
               <div className="grid md:grid-cols-2 gap-3">
@@ -214,19 +292,69 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
                   </select>
                 </div>
 
-                <div>
-                  <div className="text-xs opacity-70 mb-1">{t("prizepool")}</div>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">€</span>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      inputMode="decimal"
-                      value={prizePool ?? ""}
-                      onChange={(e) => setPrizePool(e.target.value)}
-                      placeholder="e.g., 500.00"
-                      className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white pl-7"
-                    />
+                {/* Prizes by position */}
+                <div className="md:col-span-2">
+                  <div className="text-[11px] font-semibold tracking-wide opacity-60 mb-2">
+                    PRIZES BY POSITION
+                  </div>
+                  <div className="grid md:grid-cols-3 gap-3">
+                    <div>
+                      <div className="text-xs opacity-70 mb-1">1st place</div>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">€</span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          inputMode="decimal"
+                          value={p1}
+                          onChange={(e) => setP1(e.target.value)}
+                          placeholder="e.g., 80"
+                          className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white pl-7"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs opacity-70 mb-1">2nd place</div>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">€</span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          inputMode="decimal"
+                          value={p2}
+                          onChange={(e) => setP2(e.target.value)}
+                          placeholder="e.g., 30"
+                          className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white pl-7"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs opacity-70 mb-1">3rd place</div>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">€</span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          inputMode="decimal"
+                          value={p3}
+                          onChange={(e) => setP3(e.target.value)}
+                          placeholder="e.g., 13"
+                          className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white pl-7"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Prize pool automático */}
+                  <div className="mt-3 grid md:grid-cols-2 gap-3">
+                    <div>
+                      <div className="text-xs opacity-70 mb-1">{t("prizepool")} (auto)</div>
+                      <div className="h-11 rounded-xl bg-zinc-900 border border-white/10 px-3 grid items-center text-sm">
+                        <span className="font-semibold">{fmtMoney(totalPrizePool)}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -248,7 +376,7 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
             <Button variant="outline" onClick={onClose}>{t("cancel")}</Button>
             <Button onClick={save} disabled={busy}>
               {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-              {initial?.id ? t("save") : t("add")}
+              {t("save")}
             </Button>
           </div>
         </div>
@@ -385,137 +513,136 @@ export default function TournamentsPage() {
   React.useEffect(() => { load(); }, [load]);
 
   // compute chart + top player + last winner
-// --- substitui a função computeInsights existente por esta ---
-async function computeInsights(tournaments) {
-  try {
-    if (!tournaments?.length) {
-      setChartData([]);
-      setTopPlayer({ name: "", wins: 0, totalPrize: 0, lastPrize: 0 });
-      setLastWinner({ player: "", slot: "" });
-      return;
-    }
+  async function computeInsights(tournaments) {
+    try {
+      if (!tournaments?.length) {
+        setChartData([]);
+        setTopPlayer({ name: "", wins: 0, totalPrize: 0, lastPrize: 0 });
+        setLastWinner({ player: "", slot: "" });
+        return;
+      }
 
-    const ids = tournaments.map((t) => t.id);
-    if (!ids.length) {
-      setChartData([]);
-      setTopPlayer({ name: "", wins: 0, totalPrize: 0, lastPrize: 0 });
-      setLastWinner({ player: "", slot: "" });
-      return;
-    }
+      const ids = tournaments.map((t) => t.id);
+      if (!ids.length) {
+        setChartData([]);
+        setTopPlayer({ name: "", wins: 0, totalPrize: 0, lastPrize: 0 });
+        setLastWinner({ player: "", slot: "" });
+        return;
+      }
 
-    // LER TUDO e depois mapear colunas que existirem
-    const { data: entries, error: e1 } = await supabase
-      .from("tournament_entries")
-      .select("*")
-      .in("tournament_id", ids)
-      .limit(5000);
-    if (e1) throw e1;
+      // LER TUDO e depois mapear colunas que existirem
+      const { data: entries, error: e1 } = await supabase
+        .from("tournament_entries")
+        .select("*")
+        .in("tournament_id", ids)
+        .limit(5000);
+      if (e1) throw e1;
 
-    const { data: pays, error: e2 } = await supabase
-      .from("tournament_payments")
-      .select("*")
-      .in("tournament_id", ids)
-      .limit(10000);
-    if (e2) throw e2;
+      const { data: pays, error: e2 } = await supabase
+        .from("tournament_payments")
+        .select("*")
+        .in("tournament_id", ids)
+        .limit(10000);
+      if (e2) throw e2;
 
-    const { data: prizeRows, error: e3 } = await supabase
-      .from("tournament_prizes")
-      .select("tournament_id, position, amount")
-      .in("tournament_id", ids)
-      .limit(5000);
-    if (e3) throw e3;
+      const { data: prizeRows, error: e3 } = await supabase
+        .from("tournament_prizes")
+        .select("tournament_id, position, amount")
+        .in("tournament_id", ids)
+        .limit(5000);
+      if (e3) throw e3;
 
-    // map por torneio
-    const byTournamentEntries = new Map();
-    for (const r of entries || []) {
-      const arr = byTournamentEntries.get(r.tournament_id) || [];
-      arr.push({
-        seed: r.seed,
-        player_name: r.player ?? r.player_name ?? "", // suporta ambas
-        slot_name: r.slot_name ?? "",
-        slot_id: r.slot_id ?? null,
+      // map por torneio
+      const byTournamentEntries = new Map();
+      for (const r of entries || []) {
+        const arr = byTournamentEntries.get(r.tournament_id) || [];
+        arr.push({
+          seed: r.seed,
+          player_name: r.player ?? r.player_name ?? "", // suporta ambas
+          slot_name: r.slot_name ?? "",
+          slot_id: r.slot_id ?? null,
+        });
+        byTournamentEntries.set(r.tournament_id, arr);
+      }
+
+      const byTournamentPays = new Map();
+      for (const p of pays || []) {
+        const arr = byTournamentPays.get(p.tournament_id) || [];
+        arr.push(p);
+        byTournamentPays.set(p.tournament_id, arr);
+      }
+
+      // vencedores por torneio
+      const winners = [];
+      for (const t of tournaments) {
+        const w = computeTournamentWinner(
+          byTournamentEntries.get(t.id) || [],
+          byTournamentPays.get(t.id) || []
+        );
+        if (w) winners.push({ tournament_id: t.id, player: w.player_name || "", slot: w.slot_name || "" });
+      }
+
+      // TOP 3 slots
+      const slotCount = new Map();
+      for (const w of winners) slotCount.set(w.slot, (slotCount.get(w.slot) || 0) + 1);
+      const topSlots = [...slotCount.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([name, wins]) => ({ name: name || "—", wins }));
+      setChartData(topSlots);
+
+      // TOP player (wins)
+      const playerCount = new Map();
+      for (const w of winners) playerCount.set(w.player, (playerCount.get(w.player) || 0) + 1);
+      const topP = [...playerCount.entries()].sort((a, b) => b[1] - a[1])[0];
+      const topPlayerName = topP?.[0] || "";
+      const topPlayerWins = topP?.[1] || 0;
+
+      // prémios (1º lugar em tournament_prizes; fallback prize_pool)
+      const prizeByTournament = new Map();
+      for (const r of prizeRows || []) {
+        if (Number(r.position) === 1) prizeByTournament.set(r.tournament_id, Number(r.amount) || 0);
+      }
+      for (const t of tournaments) {
+        if (!prizeByTournament.has(t.id)) {
+          const v = Number(t.prize_pool);
+          if (Number.isFinite(v)) prizeByTournament.set(t.id, v);
+        }
+      }
+
+      let totalPrize = 0;
+      for (const w of winners) {
+        if (w.player === topPlayerName) totalPrize += prizeByTournament.get(w.tournament_id) || 0;
+      }
+
+      // último vencedor (torneio mais recente com winner)
+      let last = null;
+      for (const t of tournaments) {
+        const w = winners.find((x) => x.tournament_id === t.id);
+        if (w) {
+          last = { ...w, prize: prizeByTournament.get(t.id) || 0 };
+          break;
+        }
+      }
+
+      setTopPlayer({
+        name: topPlayerName,
+        wins: topPlayerWins,
+        totalPrize,
+        lastPrize: last?.player === topPlayerName ? (last?.prize || 0) : 0,
       });
-      byTournamentEntries.set(r.tournament_id, arr);
+
+      setLastWinner({
+        player: last?.player || "",
+        slot: last?.slot || "",
+      });
+    } catch (err) {
+      console.error("computeInsights:", err);
+      setChartData([]);
+      setTopPlayer({ name: "", wins: 0, totalPrize: 0, lastPrize: 0 });
+      setLastWinner({ player: "", slot: "" });
     }
-
-    const byTournamentPays = new Map();
-    for (const p of pays || []) {
-      const arr = byTournamentPays.get(p.tournament_id) || [];
-      arr.push(p);
-      byTournamentPays.set(p.tournament_id, arr);
-    }
-
-    // vencedores por torneio
-    const winners = [];
-    for (const t of tournaments) {
-      const w = computeTournamentWinner(
-        byTournamentEntries.get(t.id) || [],
-        byTournamentPays.get(t.id) || []
-      );
-      if (w) winners.push({ tournament_id: t.id, player: w.player_name || "", slot: w.slot_name || "" });
-    }
-
-    // TOP 3 slots
-    const slotCount = new Map();
-    for (const w of winners) slotCount.set(w.slot, (slotCount.get(w.slot) || 0) + 1);
-    const topSlots = [...slotCount.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
-      .map(([name, wins]) => ({ name: name || "—", wins }));
-    setChartData(topSlots);
-
-    // TOP player (wins)
-    const playerCount = new Map();
-    for (const w of winners) playerCount.set(w.player, (playerCount.get(w.player) || 0) + 1);
-    const topP = [...playerCount.entries()].sort((a, b) => b[1] - a[1])[0];
-    const topPlayerName = topP?.[0] || "";
-    const topPlayerWins = topP?.[1] || 0;
-
-    // prémios (1º lugar em tournament_prizes; fallback prize_pool)
-    const prizeByTournament = new Map();
-    for (const r of prizeRows || []) {
-      if (Number(r.position) === 1) prizeByTournament.set(r.tournament_id, Number(r.amount) || 0);
-    }
-    for (const t of tournaments) {
-      if (!prizeByTournament.has(t.id)) {
-        const v = Number(t.prize_pool);
-        if (Number.isFinite(v)) prizeByTournament.set(t.id, v);
-      }
-    }
-
-    let totalPrize = 0;
-    for (const w of winners) {
-      if (w.player === topPlayerName) totalPrize += prizeByTournament.get(w.tournament_id) || 0;
-    }
-
-    // último vencedor (torneio mais recente com winner)
-    let last = null;
-    for (const t of tournaments) {
-      const w = winners.find((x) => x.tournament_id === t.id);
-      if (w) {
-        last = { ...w, prize: prizeByTournament.get(t.id) || 0 };
-        break;
-      }
-    }
-
-    setTopPlayer({
-      name: topPlayerName,
-      wins: topPlayerWins,
-      totalPrize,
-      lastPrize: last?.player === topPlayerName ? (last?.prize || 0) : 0,
-    });
-
-    setLastWinner({
-      player: last?.player || "",
-      slot: last?.slot || "",
-    });
-  } catch (err) {
-    console.error("computeInsights:", err);
-    setChartData([]);
-    setTopPlayer({ name: "", wins: 0, totalPrize: 0, lastPrize: 0 });
-    setLastWinner({ player: "", slot: "" });
   }
-}
 
   const filtered = React.useMemo(() => {
     const needle = dSearch.trim().toLowerCase();
