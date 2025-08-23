@@ -282,21 +282,29 @@ function useHashRoute(defaultRoute = "home") {
 // Replace your current NavLink with this
 const NavLink = ({ to, current, onClick, children }) => {
   const { isDark } = useTheme();
+  return (
+    <button
+      onClick={() => onClick(to)}
+      className={[
+        "px-4 py-2 text-sm rounded-xl transition font-medium",
+        current === to
+          ? (isDark
+              ? "bg-sky-500 text-black shadow"
+              : "bg-sky-600 text-white shadow")
+          : (isDark
+              ? "text-white/80 hover:bg-white/5 hover:text-white"
+              : "text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"),
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
 };
 
 /* ---------- Theme toggle (FIXED) ---------- */
 function ThemeIconToggle() {
   const { isDark, toggle } = useTheme();
-  return (
-    <button
-      onClick={toggle}
-      className={cn("p-2 rounded-xl", isDark ? "hover:bg-white/5 text-white/80" : "hover:bg-zinc-100 text-zinc-700")}
-      title={isDark ? "Switch to light" : "Switch to dark"}
-      aria-label="Toggle theme"
-    >
-      {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-    </button>
-  );
+
 }
 
 /* ---------- Quick stats (kept for future use) ---------- */
