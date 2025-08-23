@@ -29,6 +29,34 @@ const fmtMoney = (n) =>
       }).format(Number(n))
     : "—";
 
+// Enriquecer um objeto {id,name} com provider/thumbnail da slots_catalog
+async function enrichSlotInfo(slot) {
+  if (!slot) return slot;
+  if (slot.thumbnail && slot.provider) return slot;
+  try {
+    let q = supabase
+      .from("slots_catalog")
+      .select('id, "NAME", "PROVIDER", "THUMBNAIL"')
+      .limit(1);
+
+    if (slot.id) q = q.eq("id", slot.id);
+    else if (slot.name) q = q.ilike("NAME", `%${slot.name}%`);
+
+    const { data } = await q.maybeSingle();
+    if (data) {
+      return {
+        id: data.id,
+        name: data["NAME"],
+        provider: data["PROVIDER"],
+        thumbnail: data["THUMBNAIL"],
+      };
+    }
+  } catch {
+    /* ignore */
+  }
+  return slot;
+}
+
 function AccentCard({ title, children, className }) {
   const { isDark } = useTheme();
   return (
@@ -226,38 +254,112 @@ function SlotsAutocomplete({ value, onSelect, placeholder = "Add a Slot" }) {
 }
 
 /* ───────────────────────── Widget Preview (OBS) ───────────────────────── */
-function WidgetPreview({ battleId, sideA, sideB, playerA, playerB, bestOf, buyCost, totalPay, profit }) {
+function WidgetPreview({
+  battleId,
+  sideA,
+  sideB,
+  playerA,
+  playerB,
+  bestOf,
+  buyCost,
+  totalPay,
+  profit,
+  aPays = [],
+  bPays = [],
+}) {
   const url = `${window.location.origin}/#/widget/battle/${battleId}`;
-  const tone =
-    profit > 0 ? "text-emerald-400" : profit < 0 ? "text-rose-400" : "text-sky-300";
+  const tone = profit > 0 ? "text-emerald-400" : profit < 0 ? "text-rose-400" : "text-sky-300";
+
+  const styles = `
+  @keyframes sweep { 0% { transform: translateX(-120%);} 100% { transform: translateX(120%);} }
+  @keyframes pop { 0% { transform: scale(.96); opacity: 0;} 100% { transform: scale(1); opacity: 1;} }`;
+
+  const chip = (v, i) => (
+    <span
+      key={i}
+      className="inline-flex items-center rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-semibold mr-1 mb-1"
+      style={{ animation: "pop .18s ease-out both", animationDelay: `${i * 40}ms` }}
+    >
+      {fmtMoney(Number(v?.amount || 0))}
+    </span>
+  );
 
   return (
     <AccentCard title="Widget preview (OBS)">
-      <div className="rounded-xl border border-white/10 bg-black/70 text-white p-4">
-        <div className="flex items-center justify-between text-xs opacity-70">
+      <style>{styles}</style>
+
+      <div className="relative rounded-xl overflow-hidden border border-white/10 bg-black/80 text-white p-4">
+        {/* brilho a varrer */}
+        <div
+          className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+          style={{ animation: "sweep 4.5s linear infinite" }}
+        />
+
+        {/* topo: info + profit */}
+        <div className="flex items-center justify-between text-xs opacity-80">
           <div>Best of {bestOf} • Buy {fmtMoney(buyCost)}</div>
-          <div className={cn("font-semibold", tone)}>
-            Profit: {fmtMoney(profit)}
+          <div className={cn("font-semibold", tone)}>Profit: {fmtMoney(profit)}</div>
+        </div>
+
+        {/* miolo */}
+        <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+          {/* LEFT */}
+          <div className="flex items-center justify-end gap-3">
+            <div className="min-w-0 text-right">
+              <div className="text-lg font-extrabold truncate">{playerA || "—"}</div>
+              <div className="text-[11px] opacity-70 truncate">{sideA?.name || "—"}</div>
+            </div>
+            <div className="h-12 w-12 rounded-lg overflow-hidden ring-1 ring-white/10 bg-white/5">
+              {sideA?.thumbnail ? (
+                <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div className="h-full w-full" />
+              )}
+            </div>
+          </div>
+
+          {/* VS */}
+          <div className="px-2">
+            <div className="px-2 py-1 rounded-lg border border-white/15 bg-white/10 text-xs font-bold animate-pulse">
+              VS
+            </div>
+          </div>
+
+          {/* RIGHT */}
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 rounded-lg overflow-hidden ring-1 ring-white/10 bg-white/5">
+              {sideB?.thumbnail ? (
+                <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div className="h-full w-full" />
+              )}
+            </div>
+            <div className="min-w-0 text-left">
+              <div className="text-lg font-extrabold truncate">{playerB || "—"}</div>
+              <div className="text-[11px] opacity-70 truncate">{sideB?.name || "—"}</div>
+            </div>
           </div>
         </div>
 
-        <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-          <div className="text-right">
-            <div className="text-lg font-bold truncate">{playerA || "—"}</div>
-            <div className="text-[11px] opacity-70 truncate">{sideA?.name || "—"}</div>
-          </div>
-          <div className="px-2 py-1 rounded-lg border border-white/10 bg-white/10 text-xs">VS</div>
+        {/* buys */}
+        <div className="mt-4 grid grid-cols-2 gap-4">
           <div>
-            <div className="text-lg font-bold truncate">{playerB || "—"}</div>
-            <div className="text-[11px] opacity-70 truncate">{sideB?.name || "—"}</div>
+            <div className="text-[11px] opacity-70 mb-1">Buys (Side A)</div>
+            <div className="flex flex-wrap">{aPays.map(chip)}</div>
+          </div>
+          <div>
+            <div className="text-[11px] opacity-70 mb-1">Buys (Side B)</div>
+            <div className="flex flex-wrap">{bPays.map(chip)}</div>
           </div>
         </div>
 
-        <div className="mt-3 text-xs opacity-70">
+        {/* total */}
+        <div className="mt-3 text-xs opacity-80">
           Total: <span className="font-semibold text-white">{fmtMoney(totalPay)}</span>
         </div>
       </div>
 
+      {/* ações */}
       <div className="mt-3 flex gap-2">
         <Button
           type="button"
@@ -320,7 +422,7 @@ export default function BattleView() {
   // payments
   const [pays, setPays] = React.useState([]); // battle_payments
 
-  // historial resumido por slot (aparece nos cards em baixo)
+  // historial resumido por slot
   const [histA, setHistA] = React.useState(null);
   const [histB, setHistB] = React.useState(null);
 
@@ -351,6 +453,7 @@ export default function BattleView() {
     try {
       setBusy(true);
       setErr("");
+
       // battle
       const { data: battle, error } = await supabase
         .from("battles")
@@ -367,11 +470,19 @@ export default function BattleView() {
         .from("battle_entries")
         .select("seed, slot_name, slot_id, player_name")
         .eq("battle_id", id);
+
       const A = (es || []).find((e) => String(e.seed).toUpperCase() === "A");
       const B = (es || []).find((e) => String(e.seed).toUpperCase() === "B");
-      setSideA(A ? { id: A.slot_id ?? null, name: A.slot_name || "" } : null);
+
+      // enriquecer thumbs/provider
+      let aBase = A ? { id: A.slot_id ?? null, name: A.slot_name || "" } : null;
+      let bBase = B ? { id: B.slot_id ?? null, name: B.slot_name || "" } : null;
+      if (aBase) aBase = await enrichSlotInfo(aBase);
+      if (bBase) bBase = await enrichSlotInfo(bBase);
+
+      setSideA(aBase);
       setPlayerA(A?.player_name || "");
-      setSideB(B ? { id: B.slot_id ?? null, name: B.slot_name || "" } : null);
+      setSideB(bBase);
       setPlayerB(B?.player_name || "");
 
       // payments
@@ -413,7 +524,7 @@ export default function BattleView() {
     }
   }
 
-  // upsert entries (precisa UNIQUE(battle_id,seed) ou usa versão update/insert)
+  // upsert entries (requer UNIQUE(battle_id,seed))
   async function saveSides() {
     if (!battleId) return;
     try {
@@ -600,7 +711,7 @@ export default function BattleView() {
           {/* LEFT: overview + stats + widget preview */}
           <div className="space-y-4">
             <AccentCard>
-              {/* settings (editáveis) */}
+              {/* settings */}
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <div className="text-xs opacity-70 mb-1">Best Of</div>
@@ -662,6 +773,8 @@ export default function BattleView() {
               buyCost={buyCost}
               totalPay={totalPay}
               profit={profit}
+              aPays={aPays}
+              bPays={bPays}
             />
           </div>
 
@@ -675,7 +788,13 @@ export default function BattleView() {
                     <Shield className="h-4 w-4" /> Side A
                   </div>
                   <div className="space-y-2">
-                    <SlotsAutocomplete value={sideA} onSelect={(v) => { setSideA(v); }} placeholder="Add a Slot" />
+                    <SlotsAutocomplete
+                      value={sideA}
+                      onSelect={(v) => {
+                        setSideA(v);
+                      }}
+                      placeholder="Add a Slot"
+                    />
                     <div>
                       <div className="text-xs opacity-70 mb-1">Player</div>
                       <Input
@@ -694,7 +813,13 @@ export default function BattleView() {
                     <Users className="h-4 w-4" /> Side B
                   </div>
                   <div className="space-y-2">
-                    <SlotsAutocomplete value={sideB} onSelect={(v) => { setSideB(v); }} placeholder="Add a Slot" />
+                    <SlotsAutocomplete
+                      value={sideB}
+                      onSelect={(v) => {
+                        setSideB(v);
+                      }}
+                      placeholder="Add a Slot"
+                    />
                     <div>
                       <div className="text-xs opacity-70 mb-1">Player</div>
                       <Input
