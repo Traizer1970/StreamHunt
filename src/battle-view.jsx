@@ -355,51 +355,44 @@ export default function BattleView() {
   }, [sideB?.id, sideB?.name]);
 
   // grava lados c/ validação de erro
-  async function saveSides() {
-    if (!battleId) return;
-    try {
-      const ownerId = row?.user_id ?? row?.owner_id ?? row?.created_by ?? row?.profile_id ?? null;
-
-      const rows = [];
-      if (sideA?.name)
-        rows.push({
-          battle_id: battleId,
-          seed: "A",
-          player_name: playerA || null,
-          slot_name: sideA.name,
-          slot_id: sideA.id ?? null,
-          user_id: ownerId ?? null,
-          owner_id: ownerId ?? null,
-          created_by: ownerId ?? null,
-        });
-      if (sideB?.name)
-        rows.push({
-          battle_id: battleId,
-          seed: "B",
-          player_name: playerB || null,
-          slot_name: sideB.name,
-          slot_id: sideB.id ?? null,
-          user_id: ownerId ?? null,
-          owner_id: ownerId ?? null,
-          created_by: ownerId ?? null,
-        });
-
-      if (!rows.length) return;
-
-      const { error } = await supabase
-        .from("battle_entries")
-        .upsert(rows, { onConflict: "battle_id,seed" })
-        .select(); // força retorno/erro
-      if (error) throw error;
-
-      // recarrega e volta a calcular o histórico (com dados persistidos)
-      await load(battleId);
-      if (sideA?.name) setHistA(await fetchSlotHistory(sideA, "L"));
-      if (sideB?.name) setHistB(await fetchSlotHistory(sideB, "R"));
-    } catch (e) {
-      alert(e?.message || "Falha a guardar os lados");
+async function saveSides() {
+  if (!battleId) return;
+  try {
+    const rows = [];
+    if (sideA?.name) {
+      rows.push({
+        battle_id: battleId,
+        seed: "A",
+        player_name: playerA || null,
+        slot_name: sideA.name,
+        slot_id: sideA.id ?? null,
+      });
     }
+    if (sideB?.name) {
+      rows.push({
+        battle_id: battleId,
+        seed: "B",
+        player_name: playerB || null,
+        slot_name: sideB.name,
+        slot_id: sideB.id ?? null,
+      });
+    }
+    if (!rows.length) return;
+
+    const { error } = await supabase
+      .from("battle_entries")
+      .upsert(rows, { onConflict: "battle_id,seed" }); // sem created_by/owner_id/user_id
+    if (error) throw error;
+
+    // recarregar e recalcular histórico
+    await load(battleId);
+    if (sideA?.name) setHistA(await fetchSlotHistory(sideA, "L"));
+    if (sideB?.name) setHistB(await fetchSlotHistory(sideB, "R"));
+  } catch (e) {
+    alert(e?.message || "Falha a guardar os lados");
   }
+}
+
 
   // salva um buy
   async function setBuy(side, idx, amount) {
