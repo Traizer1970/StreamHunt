@@ -3,7 +3,7 @@ import { useTheme } from "@/contexts/auth-context";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Coins, Gamepad2, TrendingUp, Shield, Users } from "lucide-react";
+import { Search, Coins, Gamepad2, TrendingUp, Shield, Users, Clock3 } from "lucide-react";
 
 /* ───────────────────────── utils / style helpers ───────────────────────── */
 const cn = (...c) => c.filter(Boolean).join(" ");
@@ -244,6 +244,10 @@ export default function BattleView() {
   const [playerA, setPlayerA] = React.useState("");
   const [playerB, setPlayerB] = React.useState("");
 
+  // histórico das slots em outras batalhas
+  const [histA, setHistA] = React.useState(null);
+  const [histB, setHistB] = React.useState(null);
+
   // payments
   const [pays, setPays] = React.useState([]); // battle_payments
 
@@ -326,9 +330,13 @@ export default function BattleView() {
     }
   }
 
+  // ————— salvar sides (inclui user_id/owner_id/created_by p/ RLS) —————
   async function saveSides() {
     if (!battleId) return;
     try {
+      const ownerId =
+        row?.user_id ?? row?.owner_id ?? row?.created_by ?? row?.profile_id ?? null;
+
       const rows = [];
       if (sideA && sideA.name)
         rows.push({
@@ -337,6 +345,9 @@ export default function BattleView() {
           player_name: playerA || null,
           slot_name: sideA.name,
           slot_id: sideA.id ?? null,
+          user_id: ownerId ?? null,
+          owner_id: ownerId ?? null,
+          created_by: ownerId ?? null,
         });
       if (sideB && sideB.name)
         rows.push({
@@ -345,8 +356,12 @@ export default function BattleView() {
           player_name: playerB || null,
           slot_name: sideB.name,
           slot_id: sideB.id ?? null,
+          user_id: ownerId ?? null,
+          owner_id: ownerId ?? null,
+          created_by: ownerId ?? null,
         });
       if (rows.length === 0) return;
+
       await supabase.from("battle_entries").upsert(rows, { onConflict: "battle_id,seed" });
       await load(battleId);
     } catch (e) {
@@ -380,7 +395,111 @@ export default function BattleView() {
     }
   }
 
-  function BuysEditor({ side, stats, player }) {
+  // ————— histórico por slot (todas as batalhas do mesmo dono) —————
+  async function fetchSlotHistory(slot, wantedSide /* "L" | "R" */) {
+    if (!slot || (!slot.id && !slot.name)) return null;
+
+    try {
+      // 1) entries com a mesma slot
+      let q = supabase.from("battle_entries").select("battle_id, seed, slot_id, slot_name");
+      if (slot.id) q = q.eq("slot_id", slot.id);
+      else q = q.ilike("slot_name", `%${slot.name}%`);
+      const { data: entries } = await q.limit(500);
+
+      if (!entries?.length) return { times: 0, total: 0, best: 0, worst: 0, last: null };
+
+      // 2) ids das batalhas
+      const ids = [...new Set(entries.map((e) => e.battle_id))];
+
+      // 3) pagamentos de todas essas batalhas
+      const { data: paysRows } = await supabase
+        .from("battle_payments")
+        .select("battle_id, side, amount, created_at")
+        .in("battle_id", ids)
+        .limit(10000);
+
+      // 4) filtrar pagamentos só do lado correspondente (seed A -> L, seed B -> R)
+      const wantedPairs = new Set(
+        entries
+          .filter((e) => (wantedSide === "L" ? String(e.seed).toUpperCase() === "A" : String(e.seed).toUpperCase() === "B"))
+          .map((e) => `${e.battle_id}:${wantedSide}`)
+      );
+
+      const rows = (paysRows || []).filter((p) => wantedPairs.has(`${p.battle_id}:${(p.side || "").toUpperCase()}`));
+
+      const total = rows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+      const best = rows.length ? Math.max(...rows.map((r) => Number(r.amount) || 0)) : 0;
+      const worst = rows.length ? Math.min(...rows.map((r) => Number(r.amount) || 0)) : 0;
+      const times = entries.filter((e) =>
+        wantedSide === "L" ? String(e.seed).toUpperCase() === "A" : String(e.seed).toUpperCase() === "B"
+      ).length;
+
+      // 5) última data (pela criação do pagamento)
+      const lastDate =
+        rows.length && rows[0]?.created_at
+          ? new Date(
+              Math.max(
+                ...rows.map((r) => new Date(r.created_at || 0).getTime())
+              )
+            )
+          : null;
+
+      return {
+        times,
+        total,
+        best,
+        worst,
+        last: lastDate ? new Intl.DateTimeFormat(LOCALE, { dateStyle: "medium" }).format(lastDate) : null,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  // Atualiza histórico quando escolhe slot
+  React.useEffect(() => {
+    (async () => {
+      setHistA(null);
+      if (sideA?.id || sideA?.name) setHistA(await fetchSlotHistory(sideA, "L"));
+    })();
+  }, [sideA?.id, sideA?.name]);
+
+  React.useEffect(() => {
+    (async () => {
+      setHistB(null);
+      if (sideB?.id || sideB?.name) setHistB(await fetchSlotHistory(sideB, "R"));
+    })();
+  }, [sideB?.id, sideB?.name]);
+
+  function HistoryStrip({ hist }) {
+    if (!hist) return null;
+    return (
+      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+        <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1">
+          <span className="opacity-70">Times:</span> <span className="font-semibold">{hist.times ?? 0}</span>
+        </div>
+        <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1">
+          <span className="opacity-70">Total:</span>{" "}
+          <span className="font-semibold">{fmtMoney(hist.total ?? 0)}</span>
+        </div>
+        <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1">
+          <span className="opacity-70">Best:</span>{" "}
+          <span className="font-semibold">{fmtMoney(hist.best ?? 0)}</span>
+        </div>
+        <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1">
+          <span className="opacity-70">Worst:</span>{" "}
+          <span className="font-semibold">{fmtMoney(hist.worst ?? 0)}</span>
+        </div>
+        <div className="col-span-2 rounded-lg border border-white/10 bg-white/5 px-2 py-1 flex items-center gap-1">
+          <Clock3 className="h-3.5 w-3.5 opacity-70" />
+          <span className="opacity-70">Last:</span>{" "}
+          <span className="font-semibold">{hist.last || "—"}</span>
+        </div>
+      </div>
+    );
+  }
+
+  function BuysEditor({ side, stats, player, history }) {
     const isLeft = side === "L";
     const label = isLeft ? "Side A" : "Side B";
     const buys = (pays || []).filter((p) => String(p.side || "").toUpperCase() === side);
@@ -434,6 +553,10 @@ export default function BattleView() {
             <div className="font-semibold">{fmtMoney(stats.worst)}</div>
           </div>
         </div>
+
+        {/* Histórico desta slot em batalhas anteriores */}
+        <HistoryStrip hist={history} />
+
         <div className="mt-4 grid gap-3">{inputs}</div>
       </div>
     );
@@ -579,8 +702,8 @@ export default function BattleView() {
             </AccentCard>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <BuysEditor side="L" stats={aStats} player={playerA} />
-              <BuysEditor side="R" stats={bStats} player={playerB} />
+              <BuysEditor side="L" stats={aStats} player={playerA} history={histA} />
+              <BuysEditor side="R" stats={bStats} player={playerB} history={histB} />
             </div>
           </div>
         </div>
