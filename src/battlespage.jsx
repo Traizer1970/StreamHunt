@@ -1,214 +1,845 @@
-import React, { useMemo, useState } from "react";
+import React from "react";
+import { AuthCtx, useTheme } from "@/contexts/auth-context";
+import { supabase } from "@/lib/supabase";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Plus,
+  Search,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  Pencil,
+  Trash2,
+  Trophy,
+  Eye,
+  Lock,
+} from "lucide-react";
 
-// --- UI ---
-const Card = ({ title, children, className }) => (
-  <div className={["rounded-2xl bg-white/5 ring-1 ring-white/10", className || ""].join(" ")}>
-    {title ? (
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-        <h3 className="text-sm font-semibold text-white/90">{title}</h3>
-      </div>
-    ) : null}
-    <div className="p-4">{children}</div>
-  </div>
-);
-
-const Badge = ({ children, tone }) => {
-  const t = tone || "zinc";
-  const cls =
-    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium " +
-    (t === "zinc"
-      ? "bg-white/8 text-zinc-200 ring-1 ring-white/10"
-      : t === "cyan"
-      ? "bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-500/30"
-      : t === "violet"
-      ? "bg-violet-500/15 text-violet-300 ring-1 ring-violet-500/30"
-      : t === "emerald"
-      ? "bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30"
-      : "bg-rose-500/15 text-rose-300 ring-1 ring-rose-500/30");
-  return <span className={cls}>{children}</span>;
+/* ───────────────────────── i18n ───────────────────────── */
+const DICT = {
+  en: {
+    title: "Bonus Buy Battles",
+    add: "Add",
+    edit: "Edit",
+    delete: "Delete",
+    confirm: "Confirm",
+    cancel: "Cancel",
+    save: "Save",
+    searchPh: "Search by title...",
+    empty: "No battles yet.",
+    name: "Title",
+    actions: "Actions",
+    open: "Open",
+    insights: "Insights",
+    topSlots: "Top Slots (all-time)",
+    topPlayer: "Top Player (wins)",
+    lastWinner: "Last battle winner",
+    player: "Player",
+    slot: "Slot",
+    wins: "wins",
+    totalPrize: "Total prize won",
+    lastPrize: "Last prize won",
+    prizes: "Prizes",
+    no: "No.",
+  },
+  pt: {},
 };
+const t = (k) => DICT.en[k] || k;
 
-const IconBtn = ({ label, onClick, tone }) => {
-  const t = tone || "zinc";
-  const cls =
-    "inline-flex h-9 w-9 items-center justify-center rounded-xl ring-1 transition " +
-    (t === "zinc"
-      ? "bg-white/5 text-white/70 ring-white/10 hover:bg-white/10"
-      : t === "cyan"
-      ? "bg-cyan-500/15 text-cyan-300 ring-cyan-500/30 hover:bg-cyan-500/20"
-      : "bg-rose-500/15 text-rose-300 ring-rose-500/30 hover:bg-rose-500/20");
-  return (
-    <button onClick={onClick} className={cls} aria-label={label} title={label}>
-      {label === "View" && (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 5c-7 0-11 7-11 7s4 7 11 7 11-7 11-7-4-7-11-7zm0 12a5 5 0 1 1 0-10 5 5 0 0 1 0 10z" />
-        </svg>
-      )}
-      {label === "Edit" && (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm2.92 2.83H5v-.92l9.06-9.06.92.92L5.92 20.08zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z" />
-        </svg>
-      )}
-      {label === "Delete" && (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M6 7h12l-1 14H7L6 7zm9-3 1 2H8l1-2h6z" />
-        </svg>
-      )}
-    </button>
+/* ───────────────────────── utils ───────────────────────── */
+const cn = (...c) => c.filter(Boolean).join(" ");
+const LOCALE = "pt-PT";
+const CURRENCY = "EUR";
+const numCls = "tabular-nums whitespace-nowrap";
+const fmtMoney = (n) =>
+  Number.isFinite(Number(n))
+    ? new Intl.NumberFormat(LOCALE, {
+        style: "currency",
+        currency: CURRENCY,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(Number(n))
+    : "—";
+
+const toNum = (v) => {
+  const n = Number(String(v ?? "").replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+};
+const ceilPow2 = (n) => {
+  let p = 1;
+  while (p < Math.max(1, n)) p <<= 1;
+  return p;
+};
+const lettersFromIndex = (idx) => {
+  let n = idx + 1,
+    s = "";
+  while (n > 0) {
+    n--;
+    s = String.fromCharCode(65 + (n % 26)) + s;
+    n = Math.floor(n / 26);
+  }
+  return s;
+};
+const indexFromLetters = (s) => {
+  let n = 0;
+  for (const ch of String(s).toUpperCase())
+    n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n - 1;
+};
+function useDebounced(v, delay = 300) {
+  const [s, setS] = React.useState(v);
+  React.useEffect(() => {
+    const id = setTimeout(() => setS(v), delay);
+    return () => clearTimeout(id);
+  }, [v, delay]);
+  return s;
+}
+const SortIcon = ({ dir }) =>
+  dir === "asc" ? (
+    <ChevronUp className="ml-1 h-3.5 w-3.5" />
+  ) : (
+    <ChevronDown className="ml-1 h-3.5 w-3.5" />
   );
-};
 
-const BarChart = ({ data }) => {
-  const max = Math.max(1, ...data.map(function (d) { return d.value; }));
+/* avatar placeholder */
+function Avatar({ name }) {
+  const initials = String(name || "?")
+    .split(/\s+/)
+    .map((p) => p[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
   return (
-    <div className="grid grid-cols-[40px_1fr] gap-2">
-      <div className="flex flex-col justify-between text-xs text-white/60">
-        {[0,1,2,3,4].map(function (_, i) {
-          return <div key={i}>{Math.round((max / 4) * (4 - i))}</div>;
-        })}
+    <div className="h-8 w-8 rounded-full bg-gradient-to-br from-indigo-500 to-emerald-500 text-white grid place-items-center text-[11px] font-extrabold shadow ring-2 ring-black/20">
+      {initials || "?"}
+    </div>
+  );
+}
+
+/* ───────────────────────── Accent cards/boxes (azul) ───────────────────────── */
+function AccentCard({ title, children, className }) {
+  const { isDark } = useTheme();
+  return (
+    <div
+      className={cn(
+        "relative rounded-xl overflow-hidden",
+        isDark ? "bg-white/5 border border-white/10" : "bg-white border border-zinc-200",
+        className
+      )}
+    >
+      <div className="absolute inset-x-0 top-0 h-[2px] bg-sky-500/70 shadow-[0_0_12px_2px_rgba(56,189,248,0.35)]" />
+      {title && <div className="px-4 pt-4 pb-1 text-xs opacity-80">{title}</div>}
+      <div className="px-4 pb-4">{children}</div>
+    </div>
+  );
+}
+function AccentBox({ children, className }) {
+  const { isDark } = useTheme();
+  return (
+    <div
+      className={cn(
+        "relative rounded-xl",
+        isDark ? "bg-white/5 border border-white/10" : "bg-white border border-zinc-200",
+        className
+      )}
+    >
+      <div className="pointer-events-none absolute inset-0 rounded-[inherit] overflow-hidden">
+        <div className="absolute inset-x-0 top-0 h-[2px] bg-sky-500/70 shadow-[0_0_12px_2px_rgba(56,189,248,0.35)]" />
       </div>
-      <div className="relative h-48">
-        {[0,1,2,3,4].map(function (_, i) {
-          return (
-            <div key={i} className="absolute inset-x-0" style={{ top: (i * 25) + "%" }}>
-              <div className="h-px w-full bg-white/10" />
-            </div>
-          );
-        })}
-        <div className="flex h-full items-end justify-center gap-6">
-          {data.map(function (d) {
-            return (
-              <div key={d.label} className="flex w-24 flex-col items-center">
-                <div className="w-16 rounded-t-md bg-indigo-500/70" style={{ height: (d.value / max) * 90 + "%" }} />
-                <div className="mt-2 truncate text-xs text-white/80" title={d.label}>{d.label}</div>
-              </div>
-            );
-          })}
+      {children}
+    </div>
+  );
+}
+
+/* ───────────── Tooltip + “Locked cards” ───────────── */
+function Tip({ content, children, className }) {
+  return (
+    <span className={cn("relative inline-flex items-center group", className)}>
+      {children}
+      <span className="pointer-events-none absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full z-50 hidden group-hover:block">
+        <div className="rounded-xl border border-white/10 bg-zinc-900/95 shadow-xl px-3 py-2 max-w-[280px]">
+          {content}
+        </div>
+        <div className="mx-auto -mt-1 h-2 w-2 rotate-45 bg-zinc-900/95 border-l border-t border-white/10" />
+      </span>
+    </span>
+  );
+}
+function BlockCard({ height }) {
+  const { isDark } = useTheme();
+  return (
+    <div
+      className={cn(
+        "rounded-xl border grid place-items-center",
+        isDark ? "bg-neutral-900/95 border-white/10" : "bg-zinc-100 border-zinc-200",
+        height
+      )}
+    >
+      <div className="flex items-center gap-2 text-sm opacity-80">
+        <Lock className="h-4 w-4" />
+        Available on Plus.
+      </div>
+    </div>
+  );
+}
+function BattlesLocked() {
+  const { isDark } = useTheme();
+  return (
+    <div className="space-y-4">
+      <div
+        className={cn(
+          "rounded-xl border px-3 py-2 text-sm flex items-center gap-2",
+          isDark ? "bg-zinc-900/90 border-white/10" : "bg-white border-zinc-200"
+        )}
+      >
+        <Lock className="h-4 w-4 opacity-80" />
+        Bonus Buy Battles are available only on Plus. Upgrade to unlock.
+      </div>
+      <BlockCard height="h-[360px]" />
+      <BlockCard height="h-[520px]" />
+    </div>
+  );
+}
+
+/* ───────────────────────── Recharts ───────────────────────── */
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip as RTooltip,
+  Cell,
+} from "recharts";
+const BAR_COLORS = ["#6366F1", "#22C55E", "#F59E0B"];
+
+function NiceTooltip({ active, payload, label }) {
+  if (!active || !payload || !payload.length) return null;
+  const p = payload[0];
+  return (
+    <div className="rounded-xl border border-white/10 bg-zinc-900/95 text-white px-3 py-2 shadow-2xl">
+      <div className="text-xs opacity-70">{t("slot")}</div>
+      <div className="text-sm font-semibold">{label}</div>
+      <div className="mt-1 text-xs">
+        <span className="opacity-70">{t("wins")}: </span>
+        <span className="font-semibold">{p.value}</span>
+      </div>
+    </div>
+  );
+}
+
+/* ───────────────────────── Confirm ───────────────────────── */
+function Confirm({ open, title, body, confirmText, cancelText, onConfirm, onCancel }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[95]">
+      <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
+      <div className="absolute left-1/2 top-1/2 w-[92vw] max-w-[520px] -translate-x-1/2 -translate-y-1/2">
+        <div className="rounded-2xl border border-white/10 bg-zinc-950 text-white shadow-2xl p-5">
+          <div className="text-lg font-semibold mb-2">{title}</div>
+          <div className="text-sm opacity-80 mb-5">{body}</div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onCancel}>{cancelText}</Button>
+            <Button onClick={onConfirm}>{confirmText}</Button>
+          </div>
         </div>
       </div>
     </div>
   );
-};
+}
 
-export default function BattlesPage() {
-  const [query, setQuery] = useState("");
-  const currency = "€";
+/* ───────────────────────── Create/Edit Modal ───────────────────────── */
+// NOTE: If your DB uses different table names, swap "battles"/"battle_prizes" for yours.
+function UpsertBattleModal({ open, initial, onClose, onSaved }) {
+  const [busy, setBusy] = React.useState(false);
+  const [title, setTitle] = React.useState("");
+  const [description, setDescription] = React.useState("");
+  const [status, setStatus] = React.useState("scheduled");
 
-  const topSlots = [{ label: "Le Bandit", value: 1 }];
+  // prizes by position
+  const [p1, setP1] = React.useState("");
+  const [p2, setP2] = React.useState("");
+  const [p3, setP3] = React.useState("");
+  const total = (toNum(p1) || 0) + (toNum(p2) || 0) + (toNum(p3) || 0);
 
-  const topPlayer = { name: "zzleandro", wins: 1, totalPrize: 30, lastPrize: 30 };
-  const lastWinner = { player: "zzleandro", slot: "Le Bandit" };
+  React.useEffect(() => {
+    if (!open) return;
+    setTitle((initial && (initial.title || initial.name)) || "");
+    setDescription((initial && initial.description) || "");
+    setStatus((initial && initial.status) || "scheduled");
+    (async () => {
+      if (initial && initial.id) {
+        const { data } = await supabase
+          .from("battle_prizes") // ← change if your table name differs
+          .select("position,amount")
+          .eq("battle_id", initial.id);
+        const map = new Map((data || []).map((r) => [Number(r.position), Number(r.amount) || 0]));
+        setP1(map.get(1) ?? "");
+        setP2(map.get(2) ?? "");
+        setP3(map.get(3) ?? "");
+      } else {
+        setP1("");
+        setP2("");
+        setP3("");
+      }
+    })();
+  }, [open, initial]);
 
-  const battles = [
-    { id: 1, title: "Teste", mode: "Bonus Buy", prizes: [30, 20, 10], status: "Finished" },
-    { id: 2, title: "testar", mode: "Bonus Buy", prizes: [25, 15, 0], status: "Live" },
-  ];
+  if (!open) return null;
 
-  const filtered = useMemo(function () {
-    return battles.filter(function (b) {
-      return b.title.toLowerCase().includes(query.toLowerCase());
-    });
-  }, [query]);
+  async function save() {
+    try {
+      setBusy(true);
+      const payload = {
+        title: title || null,
+        description: description || null,
+        status: status || null,
+        prize_pool: total || null,
+      };
+      let id = initial && initial.id ? initial.id : null;
+      if (id) {
+        const { error } = await supabase.from("battles").update(payload).eq("id", id);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase
+          .from("battles") // ← change if needed
+          .insert([payload])
+          .select("id")
+          .single();
+        if (error) throw error;
+        id = data.id;
+      }
+      const rows = [
+        { battle_id: id, position: 1, amount: toNum(p1) || 0 },
+        { battle_id: id, position: 2, amount: toNum(p2) || 0 },
+        { battle_id: id, position: 3, amount: toNum(p3) || 0 },
+      ];
+      const { error: e2 } = await supabase
+        .from("battle_prizes")
+        .upsert(rows, { onConflict: "battle_id,position" });
+      if (e2) throw e2;
 
-  const topInitial = topPlayer.name && topPlayer.name.length ? topPlayer.name[0].toUpperCase() : "P";
-  const lastInitial = lastWinner.player && lastWinner.player.length ? lastWinner.player[0].toUpperCase() : "P";
+      onSaved && onSaved();
+      onClose && onClose();
+    } catch (e) {
+      alert(e.message || "Failed to save.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const titleText = initial && initial.id ? "Edit battle" : "New battle";
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900 text-white">
-      <div className="mx-auto max-w-7xl px-4 py-6">
-
-        <div className="mb-4 flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Battles</h1>
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <svg className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 opacity-60" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"/></svg>
-              <input value={query} onChange={function(e){ setQuery(e.target.value); }} placeholder="Search by title..." className="h-10 w-64 rounded-xl bg-white/5 pl-9 pr-3 text-sm placeholder:text-white/40 ring-1 ring-white/10 focus:outline-none" />
+    <div className="fixed inset-0 z-[90]">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="absolute left-1/2 top-1/2 w-[92vw] max-w-[720px] -translate-x-1/2 -translate-y-1/2">
+        <div className="rounded-2xl border border-white/10 bg-zinc-950 text-white shadow-2xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-lg font-semibold flex items-center gap-2">
+              <Trophy className="h-5 w-5" /> {titleText}
             </div>
-            <button className="h-10 rounded-xl bg-cyan-500 px-4 text-sm font-medium text-slate-950 hover:bg-cyan-400">+ Add</button>
+            <button onClick={onClose} className="p-2 rounded-lg hover:bg-white/10 transition" aria-label="Close">✕</button>
           </div>
-        </div>
 
-        <div className="grid grid-cols-12 gap-4">
-          <Card className="col-span-12 lg:col-span-8">
-            <div className="mb-3 text-sm font-semibold text-white/80">Insights</div>
-            <div className="rounded-2xl bg-black/30 p-4 ring-1 ring-white/10">
-              <div className="mb-3 text-sm text-white/70">Top Slots (all-time)</div>
-              <BarChart data={topSlots} />
-            </div>
-          </Card>
-
-          <div className="col-span-12 space-y-4 lg:col-span-4">
-            <Card title="Top Player (wins)">
-              <div className="flex items-center gap-3">
-                <div className="grid h-10 w-10 place-items-center rounded-full bg-cyan-500 text-slate-950">{topInitial}</div>
-                <div className="grid gap-1">
-                  <div className="text-lg font-semibold">{topPlayer.name}</div>
-                  <div className="text-xs text-white/60">{topPlayer.wins} wins</div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <Badge tone="violet">Total prize won {currency}{topPlayer.totalPrize.toFixed(2)}</Badge>
-                    <Badge tone="emerald">Last prize won {currency}{topPlayer.lastPrize.toFixed(2)}</Badge>
-                  </div>
+          <div className="space-y-6">
+            <div>
+              <div className="text-[11px] font-semibold tracking-wide opacity-60 mb-2">DETAILS</div>
+              <div className="grid md:grid-cols-2 gap-3">
+                <div className="md:col-span-2">
+                  <div className="text-xs opacity-70 mb-1">Title</div>
+                  <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g., Summer Battle" className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white" />
                 </div>
-              </div>
-            </Card>
 
-            <Card title="Last battle winner">
-              <div className="flex items-center gap-3">
-                <div className="grid h-10 w-10 place-items-center rounded-full bg-cyan-500 text-slate-950">{lastInitial}</div>
                 <div>
-                  <div className="text-sm"><span className="text-white/60">Player:</span> {lastWinner.player}</div>
-                  <div className="text-sm"><span className="text-white/60">Slot:</span> {lastWinner.slot}</div>
+                  <div className="text-xs opacity-70 mb-1">Status</div>
+                  <select value={status} onChange={(e) => setStatus(e.target.value)} className="h-11 w-full rounded-xl bg-zinc-900 border border-white/10 px-3 text-sm">
+                    <option value="scheduled">scheduled</option>
+                    <option value="running">running</option>
+                    <option value="finished">finished</option>
+                    <option value="canceled">canceled</option>
+                  </select>
                 </div>
-              </div>
-            </Card>
-          </div>
-        </div>
 
-        <div className="mt-5">
-          <div className="rounded-2xl ring-1 ring-white/10">
-            <div className="flex items-center justify-between rounded-t-2xl bg-white/5 px-4 py-3 text-sm text-white/70">
-              <div>No. ^</div>
-              <div className="grid flex-1 grid-cols-[2fr_1fr_1fr_1fr_140px] gap-2 px-2">
-                <div>Title</div>
-                <div>Mode</div>
-                <div>Prizes</div>
-                <div>Status</div>
-                <div className="text-right pr-2">Actions</div>
-              </div>
-            </div>
-            <div className="divide-y divide-white/10 bg-white/0">
-              {filtered.map(function (b, idx) {
-                return (
-                  <div key={b.id} className="flex items-center px-4 py-3 hover:bg-white/5">
-                    <div className="w-12 text-sm text-white/80">{idx + 1}</div>
-                    <div className="grid flex-1 grid-cols-[2fr_1fr_1fr_1fr_140px] items-center gap-2 px-2">
-                      <div className="truncate text-white">{b.title}</div>
-                      <div className="text-white/80">{b.mode}</div>
-                      <div className="flex flex-wrap gap-2">
-                        {b.prizes.map(function (p, i) {
-                          return <Badge key={i} tone="violet">🏅 {currency}{p.toFixed(2)}</Badge>;
-                        })}
+                <div className="md:col-span-2">
+                  <div className="text-[11px] font-semibold tracking-wide opacity-60 mb-2">PRIZES BY POSITION</div>
+                  <div className="grid md:grid-cols-3 gap-3">
+                    <div>
+                      <div className="text-xs opacity-70 mb-1">1st place</div>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">€</span>
+                        <Input inputMode="decimal" type="number" step="0.01" value={p1} onChange={(e) => setP1(e.target.value)} placeholder="e.g., 80" className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white pl-7" />
                       </div>
-                      <div>
-                        <Badge tone={b.status === "Live" ? "emerald" : (b.status === "Finished" ? "zinc" : "cyan")}>{b.status}</Badge>
+                    </div>
+                    <div>
+                      <div className="text-xs opacity-70 mb-1">2nd place</div>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">€</span>
+                        <Input inputMode="decimal" type="number" step="0.01" value={p2} onChange={(e) => setP2(e.target.value)} placeholder="e.g., 30" className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white pl-7" />
                       </div>
-                      <div className="flex items-center justify-end gap-2 pr-2">
-                        <IconBtn label="View" />
-                        <IconBtn label="Edit" />
-                        <IconBtn label="Delete" tone="rose" />
+                    </div>
+                    <div>
+                      <div className="text-xs opacity-70 mb-1">3rd place</div>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">€</span>
+                        <Input inputMode="decimal" type="number" step="0.01" value={p3} onChange={(e) => setP3(e.target.value)} placeholder="e.g., 13" className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white pl-7" />
                       </div>
                     </div>
                   </div>
-                );
-              })}
-              {filtered.length === 0 && (
-                <div className="px-4 py-8 text-center text-sm text-white/60">No battles found…</div>
-              )}
+
+                  <div className="mt-3">
+                    <div className="text-xs opacity-70 mb-1">Prize pool (auto)</div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">€</span>
+                      <Input readOnly value={String(total).replace(".", ",")} className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white pl-7" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="md:col-span-2">
+                  <div className="text-xs opacity-70 mb-1">Description</div>
+                  <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} className="w-full rounded-xl bg-zinc-900 border border-white/10 px-3 py-2 text-sm" placeholder="Notes / rules…" />
+                </div>
+              </div>
             </div>
+          </div>
+
+          <div className="mt-5 flex items-center justify-end gap-2">
+            <Button variant="outline" onClick={onClose}>{t("cancel")}</Button>
+            <Button onClick={save} disabled={busy}>
+              {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              {t("save")}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ───────────────────────── Bracket winner helpers ───────────────────────── */
+function computeBattleWinner(entries, paymentsRows) {
+  if (!Array.isArray(entries) || entries.length < 2) return null;
+
+  const bySeed = {};
+  entries.forEach((e) => { if (e && e.seed) bySeed[e.seed] = e; });
+
+  const seedList = [...Object.keys(bySeed)].sort((a, b) => indexFromLetters(a) - indexFromLetters(b));
+
+  const p = Math.max(2, ceilPow2(seedList.length));
+  const filled = [...seedList];
+  while (filled.length < p) filled.push(null);
+
+  const payMap = {};
+  for (const r of paymentsRows || []) {
+    const k = `R${r.round_idx}M${r.match_idx}-${String(r.side || "").toUpperCase()}-B${r.buy_idx}`;
+    payMap[k] = Number(r.amount) || 0;
+  }
+  const sumSide = (r, m, side, buys = 3) => {
+    let s = 0;
+    for (let i = 1; i <= Math.max(1, buys); i++) s += Number(payMap[`R${r}M${m}-${side}-B${i}`] || 0);
+    return s;
+  };
+
+  const rounds = [];
+  const r0 = [];
+  for (let i = 0; i < p; i += 2) {
+    const Ls = filled[i];
+    const Rs = filled[i + 1];
+    r0.push({ leftSeed: Ls, rightSeed: Rs, left: Ls ? bySeed[Ls] : null, right: Rs ? bySeed[Rs] : null });
+  }
+  rounds.push(r0);
+
+  const totalRounds = Math.log2(p);
+  for (let r = 0; r < totalRounds - 1; r++) {
+    const cur = rounds[r];
+    const next = Array.from({ length: Math.ceil(cur.length / 2) }, () => ({ left: null, right: null, leftSeed: null, rightSeed: null }));
+    for (let m = 0; m < cur.length; m++) {
+      const match = cur[m];
+      const sumL = sumSide(r, m, "L");
+      const sumR = sumSide(r, m, "R");
+      const w = sumL > sumR ? "L" : sumR > sumL ? "R" : null;
+      const target = next[Math.floor(m / 2)];
+      if (w === "L" && match.left) {
+        if (m % 2 === 0) { target.left = match.left; target.leftSeed = match.leftSeed; }
+        else { target.right = match.left; target.rightSeed = match.leftSeed; }
+      } else if (w === "R" && match.right) {
+        if (m % 2 === 0) { target.left = match.right; target.rightSeed = match.rightSeed; }
+        else { target.right = match.right; target.rightSeed = match.rightSeed; }
+      }
+    }
+    rounds.push(next);
+  }
+
+  const finalRound = rounds[rounds.length - 1];
+  const finalMatch = finalRound && finalRound[0];
+  if (!finalMatch) return null;
+
+  const lastR = rounds.length - 1;
+  const finalSumL = sumSide(lastR, 0, "L");
+  const finalSumR = sumSide(lastR, 0, "R");
+  return finalSumL > finalSumR ? finalMatch.left : finalMatch.right;
+}
+
+/* ───────────────────────── Página ───────────────────────── */
+export default function BattlesPage() {
+  const { isDark } = useTheme();
+  const { profile } = React.useContext(AuthCtx) || {};
+  const isFree = String((profile && profile.plan) || "Free").toLowerCase() === "free";
+
+  const [busy, setBusy] = React.useState(true);
+  const [rows, setRows] = React.useState([]);
+  const [err, setErr] = React.useState("");
+
+  const [search, setSearch] = React.useState("");
+  const dSearch = useDebounced(search, 300);
+
+  const [sort, setSort] = React.useState({ key: "no", dir: "asc" }); // asc/desc
+  const [modalOpen, setModalOpen] = React.useState(false);
+  const [editRow, setEditRow] = React.useState(null);
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const [rowToDelete, setRowToDelete] = React.useState(null);
+
+  // prizes map: battle_id -> {1,2,3}
+  const [prizesMap, setPrizesMap] = React.useState(new Map());
+
+  // insights
+  const [chartData, setChartData] = React.useState([]); // [{name, wins}]
+  const [topPlayer, setTopPlayer] = React.useState({ name: "", wins: 0, totalPrize: 0, lastPrize: 0 });
+  const [lastWinner, setLastWinner] = React.useState({ player: "", slot: "" });
+
+  const load = React.useCallback(async () => {
+    try {
+      setBusy(true);
+      setErr("");
+      // MAIN LIST -------------------------------------------------
+      const { data, error } = await supabase.from("battles").select("*").limit(500);
+      // ^^^ change table name if needed
+      if (error) throw error;
+
+      const ordered = [...(data || [])].sort((a, b) => {
+        const da = new Date((a && (a.created_at || a.starts_at)) || 0).getTime();
+        const db = new Date((b && (b.created_at || b.starts_at)) || 0).getTime();
+        return db - da;
+      });
+      setRows(ordered);
+
+      // PRIZES FOR TABLE -----------------------------------------
+      const ids = ordered.map((t) => t.id);
+      if (ids.length) {
+        const { data: pr } = await supabase
+          .from("battle_prizes") // change if needed
+          .select("battle_id, position, amount")
+          .in("battle_id", ids);
+        const m = new Map();
+        for (const r of pr || []) {
+          const cur = m.get(r.battle_id) || { 1: null, 2: null, 3: null };
+          cur[Number(r.position)] = Number(r.amount) || 0;
+          m.set(r.battle_id, cur);
+        }
+        setPrizesMap(m);
+      } else {
+        setPrizesMap(new Map());
+      }
+
+      await computeInsights(ordered);
+    } catch (e) {
+      setRows([]);
+      setErr(e.message || "Failed to load battles.");
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  React.useEffect(() => { if (!isFree) load(); }, [load, isFree]);
+
+  // Mapa No. por battle (1..N por ordem de criação)
+  const userNoById = React.useMemo(() => {
+    const arr = [...rows].sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
+    const m = new Map();
+    arr.forEach((r, i) => m.set(r.id, i + 1));
+    return m;
+  }, [rows]);
+
+  async function computeInsights(battles) {
+    try {
+      if (!battles || !battles.length) {
+        setChartData([]);
+        setTopPlayer({ name: "", wins: 0, totalPrize: 0, lastPrize: 0 });
+        setLastWinner({ player: "", slot: "" });
+        return;
+      }
+      const ids = battles.map((t) => t.id);
+      const { data: entries } = await supabase
+        .from("battle_entries") // change if needed
+        .select("*")
+        .in("battle_id", ids)
+        .limit(5000);
+      const { data: pays } = await supabase
+        .from("battle_payments") // change if needed
+        .select("*")
+        .in("battle_id", ids)
+        .limit(10000);
+      const { data: prizeRows } = await supabase
+        .from("battle_prizes")
+        .select("battle_id, position, amount")
+        .in("battle_id", ids);
+
+      const byBattleEntries = new Map();
+      for (const r of entries || []) {
+        const arr = byBattleEntries.get(r.battle_id) || [];
+        arr.push({ seed: r.seed, player_name: r.player || r.player_name || "", slot_name: r.slot_name || "" });
+        byBattleEntries.set(r.battle_id, arr);
+      }
+      const byBattlePays = new Map();
+      for (const p of pays || []) {
+        const arr = byBattlePays.get(p.battle_id) || [];
+        arr.push(p);
+        byBattlePays.set(p.battle_id, arr);
+      }
+
+      const winners = [];
+      for (const t of battles) {
+        const w = computeBattleWinner(byBattleEntries.get(t.id) || [], byBattlePays.get(t.id) || []);
+        if (w) winners.push({ battle_id: t.id, player: w.player_name || "", slot: w.slot_name || "" });
+      }
+
+      const slotCount = new Map();
+      for (const w of winners) slotCount.set(w.slot, (slotCount.get(w.slot) || 0) + 1);
+      const topSlots = [...slotCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([name, wins]) => ({ name: name || "—", wins }));
+      setChartData(topSlots);
+
+      const playerCount = new Map();
+      for (const w of winners) playerCount.set(w.player, (playerCount.get(w.player) || 0) + 1);
+      const topP = [...playerCount.entries()].sort((a, b) => b[1] - a[1])[0];
+      const topPlayerName = (topP && topP[0]) || "";
+      const topPlayerWins = (topP && topP[1]) || 0;
+
+      const prizeByBattle = new Map();
+      for (const r of prizeRows || []) if (Number(r.position) === 1) prizeByBattle.set(r.battle_id, Number(r.amount) || 0);
+      for (const t of battles) if (!prizeByBattle.has(t.id)) {
+        const v = Number(t.prize_pool);
+        if (Number.isFinite(v)) prizeByBattle.set(t.id, v);
+      }
+
+      let totalPrize = 0;
+      for (const w of winners) if (w.player === topPlayerName) totalPrize += prizeByBattle.get(w.battle_id) || 0;
+
+      let last = null;
+      for (const t of battles) {
+        const w = winners.find((x) => x.battle_id === t.id);
+        if (w) { last = { ...w, prize: prizeByBattle.get(t.id) || 0 }; break; }
+      }
+
+      setTopPlayer({ name: topPlayerName, wins: topPlayerWins, totalPrize, lastPrize: last && last.player === topPlayerName ? last.prize || 0 : 0 });
+      setLastWinner({ player: (last && last.player) || "", slot: (last && last.slot) || "" });
+    } catch {
+      setChartData([]);
+      setTopPlayer({ name: "", wins: 0, totalPrize: 0, lastPrize: 0 });
+      setLastWinner({ player: "", slot: "" });
+    }
+  }
+
+  const filtered = React.useMemo(() => {
+    const needle = dSearch.trim().toLowerCase();
+    let arr = [...rows];
+    if (needle) arr = arr.filter((r) => String(r.title || r.name || "").toLowerCase().includes(needle));
+    const get = (r, k) => { if (k === "no") return userNoById.get(r.id) || 0; if (k === "title") return String(r.title || r.name || ""); return 0; };
+    arr.sort((a, b) => {
+      const A = get(a, sort.key); const B = get(b, sort.key);
+      const bothNum = typeof A === "number" && typeof B === "number";
+      if (bothNum) return sort.dir === "asc" ? A - B : B - A;
+      return sort.dir === "asc" ? String(A).localeCompare(String(B)) : String(B).localeCompare(String(A));
+    });
+    return arr;
+  }, [rows, dSearch, sort, userNoById]);
+
+  function toggleSort(key) {
+    setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
+  }
+
+  function askDelete(row) { setRowToDelete(row); setConfirmOpen(true); }
+  async function confirmDelete() {
+    if (!rowToDelete) return;
+    try {
+      const { error } = await supabase.from("battles").delete().eq("id", rowToDelete.id); // change if needed
+      if (error) throw error;
+      setConfirmOpen(false); setRowToDelete(null); await load();
+    } catch (e) { alert(e.message || "Failed to delete."); }
+  }
+
+  const PrizeBadge = ({ kind, value }) => {
+    const label = kind === 1 ? "🥇" : kind === 2 ? "🥈" : "🥉";
+    return (
+      <span className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs">
+        <span>{label}</span>
+        <span className="font-semibold">{value != null ? fmtMoney(value) : "—"}</span>
+      </span>
+    );
+  };
+
+  /* ---------------- Render ---------------- */
+  return (
+    <section className="py-8 md:py-10">
+      <div className="max-w-7xl mx-auto px-4">
+        {/* Topbar */}
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <Trophy className="h-5 w-5" />
+            <h1 className="text-xl font-semibold">{t("title")}</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Input disabled={isFree} value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("searchPh")} className="pl-8 h-10 rounded-xl bg-zinc-900 border-white/10 text-white placeholder:text-white/40 disabled:opacity-60" />
+              <Search className="h-4 w-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-white/60" />
+            </div>
+
+            {isFree ? (
+              <Tip content="Available on Plus. Upgrade to create battles.">
+                <span className="inline-flex">
+                  <Button disabled className="h-10 opacity-60 cursor-not-allowed">
+                    <Plus className="h-4 w-4 mr-2" />{t("add")}
+                  </Button>
+                </span>
+              </Tip>
+            ) : (
+              <Button onClick={() => { setEditRow(null); setModalOpen(true); }} className="h-10">
+                <Plus className="h-4 w-4 mr-2" />{t("add")}
+              </Button>
+            )}
           </div>
         </div>
 
+        {/* FREE: tudo bloqueado */}
+        {isFree ? (
+          <BattlesLocked />
+        ) : (
+          <>
+            {/* Insights */}
+            <AccentCard title={t("insights")} className="mb-6">
+              <div className="grid lg:grid-cols-[1fr_360px] gap-4">
+                {/* chart */}
+                <div className="rounded-xl border border-white/10 p-3">
+                  <div className="text-sm opacity-70 mb-2">{t("topSlots")}</div>
+                  <div className="h-[260px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData}>
+                        <XAxis dataKey="name" tick={{ fill: "currentColor" }} />
+                        <YAxis tick={{ fill: "currentColor" }} allowDecimals={false} />
+                        <RTooltip content={<NiceTooltip />} />
+                        <Bar dataKey="wins" radius={[6, 6, 0, 0]}>
+                          {chartData.map((_, i) => (
+                            <Cell key={`cell-${i}`} fill={BAR_COLORS[i % BAR_COLORS.length]} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* right cards */}
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-white/10 p-4">
+                    <div className="text-sm opacity-70 mb-2">{t("topPlayer")}</div>
+                    {topPlayer.name ? (
+                      <div className="flex items-center gap-3">
+                        <Avatar name={topPlayer.name} />
+                        <div className="min-w-0">
+                          <div className="text-xl font-semibold truncate">{topPlayer.name}</div>
+                          <div className="text-sm opacity-80">{topPlayer.wins} {t("wins")}</div>
+                          <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                            <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1">
+                              <div className="opacity-70">{t("totalPrize")}</div>
+                              <div className="font-semibold">{fmtMoney(topPlayer.totalPrize)}</div>
+                            </div>
+                            <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1">
+                              <div className="opacity-70">{t("lastPrize")}</div>
+                              <div className="font-semibold">{fmtMoney(topPlayer.lastPrize)}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-sm opacity-60">—</div>
+                    )}
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 p-4">
+                    <div className="text-sm opacity-70 mb-2">{t("lastWinner")}</div>
+                    {lastWinner.player ? (
+                      <div className="flex items-start gap-3">
+                        <Avatar name={lastWinner.player} />
+                        <div>
+                          <div className="text-sm"><span className="opacity-70">{t("player")}: </span><span className="font-medium">{lastWinner.player}</span></div>
+                          <div className="text-sm"><span className="opacity-70">{t("slot")}: </span><span className="font-medium">{lastWinner.slot || "—"}</span></div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-sm opacity-60">—</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </AccentCard>
+
+            {/* Table */}
+            <AccentBox>
+              <div className={cn("grid grid-cols-12 px-3 py-2 text-[12px] font-semibold", isDark ? "bg-white/[0.06]" : "bg-zinc-50")}> 
+                <button onClick={() => toggleSort("no")} className="col-span-1 text-left flex items-center">{t("no")} {sort.key === "no" && <SortIcon dir={sort.dir} />}</button>
+                <button onClick={() => toggleSort("title")} className="col-span-7 text-left flex items-center">{t("name")} {sort.key === "title" && <SortIcon dir={sort.dir} />}</button>
+                <div className="col-span-2 text-center">{t("prizes")}</div>
+                <div className="col-span-2 text-right">{t("actions")}</div>
+              </div>
+
+              {busy && <div className="px-4 py-6 text-sm opacity-70 flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>}
+              {err && !busy && <div className="px-4 py-3 text-sm text-red-400">{err}</div>}
+              {!busy && filtered.length === 0 && !err && <div className="px-4 py-6 text-sm opacity-70">{t("empty")}</div>}
+
+              {!busy && filtered.length > 0 && (
+                <div className="divide-y divide-white/10">
+                  {filtered.map((r) => {
+                    const title = r.title || r.name || "—";
+                    const prizes = prizesMap.get(r.id) || { 1: null, 2: null, 3: null };
+                    const no = userNoById.get(r.id) ?? "—";
+                    return (
+                      <div key={r.id} className="grid grid-cols-12 items-center px-3 py-3 hover:bg-white/[0.06] transition-colors">
+                        <div className="col-span-1">{no}</div>
+                        <div className="col-span-7 min-w-0">
+                          <div className="font-medium truncate">{title}</div>
+                          <div className="text-xs opacity-70 truncate">{r.description || ""}</div>
+                        </div>
+                        <div className={cn("col-span-2 flex items-center justify-center gap-2", numCls)}>
+                          <PrizeBadge kind={1} value={prizes[1]} />
+                          <PrizeBadge kind={2} value={prizes[2]} />
+                          <PrizeBadge kind={3} value={prizes[3]} />
+                        </div>
+                        <div className="col-span-2">
+                          <div className="flex justify-end gap-1.5">
+                            <Button variant="outline" size="icon" className="h-8 w-8" title={t("open")} onClick={() => { window.location.hash = `#/battles/${r.id}`; }}>
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button variant="outline" size="icon" className="h-8 w-8" title={t("edit")} onClick={() => { setEditRow(r); setModalOpen(true); }}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button variant="destructive" size="icon" className="h-8 w-8 text-white" title={t("delete")} onClick={() => askDelete(r)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </AccentBox>
+
+            {/* Modals */}
+            <UpsertBattleModal open={modalOpen} initial={editRow} onClose={() => setModalOpen(false)} onSaved={load} />
+            <Confirm open={confirmOpen} title={t("delete")} body="Are you sure you want to delete this battle? This cannot be undone." confirmText={t("confirm")} cancelText={t("cancel")} onConfirm={confirmDelete} onCancel={() => setConfirmOpen(false)} />
+          </>
+        )}
       </div>
-    </div>
+    </section>
   );
 }
