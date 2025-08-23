@@ -27,9 +27,6 @@ const DICT = {
     confirm: "Confirm",
     cancel: "Cancel",
     save: "Save",
-    creating: "Creating…",
-    saving: "Saving…",
-    deleting: "Deleting…",
     searchPh: "Search by title...",
     empty: "No tournaments yet.",
     name: "Title",
@@ -52,6 +49,7 @@ const DICT = {
 const t = (k) => DICT.en[k] || k;
 
 /* ───────────────────────── utils ───────────────────────── */
+const cn = (...c) => c.filter(Boolean).join(" ");
 const LOCALE = "pt-PT";
 const CURRENCY = "EUR";
 const numCls = "tabular-nums whitespace-nowrap";
@@ -74,6 +72,16 @@ const ceilPow2 = (n) => {
   while (p < Math.max(1, n)) p <<= 1;
   return p;
 };
+const lettersFromIndex = (idx) => {
+  let n = idx + 1,
+    s = "";
+  while (n > 0) {
+    n--;
+    s = String.fromCharCode(65 + (n % 26)) + s;
+    n = Math.floor(n / 26);
+  }
+  return s;
+};
 const indexFromLetters = (s) => {
   let n = 0;
   for (const ch of String(s).toUpperCase())
@@ -88,6 +96,12 @@ function useDebounced(v, delay = 300) {
   }, [v, delay]);
   return s;
 }
+const SortIcon = ({ dir }) =>
+  dir === "asc" ? (
+    <ChevronUp className="ml-1 h-3.5 w-3.5" />
+  ) : (
+    <ChevronDown className="ml-1 h-3.5 w-3.5" />
+  );
 
 /* avatar placeholder */
 function Avatar({ name }) {
@@ -100,6 +114,41 @@ function Avatar({ name }) {
   return (
     <div className="h-8 w-8 rounded-full bg-gradient-to-br from-indigo-500 to-emerald-500 text-white grid place-items-center text-[11px] font-extrabold shadow ring-2 ring-black/20">
       {initials || "?"}
+    </div>
+  );
+}
+
+/* ───────────────────────── Accent cards/boxes (azul) ───────────────────────── */
+function AccentCard({ title, children, className }) {
+  const { isDark } = useTheme();
+  return (
+    <div
+      className={cn(
+        "relative rounded-xl overflow-hidden",
+        isDark ? "bg-white/5 border border-white/10" : "bg-white border border-zinc-200",
+        className
+      )}
+    >
+      <div className="absolute inset-x-0 top-0 h-[2px] bg-sky-500/70 shadow-[0_0_12px_2px_rgba(56,189,248,0.35)]" />
+      {title && <div className="px-4 pt-4 pb-1 text-xs opacity-80">{title}</div>}
+      <div className="px-4 pb-4">{children}</div>
+    </div>
+  );
+}
+function AccentBox({ children, className }) {
+  const { isDark } = useTheme();
+  return (
+    <div
+      className={cn(
+        "relative rounded-xl",
+        isDark ? "bg-white/5 border border-white/10" : "bg-white border border-zinc-200",
+        className
+      )}
+    >
+      <div className="pointer-events-none absolute inset-0 rounded-[inherit] overflow-hidden">
+        <div className="absolute inset-x-0 top-0 h-[2px] bg-sky-500/70 shadow-[0_0_12px_2px_rgba(56,189,248,0.35)]" />
+      </div>
+      {children}
     </div>
   );
 }
@@ -161,26 +210,7 @@ function Confirm({
   );
 }
 
-/* ───────────────────────── Helpers: per-user next number ───────────────────────── */
-async function getNextTournamentNo() {
-  const { data: auth, error: uErr } = await supabase.auth.getUser();
-  if (uErr) throw uErr;
-  const userId = auth?.user?.id || null;
-  if (!userId) return null;
-
-  const { data: last, error } = await supabase
-    .from("tournaments")
-    .select("no")
-    .eq("created_by", userId)
-    .order("no", { ascending: false })
-    .limit(1);
-
-  if (error) throw error;
-  const prev = last?.[0]?.no ?? 0;
-  return prev + 1;
-}
-
-/* ───────────────────────── Modal (Create/Edit) ───────────────────────── */
+/* ───────────────────────── Create/Edit Modal ───────────────────────── */
 function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
   const [busy, setBusy] = React.useState(false);
   const [title, setTitle] = React.useState("");
@@ -189,6 +219,7 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
 
   // prizes by position
   const [p1, setP1] = React.useState("");
+  theP2: 0;
   const [p2, setP2] = React.useState("");
   const [p3, setP3] = React.useState("");
   const total = (toNum(p1) || 0) + (toNum(p2) || 0) + (toNum(p3) || 0);
@@ -198,6 +229,7 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
     setTitle(initial?.title ?? initial?.name ?? "");
     setDescription(initial?.description ?? "");
     setStatus(initial?.status ?? "scheduled");
+    // load prizes for edit
     (async () => {
       if (initial?.id) {
         const { data } = await supabase
@@ -223,11 +255,12 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
   async function save() {
     try {
       setBusy(true);
+      // 1) create / update tournament
       const payload = {
         title: title || null,
         description: description || null,
         status: status || null,
-        prize_pool: total || null,
+        prize_pool: total || null, // auto
       };
 
       let id = initial?.id ?? null;
@@ -238,21 +271,16 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
           .eq("id", id);
         if (error) throw error;
       } else {
-        // include per-user sequential number and created_by
-        const nextNo = await getNextTournamentNo();
-        const { data: auth } = await supabase.auth.getUser();
-        const created_by = auth?.user?.id || null;
-
         const { data, error } = await supabase
           .from("tournaments")
-          .insert([{ ...payload, no: nextNo, created_by }])
+          .insert([payload])
           .select("id")
           .single();
         if (error) throw error;
         id = data.id;
       }
 
-      // prizes 1..3
+      // 2) upsert prizes 1..3
       const rows = [
         { tournament_id: id, position: 1, amount: toNum(p1) || 0 },
         { tournament_id: id, position: 2, amount: toNum(p2) || 0 },
@@ -414,9 +442,7 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
               {t("cancel")}
             </Button>
             <Button onClick={save} disabled={busy}>
-              {busy ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : null}
+              {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
               {t("save")}
             </Button>
           </div>
@@ -496,7 +522,7 @@ function computeTournamentWinner(entries, paymentsRows) {
       } else if (w === "R" && match.right) {
         if (m % 2 === 0) {
           target.left = match.right;
-          target.leftSeed = match.rightSeed;
+          target.rightSeed = match.rightSeed;
         } else {
           target.right = match.right;
           target.rightSeed = match.rightSeed;
@@ -527,16 +553,14 @@ export default function TournamentsPage() {
   const [search, setSearch] = React.useState("");
   const dSearch = useDebounced(search, 300);
 
-  const [sort, setSort] = React.useState({ key: "title", dir: 1 });
+  const [sort, setSort] = React.useState({ key: "no", dir: "asc" }); // asc/desc
   const [modalOpen, setModalOpen] = React.useState(false);
   const [editRow, setEditRow] = React.useState(null);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [rowToDelete, setRowToDelete] = React.useState(null);
 
-  // prizes map: id -> {1,2,3}
+  // prizes map: tournament_id -> {1,2,3}
   const [prizesMap, setPrizesMap] = React.useState(new Map());
-  // per-user displayed number (#1, #2, …)
-  const [noMap, setNoMap] = React.useState(new Map());
 
   // insights
   const [chartData, setChartData] = React.useState([]); // [{name, wins}]
@@ -552,11 +576,6 @@ export default function TournamentsPage() {
     try {
       setBusy(true);
       setErr("");
-
-      // who is the current user (for per-account numbering)
-      const { data: auth } = await supabase.auth.getUser();
-      const uid = auth?.user?.id ?? null;
-
       const { data, error } = await supabase
         .from("tournaments")
         .select("*")
@@ -569,22 +588,6 @@ export default function TournamentsPage() {
         return db - da;
       });
       setRows(ordered);
-
-      // compute per-user sequential numbers (fallback when `no` is null)
-      const mine = ordered
-        .filter((r) => (uid ? r.created_by === uid : false))
-        .sort(
-          (a, b) =>
-            new Date(a.created_at || 0).getTime() -
-            new Date(b.created_at || 0).getTime()
-        );
-      const noTmp = new Map();
-      let seq = 1;
-      for (const r of mine) {
-        noTmp.set(r.id, Number.isFinite(Number(r.no)) ? Number(r.no) : seq);
-        seq++;
-      }
-      setNoMap(noTmp);
 
       // fetch prizes for table + insights
       const ids = ordered.map((t) => t.id);
@@ -616,6 +619,18 @@ export default function TournamentsPage() {
   React.useEffect(() => {
     load();
   }, [load]);
+
+  // Mapa No. por torneio (1..N por ordem de criação)
+  const userNoById = React.useMemo(() => {
+    const arr = [...rows].sort(
+      (a, b) =>
+        new Date(a.created_at || 0).getTime() -
+        new Date(b.created_at || 0).getTime()
+    );
+    const m = new Map();
+    arr.forEach((r, i) => m.set(r.id, i + 1));
+    return m;
+  }, [rows]);
 
   async function computeInsights(tournaments) {
     try {
@@ -730,29 +745,33 @@ export default function TournamentsPage() {
   const filtered = React.useMemo(() => {
     const needle = dSearch.trim().toLowerCase();
     let arr = [...rows];
-    if (needle)
+    if (needle) {
       arr = arr.filter((r) =>
         String(r.title || r.name || "").toLowerCase().includes(needle)
       );
-
+    }
     const get = (r, k) => {
+      if (k === "no") return userNoById.get(r.id) || 0;
       if (k === "title") return String(r.title || r.name || "");
-      if (k === "no")
-        return (noMap.get(r.id) ??
-          (Number.isFinite(Number(r.no)) ? Number(r.no) : Infinity));
       return 0;
     };
-
     arr.sort((a, b) => {
       const A = get(a, sort.key);
       const B = get(b, sort.key);
-      if (typeof A === "string" && typeof B === "string")
-        return A.localeCompare(B) * sort.dir;
-      // numeric compare (NaN/Infinity handled by Number)
-      return (Number(A) - Number(B)) * sort.dir;
+      const bothNum = typeof A === "number" && typeof B === "number";
+      if (bothNum) return sort.dir === "asc" ? A - B : B - A;
+      return sort.dir === "asc"
+        ? String(A).localeCompare(String(B))
+        : String(B).localeCompare(String(A));
     });
     return arr;
-  }, [rows, dSearch, sort, noMap]);
+  }, [rows, dSearch, sort, userNoById]);
+
+  function toggleSort(key) {
+    setSort((s) =>
+      s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }
+    );
+  }
 
   function askDelete(row) {
     setRowToDelete(row);
@@ -774,30 +793,6 @@ export default function TournamentsPage() {
     }
   }
 
-  const HeaderCell = ({ k, children, right }) => {
-    const is = sort.key === k;
-    return (
-      <button
-        className={`flex items-center gap-1 ${right ? "justify-end" : ""}`}
-        onClick={() =>
-          setSort((s) => ({ key: k, dir: is ? -s.dir : 1 }))
-        }
-        title="Sort"
-      >
-        <span>{children}</span>
-        <span className="opacity-60">
-          {is ? (
-            sort.dir === -1 ? (
-              <ChevronDown className="h-3.5 w-3.5" />
-            ) : (
-              <ChevronUp className="h-3.5 w-3.5" />
-            )
-          ) : null}
-        </span>
-      </button>
-    );
-  };
-
   const PrizeBadge = ({ kind, value }) => {
     const label = kind === 1 ? "🥇" : kind === 2 ? "🥈" : "🥉";
     return (
@@ -811,251 +806,245 @@ export default function TournamentsPage() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
-      {/* Topbar */}
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-2">
-          <Trophy className="h-5 w-5" />
-          <h1 className="text-xl font-semibold">{t("title")}</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={t("searchPh")}
-              className="pl-8 h-10 rounded-xl bg-zinc-900 border-white/10 text-white placeholder:text-white/40"
-            />
-            <Search className="h-4 w-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-white/60" />
+    <section className="py-8 md:py-10">
+      <div className="max-w-7xl mx-auto px-4">
+        {/* Topbar */}
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <Trophy className="h-5 w-5" />
+            <h1 className="text-xl font-semibold">{t("title")}</h1>
           </div>
-          <Button
-            onClick={() => {
-              setEditRow(null);
-              setModalOpen(true);
-            }}
-            className="h-10"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            {t("add")}
-          </Button>
-        </div>
-      </div>
-
-      {/* Insights */}
-      <div
-        className={`rounded-2xl border ${
-          isDark ? "border-white/10" : "border-zinc-200"
-        } p-4 mb-6`}
-      >
-        <div className="flex items-center gap-2 mb-3">
-          <Crown className="h-4 w-4" />
-          <div className="text-lg font-semibold">{t("insights")}</div>
-        </div>
-
-        <div className="grid lg:grid-cols-[1fr_360px] gap-4">
-          {/* chart */}
-          <div className="rounded-xl border border-white/10 p-3">
-            <div className="text-sm opacity-70 mb-2">{t("topSlots")}</div>
-            <div className="h-[260px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <XAxis dataKey="name" tick={{ fill: "currentColor" }} />
-                  <YAxis
-                    tick={{ fill: "currentColor" }}
-                    allowDecimals={false}
-                  />
-                  <Tooltip content={<NiceTooltip />} />
-                  <Bar dataKey="wins" radius={[6, 6, 0, 0]}>
-                    {chartData.map((_, i) => (
-                      <Cell
-                        key={`cell-${i}`}
-                        fill={BAR_COLORS[i % BAR_COLORS.length]}
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t("searchPh")}
+                className="pl-8 h-10 rounded-xl bg-zinc-900 border-white/10 text-white placeholder:text-white/40"
+              />
+              <Search className="h-4 w-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-white/60" />
             </div>
+            <Button
+              onClick={() => {
+                setEditRow(null);
+                setModalOpen(true);
+              }}
+              className="h-10"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              {t("add")}
+            </Button>
           </div>
+        </div>
 
-          {/* right cards */}
-          <div className="space-y-4">
-            <div className="rounded-xl border border-white/10 p-4">
-              <div className="text-sm opacity-70 mb-2">{t("topPlayer")}</div>
-              {topPlayer.name ? (
-                <div className="flex items-center gap-3">
-                  <Avatar name={topPlayer.name} />
-                  <div className="min-w-0">
-                    <div className="text-xl font-semibold truncate">
-                      {topPlayer.name}
-                    </div>
-                    <div className="text-sm opacity-80">
-                      {topPlayer.wins} {t("wins")}
-                    </div>
-                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                      <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1">
-                        <div className="opacity-70">{t("totalPrize")}</div>
-                        <div className="font-semibold">
-                          {fmtMoney(topPlayer.totalPrize)}
-                        </div>
+        {/* Insights (accent azul) */}
+        <AccentCard title={t("insights")} className="mb-6">
+          <div className="grid lg:grid-cols-[1fr_360px] gap-4">
+            {/* chart */}
+            <div className="rounded-xl border border-white/10 p-3">
+              <div className="text-sm opacity-70 mb-2">{t("topSlots")}</div>
+              <div className="h-[260px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData}>
+                    <XAxis dataKey="name" tick={{ fill: "currentColor" }} />
+                    <YAxis tick={{ fill: "currentColor" }} allowDecimals={false} />
+                    <Tooltip content={<NiceTooltip />} />
+                    <Bar dataKey="wins" radius={[6, 6, 0, 0]}>
+                      {chartData.map((_, i) => (
+                        <Cell
+                          key={`cell-${i}`}
+                          fill={BAR_COLORS[i % BAR_COLORS.length]}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* right cards */}
+            <div className="space-y-4">
+              <div className="rounded-xl border border-white/10 p-4">
+                <div className="text-sm opacity-70 mb-2">{t("topPlayer")}</div>
+                {topPlayer.name ? (
+                  <div className="flex items-center gap-3">
+                    <Avatar name={topPlayer.name} />
+                    <div className="min-w-0">
+                      <div className="text-xl font-semibold truncate">
+                        {topPlayer.name}
                       </div>
-                      <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1">
-                        <div className="opacity-70">{t("lastPrize")}</div>
-                        <div className="font-semibold">
-                          {fmtMoney(topPlayer.lastPrize)}
+                      <div className="text-sm opacity-80">
+                        {topPlayer.wins} {t("wins")}
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                        <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1">
+                          <div className="opacity-70">{t("totalPrize")}</div>
+                          <div className="font-semibold">
+                            {fmtMoney(topPlayer.totalPrize)}
+                          </div>
+                        </div>
+                        <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1">
+                          <div className="opacity-70">{t("lastPrize")}</div>
+                          <div className="font-semibold">
+                            {fmtMoney(topPlayer.lastPrize)}
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
+                ) : (
+                  <div className="text-sm opacity-60">—</div>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-white/10 p-4">
+                <div className="text-sm opacity-70 mb-2">{t("lastWinner")}</div>
+                <div className="text-sm">
+                  <span className="opacity-70">{t("player")}: </span>
+                  <span className="font-medium">{lastWinner.player || "—"}</span>
                 </div>
-              ) : (
-                <div className="text-sm opacity-60">—</div>
-              )}
-            </div>
-
-            <div className="rounded-xl border border-white/10 p-4">
-              <div className="text-sm opacity-70 mb-2">{t("lastWinner")}</div>
-              <div className="text-sm">
-                <span className="opacity-70">{t("player")}: </span>
-                <span className="font-medium">
-                  {lastWinner.player || "—"}
-                </span>
-              </div>
-              <div className="text-sm">
-                <span className="opacity-70">{t("slot")}: </span>
-                <span className="font-medium">{lastWinner.slot || "—"}</span>
+                <div className="text-sm">
+                  <span className="opacity-70">{t("slot")}: </span>
+                  <span className="font-medium">{lastWinner.slot || "—"}</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </div>
+        </AccentCard>
 
-      {/* Table */}
-      <div
-        className={`rounded-xl border overflow-hidden ${
-          isDark ? "border-white/10" : "border-zinc-200"
-        }`}
-      >
-        <div
-          className={`${
-            isDark ? "bg-white/[0.04]" : "bg-zinc-50"
-          } grid grid-cols-12 items-center px-4 py-3 text-xs font-semibold`}
-        >
-          <div className="col-span-1 text-center">
-            <HeaderCell k="no">{t("no")}</HeaderCell>
-          </div>
-          <div className="col-span-6">
-            <HeaderCell k="title">{t("name")}</HeaderCell>
-          </div>
-          <div className="col-span-3 text-center">{t("prizes")}</div>
-          <div className="col-span-2 text-right">{t("actions")}</div>
-        </div>
-
-        {busy && (
-          <div className="px-4 py-6 text-sm opacity-70 flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-          </div>
-        )}
-
-        {err && !busy && (
-          <div className="px-4 py-3 text-sm text-red-400">{err}</div>
-        )}
-        {!busy && filtered.length === 0 && !err && (
-          <div className="px-4 py-6 text-sm opacity-70">{t("empty")}</div>
-        )}
-
-        {filtered.map((r) => {
-          const title = r.title || r.name || "—";
-          const prizes = prizesMap.get(r.id) || { 1: null, 2: null, 3: null };
-          const displayNo =
-            (noMap && noMap.get(r.id)) ??
-            (Number.isFinite(Number(r.no)) ? Number(r.no) : null);
-
-          return (
-            <div
-              key={r.id}
-              className={`grid grid-cols-12 items-center px-4 py-3 border-t ${
-                isDark ? "border-white/10" : "border-zinc-200"
-              }`}
+        {/* Table (accent azul + No. à esquerda) */}
+        <AccentBox>
+          <div
+            className={cn(
+              "grid grid-cols-12 px-3 py-2 text-[12px] font-semibold",
+              isDark ? "bg-white/[0.06]" : "bg-zinc-50"
+            )}
+          >
+            <button
+              onClick={() => toggleSort("no")}
+              className="col-span-1 text-left flex items-center"
             >
-              {/* No. (separate column, no box) */}
-              <div className={`col-span-1 text-center ${numCls}`}>
-                {displayNo != null ? displayNo : "—"}
-              </div>
+              {t("no")} {sort.key === "no" && <SortIcon dir={sort.dir} />}
+            </button>
+            <button
+              onClick={() => toggleSort("title")}
+              className="col-span-7 text-left flex items-center"
+            >
+              {t("name")} {sort.key === "title" && <SortIcon dir={sort.dir} />}
+            </button>
+            <div className="col-span-2 text-center">{t("prizes")}</div>
+            <div className="col-span-2 text-right">{t("actions")}</div>
+          </div>
 
-              {/* Title */}
-              <div className="col-span-6 min-w-0 pl-2">
-                <div className="font-medium truncate">{title}</div>
-                <div className="text-xs opacity-70 truncate">
-                  {r.description || ""}
-                </div>
-              </div>
-
-              {/* Prizes */}
-              <div
-                className={`col-span-3 flex items-center justify-center gap-2 ${numCls}`}
-              >
-                <PrizeBadge kind={1} value={prizes[1]} />
-                <PrizeBadge kind={2} value={prizes[2]} />
-                <PrizeBadge kind={3} value={prizes[3]} />
-              </div>
-
-              {/* Actions */}
-              <div className="col-span-2 flex items-center justify-end gap-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  title={t("open")}
-                  onClick={() => {
-                    window.location.hash = `#/tournaments/${r.id}`;
-                  }}
-                >
-                  <Eye className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  title={t("edit")}
-                  onClick={() => {
-                    setEditRow(r);
-                    setModalOpen(true);
-                  }}
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="icon"
-                  className="h-8 w-8 text-white"
-                  title={t("delete")}
-                  onClick={() => askDelete(r)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
+          {busy && (
+            <div className="px-4 py-6 text-sm opacity-70 flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading…
             </div>
-          );
-        })}
-      </div>
+          )}
 
-      {/* Modals */}
-      <UpsertTournamentModal
-        open={modalOpen}
-        initial={editRow}
-        onClose={() => setModalOpen(false)}
-        onSaved={load}
-      />
-      <Confirm
-        open={confirmOpen}
-        title={t("delete")}
-        body="Are you sure you want to delete this tournament? This cannot be undone."
-        confirmText={t("confirm")}
-        cancelText={t("cancel")}
-        onConfirm={confirmDelete}
-        onCancel={() => setConfirmOpen(false)}
-      />
-    </div>
+          {err && !busy && (
+            <div className="px-4 py-3 text-sm text-red-400">{err}</div>
+          )}
+          {!busy && filtered.length === 0 && !err && (
+            <div className="px-4 py-6 text-sm opacity-70">{t("empty")}</div>
+          )}
+
+          {!busy && filtered.length > 0 && (
+            <div className="divide-y divide-white/10">
+              {filtered.map((r) => {
+                const title = r.title || r.name || "—";
+                const prizes = prizesMap.get(r.id) || { 1: null, 2: null, 3: null };
+                const no = userNoById.get(r.id) ?? "—";
+
+                return (
+                  <div
+                    key={r.id}
+                    className="grid grid-cols-12 items-center px-3 py-3 hover:bg-white/[0.06] transition-colors"
+                  >
+                    {/* No. */}
+                    <div className="col-span-1">{no}</div>
+
+                    {/* Title + description */}
+                    <div className="col-span-7 min-w-0">
+                      <div className="font-medium truncate">{title}</div>
+                      <div className="text-xs opacity-70 truncate">
+                        {r.description || ""}
+                      </div>
+                    </div>
+
+                    {/* Prizes */}
+                    <div
+                      className={cn(
+                        "col-span-2 flex items-center justify-center gap-2",
+                        numCls
+                      )}
+                    >
+                      <PrizeBadge kind={1} value={prizes[1]} />
+                      <PrizeBadge kind={2} value={prizes[2]} />
+                      <PrizeBadge kind={3} value={prizes[3]} />
+                    </div>
+
+                    {/* Actions */}
+                    <div className="col-span-2">
+                      <div className="flex justify-end gap-1.5">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8"
+                          title={t("open")}
+                          onClick={() => {
+                            window.location.hash = `#/tournaments/${r.id}`;
+                          }}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8"
+                          title={t("edit")}
+                          onClick={() => {
+                            setEditRow(r);
+                            setModalOpen(true);
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          className="h-8 w-8 text-white"
+                          title={t("delete")}
+                          onClick={() => askDelete(r)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </AccentBox>
+
+        {/* Modals */}
+        <UpsertTournamentModal
+          open={modalOpen}
+          initial={editRow}
+          onClose={() => setModalOpen(false)}
+          onSaved={load}
+        />
+        <Confirm
+          open={confirmOpen}
+          title={t("delete")}
+          body="Are you sure you want to delete this tournament? This cannot be undone."
+          confirmText={t("confirm")}
+          cancelText={t("cancel")}
+          onConfirm={confirmDelete}
+          onCancel={() => setConfirmOpen(false)}
+        />
+      </div>
+    </section>
   );
 }
