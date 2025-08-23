@@ -5,21 +5,10 @@ import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Plus, Search, ChevronDown, ChevronUp, Loader2, Pencil, Trash2, Trophy, Eye,
+  Plus, Search, ChevronDown, ChevronUp, Loader2, Pencil, Trash2, Trophy, Eye, Crown
 } from "lucide-react";
 
-// recharts
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-} from "recharts";
-
-/* ───────────────────────── i18n (default EN) ───────────────────────── */
+/* ───────────────────────── i18n ───────────────────────── */
 const DICT = {
   en: {
     title: "Tournaments",
@@ -32,7 +21,7 @@ const DICT = {
     creating: "Creating…",
     saving: "Saving…",
     deleting: "Deleting…",
-    searchPh: "Search by title…",
+    searchPh: "Search by title...",
     empty: "No tournaments yet.",
     name: "Title",
     status: "Status",
@@ -42,24 +31,20 @@ const DICT = {
     running: "running",
     finished: "finished",
     canceled: "canceled",
-    editTournament: "Edit tournament",
-    newTournament: "New tournament",
-    description: "Description",
-    areYouSure: "Are you sure you want to delete this tournament? This cannot be undone.",
     open: "Open",
-    // Insights
     insights: "Insights",
-    topSlotsAll: "Top Slots (all-time)",
-    topPlayerWins: "Top Player (wins)",
-    lastTournamentWinner: "Last tournament winner",
+    topSlots: "Top Slots (all-time)",
+    topPlayer: "Top Player (wins)",
+    lastWinner: "Last tournament winner",
     player: "Player",
     slot: "Slot",
+    wins: "wins",
+    totalPrize: "Total prize won",
+    lastPrize: "Last prize won",
   },
+  pt: {} // mantido vazio para forçar inglês nesta página
 };
-function useLang() {
-  const t = React.useCallback((k) => (DICT.en && DICT.en[k]) || k, []);
-  return { t, lang: "en" };
-}
+const t = (k) => DICT.en[k] || k;
 
 /* ───────────────────────── utils ───────────────────────── */
 const LOCALE = "pt-PT";
@@ -74,40 +59,49 @@ const fmtMoney = (n) =>
         maximumFractionDigits: 2,
       }).format(Number(n))
     : "—";
+
+const toNum = (v) => {
+  const n = Number(String(v ?? "").replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+};
+const ceilPow2 = (n) => { let p = 1; while (p < Math.max(1, n)) p <<= 1; return p; };
+const lettersFromIndex = (idx) => { let n = idx + 1, s = ""; while (n > 0){ n--; s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n/26);} return s; };
+const indexFromLetters = (s) => { let n = 0; for (const ch of String(s).toUpperCase()) n = n*26 + (ch.charCodeAt(0) - 64); return n-1; };
 function useDebounced(v, delay = 300) {
   const [s, setS] = React.useState(v);
-  React.useEffect(() => {
-    const id = setTimeout(() => setS(v), delay);
-    return () => clearTimeout(id);
-  }, [v, delay]);
+  React.useEffect(() => { const id = setTimeout(() => setS(v), delay); return () => clearTimeout(id); }, [v, delay]);
   return s;
 }
 
-// A, B, ..., Z, AA, ...
-const lettersFromIndex = (idx) => {
-  let n = idx + 1;
-  let s = "";
-  while (n > 0) {
-    n--;
-    s = String.fromCharCode(65 + (n % 26)) + s;
-    n = Math.floor(n / 26);
-  }
-  return s;
-};
-const indexFromLetters = (s) => {
-  let n = 0;
-  for (const ch of String(s || "").toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64);
-  return n - 1;
-};
-const ceilPow2 = (n) => {
-  let p = 1;
-  while (p < Math.max(1, n)) p <<= 1;
-  return p;
-};
-const toNum = (v) => {
-  const n = Number(String(v ?? "").replace(",", "."));
-  return Number.isFinite(n) ? n : 0;
-};
+// tiny avatar placeholder (with initials)
+function Avatar({ name }) {
+  const initials = String(name || "?")
+    .split(/\s+/).map(p => p[0]).join("").slice(0,2).toUpperCase();
+  return (
+    <div className="h-8 w-8 rounded-full bg-gradient-to-br from-indigo-500 to-emerald-500 text-white grid place-items-center text-[11px] font-extrabold shadow ring-2 ring-black/20">
+      {initials || "?"}
+    </div>
+  );
+}
+
+/* ───────────────────────── Custom Chart (Recharts) ───────────────────────── */
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell
+} from "recharts";
+
+const BAR_COLORS = ["#6366F1", "#22C55E", "#F59E0B"]; // indigo, green, amber
+
+function NiceTooltip({ active, payload, label }) {
+  if (!active || !payload || !payload.length) return null;
+  const p = payload[0];
+  return (
+    <div className="rounded-xl border border-white/10 bg-zinc-900/95 text-white px-3 py-2 shadow-2xl">
+      <div className="text-xs opacity-70">{t("slot")}</div>
+      <div className="text-sm font-semibold">{label}</div>
+      <div className="mt-1 text-xs"><span className="opacity-70">{t("wins")}:</span> <span className="font-semibold">{p.value}</span></div>
+    </div>
+  );
+}
 
 /* ───────────────────────── Mini confirm ───────────────────────── */
 function Confirm({ open, title, body, confirmText, cancelText, onConfirm, onCancel }) {
@@ -131,7 +125,6 @@ function Confirm({ open, title, body, confirmText, cancelText, onConfirm, onCanc
 
 /* ───────────────────────── Create/Edit Modal ───────────────────────── */
 function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
-  const { t } = useLang();
   const [busy, setBusy] = React.useState(false);
   const [title, setTitle] = React.useState("");
   const [description, setDescription] = React.useState("");
@@ -173,7 +166,7 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
     }
   }
 
-  const titleText = initial?.id ? t("editTournament") : t("newTournament");
+  const titleText = initial?.id ? "Edit tournament" : "New tournament";
 
   return (
     <div className="fixed inset-0 z-[90]">
@@ -198,17 +191,17 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
               <div className="text-[11px] font-semibold tracking-wide opacity-60 mb-2">DETAILS</div>
               <div className="grid md:grid-cols-2 gap-3">
                 <div className="md:col-span-2">
-                  <div className="text-xs opacity-70 mb-1">{t("name")}</div>
+                  <div className="text-xs opacity-70 mb-1">Title</div>
                   <Input
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    placeholder="e.g. Summer Cup"
+                    placeholder="e.g., Summer Cup"
                     className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white"
                   />
                 </div>
 
                 <div>
-                  <div className="text-xs opacity-70 mb-1">{t("status")}</div>
+                  <div className="text-xs opacity-70 mb-1">Status</div>
                   <select
                     value={status}
                     onChange={(e) => setStatus(e.target.value)}
@@ -231,14 +224,14 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
                       inputMode="decimal"
                       value={prizePool ?? ""}
                       onChange={(e) => setPrizePool(e.target.value)}
-                      placeholder="e.g. 500.00"
+                      placeholder="e.g., 500.00"
                       className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white pl-7"
                     />
                   </div>
                 </div>
 
                 <div className="md:col-span-2">
-                  <div className="text-xs opacity-70 mb-1">{t("description")}</div>
+                  <div className="text-xs opacity-70 mb-1">Description</div>
                   <textarea
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
@@ -264,92 +257,89 @@ function UpsertTournamentModal({ open, initial, onClose, onSaved }) {
   );
 }
 
-/* ───────────────────────── helpers: winners/insights ───────────────────────── */
+/* ───────────────────────── Bracket winner helpers ───────────────────────── */
+// Build bracket from ordered seed list and decide winners using payments map
+function computeTournamentWinner(entries, paymentsRows) {
+  if (!Array.isArray(entries) || entries.length < 2) return null;
 
-function normalizeEntry(row) {
-  // columns seen in your DB: seed, player, slot_name, slot_id
-  return {
-    tournament_id: row.tournament_id,
-    seed: row.seed,
-    player: row.player ?? row.player_name ?? row.name ?? row.username ?? "—",
-    slot_name: row.slot_name ?? row.slot ?? "—",
-    slot_id: row.slot_id ?? row.slotid ?? row.game_id ?? null,
-  };
-}
-
-function computeChampionForTournament(entriesRows, paymentsRows) {
-  // entriesRows: array for a single tournament
-  // paymentsRows: same tournament (all rounds)
-  if (!entriesRows?.length) return null;
-
-  // Map payments -> sums per round/match/side
-  const sums = new Map(); // key = `${r}_${m}_${side}` -> number
-  for (const r of paymentsRows || []) {
-    const key = `${r.round_idx}_${r.match_idx}_${String(r.side || "").toUpperCase()}`;
-    const prev = sums.get(key) || 0;
-    const add = toNum(r.amount);
-    sums.set(key, prev + add);
-  }
-
-  // seed order padded to power of two
-  const orderedSeeds = [...entriesRows]
-    .filter((e) => e.seed)
-    .sort((a, b) => indexFromLetters(a.seed) - indexFromLetters(b.seed))
-    .map((e) => e.seed);
-
-  const p = Math.max(2, ceilPow2(orderedSeeds.length));
-  while (orderedSeeds.length < p) orderedSeeds.push(null);
-
-  // helper to get entry by seed
   const bySeed = {};
-  for (const r of entriesRows) bySeed[r.seed] = r;
+  entries.forEach((e) => { if (e?.seed) bySeed[e.seed] = e; });
 
+  const seedList = [...Object.keys(bySeed)]
+    .sort((a,b) => indexFromLetters(a) - indexFromLetters(b));
+
+  const p = Math.max(2, ceilPow2(seedList.length));
+  const filled = [...seedList];
+  while (filled.length < p) filled.push(null);
+
+  // index payments -> map["R{r}M{m}-{L|R}-B{b}"] = amount
+  const payMap = {};
+  for (const r of paymentsRows || []) {
+    const k = `R${r.round_idx}M${r.match_idx}-${(r.side || "").toUpperCase()}-B${r.buy_idx}`;
+    payMap[k] = Number(r.amount) || 0;
+  }
+  const sumSide = (r, m, side, buys = 3) => {
+    let s = 0;
+    for (let i = 1; i <= Math.max(1, buys); i++) {
+      const k = `R${r}M${m}-${side}-B${i}`;
+      s += Number(payMap[k] || 0);
+    }
+    return s;
+  };
+
+  const rounds = [];
+  // round 0
+  const r0 = [];
+  for (let i=0; i<p; i+=2) {
+    const Ls = filled[i];
+    const Rs = filled[i+1];
+    r0.push({
+      leftSeed: Ls, rightSeed: Rs,
+      left: Ls ? bySeed[Ls] : null,
+      right: Rs ? bySeed[Rs] : null
+    });
+  }
+  rounds.push(r0);
+
+  // propagate
   const totalRounds = Math.log2(p);
-  // round 0: explicit pairs from seeds; next rounds are winners from previous
-  let roundPairs = orderedSeeds.map((s, i, arr) => (i % 2 === 0 ? [arr[i], arr[i + 1]] : null)).filter(Boolean);
-
-  for (let r = 0; r < totalRounds; r++) {
-    // winner seeds for this round to feed next round
-    const nextSeeds = [];
-    for (let m = 0; m < roundPairs.length; m++) {
-      const [leftSeed, rightSeed] = roundPairs[m];
-      // if one side is bye -> other wins
-      if (leftSeed && !rightSeed) { nextSeeds.push(leftSeed); continue; }
-      if (!leftSeed && rightSeed) { nextSeeds.push(rightSeed); continue; }
-      if (!leftSeed && !rightSeed) { nextSeeds.push(null); continue; }
-
-      const sumL = sums.get(`${r}_${m}_L`) || 0;
-      const sumR = sums.get(`${r}_${m}_R`) || 0;
-
-      if (sumL > sumR) nextSeeds.push(leftSeed);
-      else if (sumR > sumL) nextSeeds.push(rightSeed);
-      else nextSeeds.push(null); // tie/undefined
+  for (let r=0; r<totalRounds-1; r++) {
+    const cur = rounds[r];
+    const next = Array.from({length: Math.ceil(cur.length/2)}, () => ({
+      left: null, right: null, leftSeed: null, rightSeed: null
+    }));
+    for (let m=0; m<cur.length; m++) {
+      const match = cur[m];
+      const sumL = sumSide(r, m, "L");
+      const sumR = sumSide(r, m, "R");
+      const winnerSide = sumL > sumR ? "L" : sumR > sumL ? "R" : null;
+      const target = next[Math.floor(m/2)];
+      if (winnerSide === "L" && match.left) {
+        if (m % 2 === 0) { target.left = match.left; target.leftSeed = match.leftSeed; }
+        else { target.right = match.left; target.rightSeed = match.leftSeed; }
+      } else if (winnerSide === "R" && match.right) {
+        if (m % 2 === 0) { target.left = match.right; target.leftSeed = match.rightSeed; }
+        else { target.right = match.right; target.rightSeed = match.rightSeed; }
+      }
     }
-
-    if (r === totalRounds - 1) {
-      const championSeed = nextSeeds[0] || null;
-      if (!championSeed) return null;
-      const champ = bySeed[championSeed];
-      return champ
-        ? {
-            player: champ.player,
-            slot_name: champ.slot_name,
-            slot_id: champ.slot_id,
-          }
-        : null;
-    }
-
-    // build next round pairs
-    roundPairs = nextSeeds.map((s, i, arr) => (i % 2 === 0 ? [arr[i], arr[i + 1]] : null)).filter(Boolean);
+    rounds.push(next);
   }
 
-  return null;
+  const finalRound = rounds[rounds.length - 1];
+  const finalMatch = finalRound?.[0];
+  if (!finalMatch) return null;
+
+  // winner of final by payments at last round index
+  const lastR = rounds.length - 1;
+  const finalSumL = sumSide(lastR, 0, "L");
+  const finalSumR = sumSide(lastR, 0, "R");
+  const winner = finalSumL > finalSumR ? finalMatch.left : finalMatch.right;
+  return winner || null;
 }
 
 /* ───────────────────────── Página ───────────────────────── */
 export default function TournamentsPage() {
   const { isDark } = useTheme();
-  const { t } = useLang();
 
   const [busy, setBusy] = React.useState(true);
   const [rows, setRows] = React.useState([]);
@@ -364,22 +354,26 @@ export default function TournamentsPage() {
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [rowToDelete, setRowToDelete] = React.useState(null);
 
-  // Insights state
-  const [chartData, setChartData] = React.useState([]); // {name, wins}
-  const [topPlayer, setTopPlayer] = React.useState({ name: "—", wins: 0 });
-  const [lastWinner, setLastWinner] = React.useState({ player: "—", slot: "—" });
+  // insights
+  const [chartData, setChartData] = React.useState([]); // [{name, wins}]
+  const [topPlayer, setTopPlayer] = React.useState({ name: "", wins: 0, totalPrize: 0, lastPrize: 0 });
+  const [lastWinner, setLastWinner] = React.useState({ player: "", slot: "" });
 
   const load = React.useCallback(async () => {
     try {
       setBusy(true);
       setErr("");
-      let { data, error } = await supabase
-        .from("tournaments")
-        .select("*")
-        .order("created_at", { ascending: true }) // keep stable ascending for table; we will detect "last" below
-        .limit(500);
+      let { data, error } = await supabase.from("tournaments").select("*").limit(500);
       if (error) throw error;
-      setRows(data || []);
+      // order by created_at/starts_at desc for “last winner”
+      const ordered = [...(data || [])].sort((a,b) => {
+        const da = new Date(a?.created_at || a?.starts_at || 0).getTime();
+        const db = new Date(b?.created_at || b?.starts_at || 0).getTime();
+        return db - da;
+      });
+      setRows(ordered);
+      // compute insights
+      await computeInsights(ordered);
     } catch (e) {
       setRows([]);
       setErr(e.message || "Failed to load tournaments.");
@@ -388,107 +382,118 @@ export default function TournamentsPage() {
     }
   }, []);
 
-  // Load tournaments
   React.useEffect(() => { load(); }, [load]);
 
-  // Load insights whenever tournaments list changes
-  React.useEffect(() => {
-    const run = async () => {
-      try {
-        // fetch up to 200 most recent tournaments (id, created_at)
-        const ids = (rows || []).map((r) => r.id);
-        if (!ids.length) {
-          setChartData([]);
-          setTopPlayer({ name: "—", wins: 0 });
-          setLastWinner({ player: "—", slot: "—" });
-          return;
-        }
+  // compute chart + top player + last winner
+  async function computeInsights(tournaments) {
+    if (!tournaments?.length) {
+      setChartData([]);
+      setTopPlayer({ name: "", wins: 0, totalPrize: 0, lastPrize: 0 });
+      setLastWinner({ player: "", slot: "" });
+      return;
+    }
 
-        // entries for all tournaments
-        const { data: entriesRaw, error: e1 } = await supabase
-          .from("tournament_entries")
-          .select("tournament_id, seed, player, slot_name, slot_id")
-          .in("tournament_id", ids);
-        if (e1) throw e1;
+    // prefetch all entries & payments for these tournaments
+    const ids = tournaments.map(t => t.id);
+    const { data: entries } = await supabase
+      .from("tournament_entries")
+      .select("id,tournament_id,seed,player:player_name,player_name,slot_name,slot_id")
+      .in("tournament_id", ids)
+      .limit(5000);
 
-        // payments for all tournaments
-        const { data: paysRaw, error: e2 } = await supabase
-          .from("tournament_payments")
-          .select("tournament_id, round_idx, match_idx, side, amount, updated_at")
-          .in("tournament_id", ids);
-        if (e2) throw e2;
+    const { data: pays } = await supabase
+      .from("tournament_payments")
+      .select("*")
+      .in("tournament_id", ids)
+      .limit(10000);
 
-        // group by tournament_id
-        const byTidEntries = new Map();
-        for (const r of entriesRaw || []) {
-          const e = normalizeEntry(r);
-          const arr = byTidEntries.get(e.tournament_id) || [];
-          arr.push(e);
-          byTidEntries.set(e.tournament_id, arr);
-        }
-        const byTidPays = new Map();
-        for (const p of paysRaw || []) {
-          const arr = byTidPays.get(p.tournament_id) || [];
-          arr.push(p);
-          byTidPays.set(p.tournament_id, arr);
-        }
+    const byTournamentEntries = new Map();
+    for (const e of entries || []) {
+      const arr = byTournamentEntries.get(e.tournament_id) || [];
+      arr.push({
+        seed: e.seed,
+        player_name: e.player ?? e.player_name ?? "",
+        slot_name: e.slot_name ?? "",
+        slot_id: e.slot_id ?? null
+      });
+      byTournamentEntries.set(e.tournament_id, arr);
+    }
+    const byTournamentPays = new Map();
+    for (const p of pays || []) {
+      const arr = byTournamentPays.get(p.tournament_id) || [];
+      arr.push(p);
+      byTournamentPays.set(p.tournament_id, arr);
+    }
 
-        // champions per tournament
-        const champions = [];
-        for (const tid of ids) {
-          const champ = computeChampionForTournament(byTidEntries.get(tid) || [], byTidPays.get(tid) || []);
-          if (champ) champions.push({ ...champ, tournament_id: tid });
-        }
+    // winners list [{player, slot, tournament_id}]
+    const winners = [];
+    for (const t of tournaments) {
+      const w = computeTournamentWinner(byTournamentEntries.get(t.id) || [], byTournamentPays.get(t.id) || []);
+      if (w) winners.push({ tournament_id: t.id, player: w.player_name || "", slot: w.slot_name || "" });
+    }
 
-        // Aggregate slot wins
-        const slotWins = new Map();
-        const playerWins = new Map();
-        for (const c of champions) {
-          const sname = c.slot_name || "—";
-          slotWins.set(sname, (slotWins.get(sname) || 0) + 1);
-          const pname = c.player || "—";
-          playerWins.set(pname, (playerWins.get(pname) || 0) + 1);
-        }
+    // Top slots (count wins)
+    const slotCount = new Map();
+    for (const w of winners) slotCount.set(w.slot, (slotCount.get(w.slot) || 0) + 1);
+    const topSlots = [...slotCount.entries()]
+      .sort((a,b) => b[1]-a[1])
+      .slice(0, 3)
+      .map(([name, wins]) => ({ name: name || "—", wins }));
+    setChartData(topSlots);
 
-        // Build chart data (top 12)
-        const chart = [...slotWins.entries()]
-          .map(([name, wins]) => ({ name, wins }))
-          .sort((a, b) => b.wins - a.wins || a.name.localeCompare(b.name))
-          .slice(0, 12);
-        setChartData(chart);
+    // Top player by wins
+    const playerCount = new Map();
+    for (const w of winners) playerCount.set(w.player, (playerCount.get(w.player) || 0) + 1);
+    const topP = [...playerCount.entries()].sort((a,b) => b[1]-a[1])[0];
+    let topPlayerName = topP?.[0] || "";
+    let topPlayerWins = topP?.[1] || 0;
 
-        // Top player
-        if (playerWins.size) {
-          const [name, wins] = [...playerWins.entries()].sort((a, b) => b[1] - a[1])[0];
-          setTopPlayer({ name, wins });
-        } else {
-          setTopPlayer({ name: "—", wins: 0 });
-        }
+    // prizes: try tournament_prizes.position=1, fallback to tournaments.prize_pool
+    const { data: prizeRows } = await supabase
+      .from("tournament_prizes")
+      .select("tournament_id, position, amount")
+      .in("tournament_id", ids)
+      .limit(5000);
 
-        // Last tournament winner (by created_at from rows)
-        const last = [...rows]
-          .filter(Boolean)
-          .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))[0];
-        if (last) {
-          const found = champions.find((c) => c.tournament_id === last.id);
-          setLastWinner({
-            player: found?.player || "—",
-            slot: found?.slot_name || "—",
-          });
-        } else {
-          setLastWinner({ player: "—", slot: "—" });
-        }
-      } catch (e) {
-        // In case of failure, show empty insights
-        setChartData([]);
-        setTopPlayer({ name: "—", wins: 0 });
-        setLastWinner({ player: "—", slot: "—" });
-        // Do not alert here to avoid noise on the listing page
-        console.warn("Insights error:", e?.message || e);
+    const prizeByTournament = new Map();
+    for (const r of prizeRows || []) {
+      if (Number(r.position) === 1) {
+        prizeByTournament.set(r.tournament_id, Number(r.amount) || 0);
       }
-    };
-    run();
-  }, [rows]);
+    }
+    // fallback
+    for (const t of tournaments) {
+      if (!prizeByTournament.has(t.id)) {
+        const v = Number(t.prize_pool);
+        if (Number.isFinite(v)) prizeByTournament.set(t.id, v);
+      }
+    }
+
+    // total prize for top player
+    let totalPrize = 0;
+    for (const w of winners) {
+      if (w.player === topPlayerName) totalPrize += prizeByTournament.get(w.tournament_id) || 0;
+    }
+
+    // last tournament winner (most recent from list that has winner)
+    let last = null;
+    for (const t of tournaments) {
+      const w = winners.find(x => x.tournament_id === t.id);
+      if (w) { last = { ...w, prize: prizeByTournament.get(t.id) || 0 }; break; }
+    }
+
+    setTopPlayer({
+      name: topPlayerName,
+      wins: topPlayerWins,
+      totalPrize,
+      lastPrize: last?.player === topPlayerName ? (last?.prize || 0) : 0,
+    });
+
+    setLastWinner({
+      player: last?.player || "",
+      slot: last?.slot || ""
+    });
+  }
 
   const filtered = React.useMemo(() => {
     const needle = dSearch.trim().toLowerCase();
@@ -544,7 +549,7 @@ export default function TournamentsPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
       {/* Topbar */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-2">
           <Trophy className="h-5 w-5" />
           <h1 className="text-xl font-semibold">{t("title")}</h1>
@@ -568,56 +573,68 @@ export default function TournamentsPage() {
 
       {/* Insights */}
       <div className={`rounded-2xl border ${isDark ? "border-white/10" : "border-zinc-200"} p-4 mb-6`}>
-        <div className="text-lg font-semibold mb-3 flex items-center gap-2">
-          <Trophy className="h-4 w-4" /> {t("insights")}
+        <div className="flex items-center gap-2 mb-3">
+          <Crown className="h-4 w-4" />
+          <div className="text-lg font-semibold">{t("insights")}</div>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 rounded-xl border border-white/10 p-3">
-            <div className="text-sm opacity-70 mb-2">{t("topSlotsAll")}</div>
-            <div style={{ width: "100%", height: 260 }}>
-              <ResponsiveContainer>
-                <BarChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="name"
-                    angle={-15}
-                    textAnchor="end"
-                    interval={0}
-                    height={50}
-                    tick={{ fontSize: 12 }}
-                  />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip
-                    formatter={(v) => [`${v} wins`, "Wins"]}
-                    cursor={{ fill: "rgba(255,255,255,0.06)" }}
-                  />
-                  {/* Azul-visível no dark e light */}
-                  <Bar dataKey="wins" fill="#3b82f6" radius={[6, 6, 0, 0]} />
+        <div className="grid lg:grid-cols-[1fr_360px] gap-4">
+          {/* left: chart */}
+          <div className="rounded-xl border border-white/10 p-3">
+            <div className="text-sm opacity-70 mb-2">{t("topSlots")}</div>
+            <div className="h-[260px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData}>
+                  <XAxis dataKey="name" tick={{ fill: "currentColor" }} />
+                  <YAxis tick={{ fill: "currentColor" }} allowDecimals={false} />
+                  <Tooltip content={<NiceTooltip />} />
+                  <Bar dataKey="wins" radius={[6,6,0,0]}>
+                    {chartData.map((_, i) => (
+                      <Cell key={`cell-${i}`} fill={BAR_COLORS[i % BAR_COLORS.length]} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </div>
 
+          {/* right: cards */}
           <div className="space-y-4">
-            <div className="rounded-xl border border-white/10 p-3">
-              <div className="text-sm opacity-70">{t("topPlayerWins")}</div>
-              <div className="mt-3 text-2xl font-semibold">{topPlayer.name}</div>
-              <div className="opacity-70">{topPlayer.wins} wins</div>
+            <div className="rounded-xl border border-white/10 p-4">
+              <div className="text-sm opacity-70 mb-2">{t("topPlayer")}</div>
+              {topPlayer.name ? (
+                <div className="flex items-center gap-3">
+                  <Avatar name={topPlayer.name} />
+                  <div className="min-w-0">
+                    <div className="text-xl font-semibold truncate">{topPlayer.name}</div>
+                    <div className="text-sm opacity-80">{topPlayer.wins} {t("wins")}</div>
+                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1">
+                        <div className="opacity-70">{t("totalPrize")}</div>
+                        <div className="font-semibold">{fmtMoney(topPlayer.totalPrize)}</div>
+                      </div>
+                      <div className="rounded-lg border border-white/10 bg-white/5 px-2 py-1">
+                        <div className="opacity-70">{t("lastPrize")}</div>
+                        <div className="font-semibold">{fmtMoney(topPlayer.lastPrize)}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm opacity-60">—</div>
+              )}
             </div>
 
-            <div className="rounded-xl border border-white/10 p-3">
-              <div className="text-sm opacity-70">{t("lastTournamentWinner")}</div>
-              <div className="mt-2 text-sm">
-                <div><span className="opacity-70">{t("player")}:</span> <span className="font-semibold">{lastWinner.player}</span></div>
-                <div><span className="opacity-70">{t("slot")}:</span> <span className="font-semibold">{lastWinner.slot}</span></div>
-              </div>
+            <div className="rounded-xl border border-white/10 p-4">
+              <div className="text-sm opacity-70 mb-2">{t("lastWinner")}</div>
+              <div className="text-sm"><span className="opacity-70">{t("player")}: </span><span className="font-medium">{lastWinner.player || "—"}</span></div>
+              <div className="text-sm"><span className="opacity-70">{t("slot")}: </span><span className="font-medium">{lastWinner.slot || "—"}</span></div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Tabela */}
+      {/* Table */}
       <div className={`rounded-xl border overflow-hidden ${isDark ? "border-white/10" : "border-zinc-200"}`}>
         <div className={`${isDark ? "bg-white/[0.04]" : "bg-zinc-50"} grid grid-cols-12 items-center px-4 py-3 text-xs font-semibold`}>
           <div className="col-span-6"><HeaderCell k="title">{t("name")}</HeaderCell></div>
@@ -634,7 +651,7 @@ export default function TournamentsPage() {
 
         {err && !busy && <div className="px-4 py-3 text-sm text-red-400">{err}</div>}
         {!busy && filtered.length === 0 && !err && (
-          <div className="px-4 py-6 text-sm opacity-70"> {t("empty")} </div>
+          <div className="px-4 py-6 text-sm opacity-70">{t("empty")}</div>
         )}
 
         {filtered.map((r) => {
@@ -647,13 +664,11 @@ export default function TournamentsPage() {
               key={r.id}
               className={`grid grid-cols-12 items-center px-4 py-3 border-t ${isDark ? "border-white/10" : "border-zinc-200"}`}
             >
-              {/* Title */}
               <div className="col-span-6 min-w-0 pl-2">
                 <div className="font-medium truncate">{title}</div>
                 <div className="text-xs opacity-70 truncate">{r.description || ""}</div>
               </div>
 
-              {/* Status */}
               <div className="col-span-2 text-center">
                 <span
                   className={`text-xs font-semibold rounded-full px-2 py-0.5 border ${
@@ -666,20 +681,18 @@ export default function TournamentsPage() {
                       : "border-white/20 text-white/70"
                   }`}
                 >
-                  {DICT.en[status] || status}
+                  {t(status)}
                 </span>
               </div>
 
-              {/* Prize pool */}
               <div className={`col-span-2 text-right ${numCls}`}>{prize != null ? fmtMoney(prize) : "—"}</div>
 
-              {/* Actions */}
               <div className="col-span-2 flex items-center justify-end gap-2">
                 <Button
                   variant="outline"
                   size="icon"
                   className="h-8 w-8"
-                  title={DICT.en.open}
+                  title={t("open")}
                   onClick={() => { window.location.hash = `#/tournaments/${r.id}`; }}
                 >
                   <Eye className="h-4 w-4" />
@@ -715,11 +728,10 @@ export default function TournamentsPage() {
         onClose={() => setModalOpen(false)}
         onSaved={load}
       />
-
       <Confirm
         open={confirmOpen}
         title={t("delete")}
-        body={t("areYouSure")}
+        body="Are you sure you want to delete this tournament? This cannot be undone."
         confirmText={t("confirm")}
         cancelText={t("cancel")}
         onConfirm={confirmDelete}
