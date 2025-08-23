@@ -48,95 +48,121 @@ function Kpi({ icon, label, value }) {
   );
 }
 
-/* ───────────────────────── hooks ───────────────────────── */
+/* ───────────────────────── debounce ───────────────────────── */
 function useDebounced(v, delay) {
   const [s, setS] = React.useState(v);
-  React.useEffect(function () {
-    const id = setTimeout(function () { setS(v); }, delay || 300);
-    return function () { clearTimeout(id); };
+  React.useEffect(function(){
+    const id = setTimeout(function(){ setS(v); }, delay || 300);
+    return function(){ clearTimeout(id); };
   }, [v, delay]);
   return s;
 }
 
-/* ───────────────────────── Remote Slot Picker (Supabase) ───────────────────────── */
-// Ajusta aqui os nomes das tabelas/campos do teu catálogo de slots, se necessário.
-const SLOT_TABLES = [
-  { table: "slots", nameField: "name", providerField: "provider", imageField: "image" },
-  { table: "games", nameField: "title", providerField: "provider", imageField: "image" },
-  { table: "casino_slots", nameField: "name", providerField: "provider", imageField: "image" },
-];
+/* ───────────────────────── SlotsAutocomplete (igual ao tournament-detail) ───────────────────────── */
+function SlotsAutocomplete({ value, onSelect, placeholder = "Add a Slot" }) {
+  const { isDark } = useTheme();
+  const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState(
+    typeof value === "object" && value !== null
+      ? value.name ?? ""
+      : typeof value === "string"
+      ? value
+      : ""
+  );
+  const [items, setItems] = React.useState([]);
+  const [errorMsg, setErrorMsg] = React.useState("");
+  const boxRef = React.useRef(null);
+  const dQuery = useDebounced(query, 250);
 
-async function fetchSlotsFromAnyTable(q) {
-  const query = String(q || "").trim();
-  for (let i = 0; i < SLOT_TABLES.length; i++) {
-    const cfg = SLOT_TABLES[i];
-    try {
-      let req = supabase.from(cfg.table).select("*").limit(20);
-      if (query) req = req.ilike(cfg.nameField, `%${query}%`);
-      const { data, error } = await req;
-      if (error) throw error;
-      if (Array.isArray(data) && data.length) {
-        return data.map(function (r) {
-          return {
-            id: r.id,
-            name: r[cfg.nameField] || "",
-            provider: r[cfg.providerField] || "",
-            image: r[cfg.imageField] || null,
-            _table: cfg.table,
-          };
-        });
+  const currentValueName = React.useMemo(
+    () => (typeof value === "object" && value !== null ? value.name ?? "" : typeof value === "string" ? value : ""),
+    [value]
+  );
+  React.useEffect(() => setQuery(currentValueName), [currentValueName]);
+
+  const commitFreeText = React.useCallback(() => {
+    const q = (query || "").trim();
+    const cur = (currentValueName || "").trim();
+    if (!q || q === cur) { setOpen(false); return; }
+    onSelect && onSelect({ id: null, name: q });
+    setOpen(false);
+  }, [onSelect, query, currentValueName]);
+
+  React.useEffect(() => {
+    const onDoc = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) { setOpen(false); commitFreeText(); } };
+    const onEsc = (e) => { if (e.key === "Escape") { setOpen(false); commitFreeText(); } };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onEsc);
+    return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onEsc); };
+  }, [commitFreeText]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async function run(){
+      const q = (dQuery || "").trim();
+      setErrorMsg("");
+      if (q.length < 3) { if (!cancelled) setItems([]); return; }
+      try {
+        const { data, error } = await supabase
+          .from("slots_catalog")
+          .select('id, "NAME", "PROVIDER", "THUMBNAIL"')
+          .or(`NAME.ilike.%${q}%,PROVIDER.ilike.%${q}%`)
+          .order("NAME", { ascending: true })
+          .limit(12);
+        if (error) throw error;
+        if (!cancelled) setItems(data || []);
+      } catch (e) {
+        if (!cancelled) { setErrorMsg(e?.message || "Erro na pesquisa."); setItems([]); }
       }
-    } catch (e) {
-      // tenta próxima tabela
-    }
-  }
-  return [];
-}
-
-function RemoteSlotPicker({ placeholder, value, onChange }) {
-  const [q, setQ] = React.useState("");
-  const dq = useDebounced(q, 250);
-  const [opts, setOpts] = React.useState([]);
-  const [busy, setBusy] = React.useState(false);
-
-  React.useEffect(function () {
-    let alive = true;
-    (async function () {
-      setBusy(true);
-      const res = await fetchSlotsFromAnyTable(dq);
-      if (!alive) return;
-      setOpts(res);
-      setBusy(false);
     })();
-    return function () { alive = false; };
-  }, [dq]);
+    return () => { cancelled = true; };
+  }, [dQuery]);
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5">
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10">
-        <Search className="h-4 w-4 opacity-60" />
-        <input value={q} onChange={function(e){ setQ(e.target.value); }} placeholder={placeholder || "Add a Slot"} className="flex-1 bg-transparent outline-none text-sm" />
+    <div ref={boxRef} className="relative">
+      <div className="relative">
+        <Input
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          placeholder={placeholder}
+          className="h-11 rounded-xl bg-zinc-900/60 border-white/10 text-white pl-9 focus-visible:ring-1 focus-visible:ring-sky-400 placeholder:text-white/40"
+        />
+        <Search className="h-4 w-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-white/60" />
       </div>
-      <div className="p-2 grid gap-1 max-h-[280px] overflow-auto">
-        {busy ? (
-          <div className="text-xs opacity-60 px-2 py-1">Loading…</div>
-        ) : opts.length === 0 ? (
-          <div className="text-xs opacity-60 px-2 py-1">No results…</div>
-        ) : (
-          opts.map(function (s) {
-            const isSel = value && value.name === s.name;
-            return (
-              <button key={(s._table || "t") + ":" + s.id + ":" + s.name}
-                onClick={function(){ onChange && onChange(s); }}
-                className={cn("text-left px-2 py-2 rounded-lg hover:bg-white/10", isSel && "ring-1 ring-sky-400/40")}
-              >
-                <div className="font-medium">{s.name}</div>
-                <div className="text-xs opacity-60">{s.provider || ""}</div>
-              </button>
-            );
-          })
-        )}
-      </div>
+      {open && (
+        <div className={[
+          "absolute z-40 mt-2 w-full rounded-xl overflow-hidden border",
+          isDark ? "bg-zinc-950/95 border-white/10 shadow-2xl" : "bg-white border-zinc-200 shadow-xl",
+        ].join(" ")}
+        >
+          {errorMsg && <div className="px-3 py-2 text-sm text-red-400">{errorMsg}</div>}
+          {!errorMsg && items.length === 0 ? (
+            <div className="px-3 py-2 text-sm opacity-70">Sem resultados. Escreve o nome e clica fora para usar o texto.</div>
+          ) : (
+            <ul className="max-h-72 overflow-auto divide-y divide-white/5">
+              {items.map((it) => (
+                <li key={it.id}>
+                  <button
+                    className="w-full text-left px-3 py-2 hover:bg-white/5 transition flex items-center gap-3"
+                    onClick={() => { onSelect && onSelect({ id: it.id, name: it["NAME"], provider: it["PROVIDER"], thumbnail: it["THUMBNAIL"] }); setQuery(it["NAME"]); setOpen(false); }}
+                  >
+                    {it["THUMBNAIL"] ? (
+                      <img src={it["THUMBNAIL"]} alt="" className="h-6 w-6 rounded object-contain" />
+                    ) : (
+                      <div className="h-6 w-6 rounded bg-white/10" />
+                    )}
+                    <div className="min-w-0">
+                      <div className="truncate text-sm">{it["NAME"]}</div>
+                      <div className="text-[11px] opacity-60 truncate">{it["PROVIDER"] || "—"}</div>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -168,13 +194,13 @@ export default function BattleView() {
   const [buyCost, setBuyCost] = React.useState(0);
 
   // entries
-  const [sideA, setSideA] = React.useState(null); // {name, provider}
+  const [sideA, setSideA] = React.useState(null); // {id,name,provider,thumbnail}
   const [sideB, setSideB] = React.useState(null);
 
   // payments
   const [pays, setPays] = React.useState([]); // battle_payments
 
-  const plannedBuys = Math.max(1, Number(bestOf) || 1) * 2; // por battle 1v1
+  const plannedBuys = Math.max(1, Number(bestOf) || 1) * 2; // 1 buy por lado por round
 
   const totalPay = (pays || []).reduce(function (s, r) { return s + Number(r.amount || 0); }, 0);
   const totalCost = Number(buyCost || 0) * plannedBuys;
@@ -208,11 +234,11 @@ export default function BattleView() {
       setBuyCost(Number(battle && battle.buy_cost) || 0);
 
       // entries L/R
-      const { data: es } = await supabase.from("battle_entries").select("seed, slot_name, player_name").eq("battle_id", id);
+      const { data: es } = await supabase.from("battle_entries").select("seed, slot_name, slot_id, player_name").eq("battle_id", id);
       const A = (es || []).find(function(e){return String(e.seed).toUpperCase()==="A";});
       const B = (es || []).find(function(e){return String(e.seed).toUpperCase()==="B";});
-      setSideA(A ? { name: A.slot_name || "", provider: "" } : null);
-      setSideB(B ? { name: B.slot_name || "", provider: "" } : null);
+      setSideA(A ? { id: A.slot_id ?? null, name: A.slot_name || "" } : null);
+      setSideB(B ? { id: B.slot_id ?? null, name: B.slot_name || "" } : null);
 
       // payments
       const { data: ps } = await supabase.from("battle_payments").select("*").eq("battle_id", id).order("buy_idx", { ascending: true });
@@ -241,8 +267,8 @@ export default function BattleView() {
     if (!battleId) return;
     try {
       const rows = [];
-      if (sideA && sideA.name) rows.push({ battle_id: battleId, seed: "A", player_name: null, slot_name: sideA.name });
-      if (sideB && sideB.name) rows.push({ battle_id: battleId, seed: "B", player_name: null, slot_name: sideB.name });
+      if (sideA && sideA.name) rows.push({ battle_id: battleId, seed: "A", player_name: null, slot_name: sideA.name, slot_id: sideA.id ?? null });
+      if (sideB && sideB.name) rows.push({ battle_id: battleId, seed: "B", player_name: null, slot_name: sideB.name, slot_id: sideB.id ?? null });
       if (rows.length === 0) return;
       await supabase.from("battle_entries").upsert(rows, { onConflict: "battle_id,seed" });
       await load(battleId);
@@ -368,11 +394,11 @@ export default function BattleView() {
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <div className="text-xs opacity-70 mb-2 flex items-center gap-2"><Shield className="h-4 w-4" /> Side A</div>
-                  <RemoteSlotPicker value={sideA} onChange={setSideA} />
+                  <SlotsAutocomplete value={sideA} onSelect={setSideA} placeholder="Add a Slot" />
                 </div>
                 <div>
                   <div className="text-xs opacity-70 mb-2 flex items-center gap-2"><Users className="h-4 w-4" /> Side B</div>
-                  <RemoteSlotPicker value={sideB} onChange={setSideB} />
+                  <SlotsAutocomplete value={sideB} onSelect={setSideB} placeholder="Add a Slot" />
                 </div>
               </div>
               <div className="mt-4 flex justify-end">
