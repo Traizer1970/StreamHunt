@@ -31,6 +31,9 @@ import TournamentDetail from "@/tournament-detail.jsx";
 import BattlesPage from "./battlespage.jsx";
 import BattleView  from "./battle-view.jsx";
 
+// >>> NOVO: Overlay do widget
+import WidgetOverlay from "./widget-overlay.jsx";
+
 /* =================== CONFIG =================== */
 const TELEGRAM_URL = "https://t.me/gsousa70";
 const DISCORD_URL = import.meta.env.VITE_DISCORD_URL || "https://discord.gg/your-invite";
@@ -306,7 +309,18 @@ const NavLink = ({ to, current, onClick, children }) => {
 /* ---------- Theme toggle (FIXED) ---------- */
 function ThemeIconToggle() {
   const { isDark, toggle } = useTheme();
-
+  return (
+    <button
+      onClick={toggle}
+      className={cn(
+        "p-2 rounded-xl border transition",
+        isDark ? "border-white/10 hover:bg-white/5" : "border-zinc-300 hover:bg-zinc-100"
+      )}
+      title={isDark ? "Light mode" : "Dark mode"}
+    >
+      {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+    </button>
+  );
 }
 
 /* ---------- Quick stats (kept for future use) ---------- */
@@ -1441,6 +1455,12 @@ export default function App() {
   const huntDetailMatch = route.match(/^\/?hunts\/([^\/?#]+)$/);
   const tournamentDetailMatch = route.match(/^\/?tournaments\/([^\/?#]+)$/);
 
+  const isDetailRoute =
+    !!huntDetailMatch ||
+    !!tournamentDetailMatch ||
+    route.startsWith("battles/") ||
+    route.startsWith("overlay/battle/"); // >>> NOVO: overlay
+
   let content = null;
 
   if (huntDetailMatch) {
@@ -1449,6 +1469,9 @@ export default function App() {
   } else if (tournamentDetailMatch) {
     const tournamentId = tournamentDetailMatch[1];
     content = <TournamentDetail tournamentId={tournamentId} />;
+  } else if (route.startsWith("overlay/battle/")) {
+    // >>> NOVO: rota do overlay (ex.: #/overlay/battle/1)
+    content = <WidgetOverlay />;
   } else {
     content = (
       <>
@@ -1466,23 +1489,12 @@ export default function App() {
         {route === "battles" && <BattlesPage />}
         {route.startsWith("battles/") && <BattleView />}
 
-        {/* fallback */}
-        {!(route === "home" ||
-           route === "widgets" ||
-           route === "games" ||
-           route === "premium" ||
-           route === "auth" ||
-           route === "dashboard" ||
-           route === "settings" ||
-           route === "about" ||
-           route === "hunts" ||
-           route === "tournaments" ||
-           route === "battles" ||
-           route === "terms") &&
-           !route.startsWith("hunts/") &&
-           !route.startsWith("tournaments/") &&
-           route === "battles" || route.startsWith("battles/") ||  // <-- acrescenta isto
-           <Home goPremium={() => navigate("premium")} navigate={navigate} />}
+        {/* fallback limpo */}
+        {!(
+          [
+            "home","widgets","games","premium","auth","dashboard","settings","about","hunts","tournaments","battles","terms"
+          ].includes(route) || isDetailRoute
+        ) && <Home goPremium={() => navigate("premium")} navigate={navigate} />}
       </>
     );
   }
