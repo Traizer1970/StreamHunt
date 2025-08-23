@@ -1,4 +1,4 @@
-// /src/tournament-detail.jsx
+// src/tournament-detail.jsx
 import React from "react";
 import { useTheme } from "@/contexts/auth-context";
 import { supabase } from "@/lib/supabase";
@@ -33,7 +33,7 @@ const fmtMoney = (n) =>
     : "—";
 
 const toNum = (v) => {
-  const n = Number(String(v).replace(",", "."));
+  const n = Number(String(v ?? "").replace(",", "."));
   return Number.isFinite(n) ? n : null;
 };
 
@@ -116,10 +116,25 @@ const ceilPow2 = (n) => {
   return p;
 };
 
+// pequeno debounce para gravar na BD sem spammar
+const debounce = (fn, ms = 450) => {
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), ms);
+  };
+};
+
 /* labels PT */
-const ROUND_LABELS = ["16-avos", "Oitavos", "Quartos", "Semi-finais", "Final"];
+const ROUND_LABELS = ["Round of 32", "Round of 16", "Quarter Finals", "Semi Finais", "Final"];
 const labelsForTotalRounds = (total) => ROUND_LABELS.slice(ROUND_LABELS.length - total);
 const roundTitle = (idx, total) => labelsForTotalRounds(total)[idx];
+
+/* ───────────────────── limites BD ─────────────────────
+  A tua BD tem um CHECK que aceita seeds até “H”.
+  Se mudares o constraint no Supabase, altera isto também.
+*/
+const MAX_SEED_LETTER = "Z";
 
 /* ───────────────────── Toast ───────────────────── */
 function Toast({ show, kind, text }) {
@@ -147,7 +162,7 @@ function SeedChip({ label, active, onClick }) {
     <button
       onClick={onClick}
       className={[
-        "h-8 w-8 rounded-full grid place-items-center text-xs font-bold transition",
+        "h-8 px-3 rounded-full grid place-items-center text-xs font-bold transition",
         active
           ? "bg-indigo-500 text-white shadow ring-2 ring-indigo-400/40"
           : "bg-white/5 text-white/80 border border-white/10 hover:bg-white/10",
@@ -159,16 +174,22 @@ function SeedChip({ label, active, onClick }) {
     </button>
   );
 }
-function SeedChipsAdd({ list, value, onSelect, onAdd }) {
+function SeedChipsAdd({ list, value, onSelect, onAdd, canAdd = true }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
       {list.map((s) => (
         <SeedChip key={`seedchip-${s}`} label={s} active={s === value} onClick={() => onSelect(s)} />
       ))}
       <button
-        onClick={onAdd}
-        className="h-8 w-8 rounded-full grid place-items-center border border-white/10 bg-white/5 hover:bg-white/10 text-white/80"
-        title="Adicionar seed"
+        onClick={() => canAdd && onAdd()}
+        disabled={!canAdd}
+        className={[
+          "h-8 w-8 rounded-full grid place-items-center border",
+          canAdd
+            ? "border-white/10 bg-white/5 hover:bg-white/10 text-white/80"
+            : "border-white/10 bg-white/5 opacity-40 cursor-not-allowed",
+        ].join(" ")}
+        title={canAdd ? "Adicionar seed" : "Limite de seeds atingido"}
         type="button"
       >
         <Plus className="h-4 w-4" />
@@ -179,11 +200,11 @@ function SeedChipsAdd({ list, value, onSelect, onAdd }) {
 
 function PaymentField({ value, onChange, onClear }) {
   return (
-    <div className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2 py-1">
+    <div className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2 py-0.5 h-8">
       <span className="text-[11px] opacity-70">€</span>
       <input
         inputMode="decimal"
-        className="bg-transparent outline-none text-xs w-24 placeholder-white/40"
+        className="bg-transparent outline-none text-xs w-20 placeholder-white/40"
         placeholder="Pago (€)"
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -198,7 +219,7 @@ function PaymentField({ value, onChange, onClear }) {
 }
 
 /* ─────────────────── Slot search ─────────────────── */
-function SlotsAutocomplete({ value, onSelect, placeholder = "Slot / Jogo" }) {
+function SlotsAutocomplete({ value, onSelect, placeholder = "ex.: Le King" }) {
   const { isDark } = useTheme();
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState(
@@ -343,7 +364,7 @@ function SlotsAutocomplete({ value, onSelect, placeholder = "Slot / Jogo" }) {
                       <img
                         src={it["THUMBNAIL"]}
                         alt=""
-                        className="h-6 w-6 rounded object-cover"
+                        className="h-6 w-6 rounded object-contain"
                       />
                     ) : (
                       <div className="h-6 w-6 rounded bg-white/10" />
@@ -363,72 +384,40 @@ function SlotsAutocomplete({ value, onSelect, placeholder = "Slot / Jogo" }) {
   );
 }
 
-/* ─────────────────── tiny display card (seed) ─────────────────── */
-function BuysToggle({ value = 1, onChange }) {
+/* ─────────────────── Seed row (lista esquerda) ─────────────────── */
+function SeedRow({ seed, entry, onClick, onDelete }) {
   return (
-    <div className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 p-1">
-      {[1, 2, 3].map((n) => (
-        <button
-          key={n}
-          type="button"
-          onClick={() => onChange(n)}
-          className={[
-            "h-6 w-6 text-xs font-bold rounded grid place-items-center",
-            n === value ? "bg-indigo-500 text-white" : "text-white/70 hover:bg-white/10",
-          ].join(" ")}
-          title={`${n} bonus buy(s)`}
-        >
-          {n}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function SeedCard({ seed, entry, buys, onChangeBuys, onClick, onDelete }) {
-  return (
-    <div
-      className="relative rounded-xl border border-white/10 bg-zinc-950/60 p-3 hover:bg-white/5 transition cursor-pointer"
-      onClick={onClick}
-    >
-      <div className="absolute -left-2 -top-2 h-6 w-6 rounded-full bg-indigo-500 shadow ring-2 ring-black/20 text-white grid place-items-center text-[10px] font-extrabold">
+    <div className="group grid grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 hover:bg-white/10 overflow-hidden">
+      <div className="h-7 w-7 rounded-full bg-indigo-500 text-white grid place-items-center text-[10px] font-extrabold">
         {seed}
       </div>
 
-      <div className="pl-1 flex items-center gap-3">
+      <button className="flex items-center gap-3 text-left min-w-0" onClick={onClick} type="button">
         {entry?.thumbnail ? (
-          <img
-            src={entry.thumbnail}
-            alt=""
-            className="h-10 w-10 rounded object-cover flex-none"
-            loading="lazy"
-          />
+          <div className="h-9 w-9 rounded overflow-hidden grid place-items-center flex-none">
+            <img src={entry.thumbnail} alt="" className="h-full w-full object-cover" />
+          </div>
         ) : (
-          <div className="h-10 w-10 rounded bg-white/10 flex-none" />
+          <div className="h-9 w-9 rounded bg-white/10 flex-none" />
         )}
-
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold truncate">{entry?.player_name || "—"}</div>
           <div className="text-[11px] opacity-70 truncate">{entry?.slot_name || "—"}</div>
-          <div className="mt-1 flex items-center gap-2">
-            {entry?.buy_cost != null && (
-              <div className="text-[11px] opacity-70 flex items-center gap-1">
-                <Coins className="h-3.5 w-3.5" />
-                {fmtMoney(entry.buy_cost)}
-              </div>
-            )}
-            <BuysToggle value={buys || 1} onChange={onChangeBuys} />
-          </div>
+          {entry?.buy_cost != null && (
+            <div className="mt-1 text-[11px] opacity-70 flex items-center gap-1">
+              <Coins className="h-3.5 w-3.5" />
+              {fmtMoney(entry.buy_cost)}
+            </div>
+          )}
         </div>
+      </button>
 
+      <div className="flex items-center gap-2">
         <button
-          className="text-white/50 hover:text-rose-300"
+          className="opacity-60 hover:opacity-100 text-rose-300"
           title="Eliminar seed"
           type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete?.();
-          }}
+          onClick={onDelete}
         >
           <Trash2 className="h-4 w-4" />
         </button>
@@ -438,17 +427,10 @@ function SeedCard({ seed, entry, buys, onChangeBuys, onClick, onDelete }) {
 }
 
 /* ───────────────── bracket helpers ───────────────── */
-const bothNumbers = (a, b) => toNum(a) != null && toNum(b) != null;
-function winnerSide(leftPay, rightPay) {
-  if (!bothNumbers(leftPay, rightPay)) return null;
-  const L = toNum(leftPay);
-  const R = toNum(rightPay);
-  if (L > R) return "L";
-  if (R > L) return "R";
-  return null;
-}
-function multiplier(pay, buy, buysCount = 1) {
-  const p = toNum(pay);
+const DEFAULT_BUYS = 3;
+
+function multiplier(totalPay, buy, buysCount) {
+  const p = toNum(totalPay);
   const b = toNum(buy);
   if (p == null || b == null || b === 0) return null;
   const denom = b * Math.max(1, Number(buysCount || 1));
@@ -458,31 +440,48 @@ function multiplier(pay, buy, buysCount = 1) {
 
 /* ───────────────── battle UI ───────────────── */
 function BattleSide({
-  side,           // "L" | "R"
-  seedLabel,      // A/B/...
+  side,            // "L" | "R"
+  seedLabel,
   entry,
-  payValue,
-  onPayChange,
-  onClear,
-  isWinner,       // true/false/null
-  showMult,       // "12.50" | null
+  values = [],
+  setValueAt,
+  clearAt,
+  isWinner,        // true | false | null
+  multText,        // string | null
+  totalEur,        // number | null
+  badgeGreen,      // boolean | null
+  neutral = false, // força neutro quando ninguém jogou
 }) {
-  const bothColored = isWinner !== null; // só pinta quando existe vencedor
-  const base = "relative rounded-2xl border p-4 transition";
-  const color =
-    bothColored && isWinner === true
-      ? "bg-emerald-600/12 border-emerald-400/40"
-      : bothColored && isWinner === false
-      ? "bg-rose-600/12 border-rose-400/30"
-      : "bg-white/5 border-white/10";
+  const base =
+    "relative rounded-2xl border p-5 pt-8 pb-12 transition bg-white/5 overflow-visible";
 
-  const row = side === "R" ? "flex flex-row-reverse items-center gap-4" : "flex items-center gap-4";
+  const variant = neutral
+    ? "ring-0 border-white/10"
+    : isWinner === true
+    ? "ring-2 ring-emerald-400/60 border-white/10"
+    : isWinner === false
+    ? "ring-2 ring-rose-400/60 border-white/10"
+    : "ring-0 border-white/10";
+
+  const loserOpacity = !neutral && isWinner === false ? " opacity-60" : "";
+
+  const padByThumb = side === "R" ? "pr-[88px]" : "pl-[88px]";
+  const row =
+    side === "R"
+      ? `flex flex-row-reverse items-stretch gap-5 ${padByThumb}`
+      : `flex items-stretch gap-5 ${padByThumb}`;
   const textAlign = side === "R" ? "text-right" : "text-left";
   const just = side === "R" ? "justify-end" : "justify-start";
 
+  const badgeClass =
+    badgeGreen === null
+      ? "bg-sky-500/15 border-sky-400/40 text-sky-200"
+      : badgeGreen
+      ? "bg-emerald-600/20 border-emerald-400/50 text-emerald-200"
+      : "bg-rose-600/20 border-rose-400/50 text-rose-200";
+
   return (
-    <div className={`${base} ${color}`}>
-      {/* badge da seed, uniforme nos dois lados */}
+    <div className={`${base} ${variant}${loserOpacity}`}>
       {seedLabel ? (
         <div
           className={[
@@ -495,78 +494,133 @@ function BattleSide({
         </div>
       ) : null}
 
-      <div className={row}>
-        {/* thumb SEM corte */}
-        <div className="h-14 w-14 rounded bg-white/10 overflow-hidden flex-none grid place-items-center">
-          {entry?.thumbnail ? (
-            <img src={entry.thumbnail} alt="" className="h-full w-full object-contain" />
-          ) : (
-            <div className="h-14 w-14" />
-          )}
+      {entry?.thumbnail && (
+        <div className={`absolute top-4 ${side === "R" ? "right-4" : "left-4"} z-10`} aria-hidden="true">
+          <div className="h-16 w-16 rounded-lg overflow-hidden shadow-md">
+            <img src={entry.thumbnail} alt="" className="h-full w-full object-cover object-bottom" />
+          </div>
         </div>
+      )}
 
+      <div className={row}>
         <div className={`min-w-0 flex-1 ${textAlign}`}>
           <div className="text-sm font-semibold truncate">{entry?.player_name || "—"}</div>
           <div className="text-[11px] opacity-70 truncate">{entry?.slot_name || "—"}</div>
 
-          <div className={`mt-3 flex items-center gap-2 ${just}`}>
-            <PaymentField value={payValue} onChange={onPayChange} onClear={onClear} />
-            {showMult && (
-              <span className="px-2 py-1 rounded-lg text-[11px] font-semibold border bg-sky-500/15 border-sky-400/40 text-sky-200">
-                × {showMult}
-              </span>
-            )}
+          <div className={`mt-4 flex flex-wrap items-center gap-3 ${just}`}>
+            {Array.from({ length: Math.max(1, values.length || 1) }).map((_, i) => (
+              <PaymentField
+                key={`pay-${side}-${i}`}
+                value={values[i] ?? ""}
+                onChange={(v) => setValueAt(i, v)}
+                onClear={() => clearAt(i)}
+              />
+            ))}
           </div>
         </div>
+      </div>
+
+      <div className="absolute bottom-3 left-5">
+        <span className={`px-2 py-1 rounded-lg text-[11px] font-semibold border ${badgeClass}`}>
+          × {multText ?? "0"}
+        </span>
+      </div>
+      <div className="absolute bottom-3 right-5">
+        <span className={`px-2 py-1 rounded-lg text-[11px] font-semibold border ${badgeClass}`}>
+          {totalEur != null ? fmtMoney(totalEur) : fmtMoney(0)}
+        </span>
       </div>
     </div>
   );
 }
 
-function MatchRow({
-  roundIndex,
-  matchIndex,
-  match,
-  payments,
-  setPay,
-  buysForSeed,
-}) {
-  const keyL = `R${roundIndex}M${matchIndex}-L`;
-  const keyR = `R${roundIndex}M${matchIndex}-R`;
-  const payL = payments[keyL] ?? "";
-  const payR = payments[keyR] ?? "";
+function MatchRow({ roundIndex, matchIndex, match, payments, setPay, buysForSeed }) {
+  const baseKey = `R${roundIndex}M${matchIndex}`;
 
-  const both = bothNumbers(payL, payR);
-  const w = winnerSide(payL, payR);
+  const nL = Math.max(1, buysForSeed[match.leftSeed] || 3);
+  const nR = Math.max(1, buysForSeed[match.rightSeed] || 3);
 
-  const multL = multiplier(payL, match.left?.buy_cost, buysForSeed[match.leftSeed] || 1);
-  const multR = multiplier(payR, match.right?.buy_cost, buysForSeed[match.rightSeed] || 1);
+  const keysL = Array.from({ length: nL }, (_, i) => `${baseKey}-L-B${i + 1}`);
+  const keysR = Array.from({ length: nR }, (_, i) => `${baseKey}-R-B${i + 1}`);
+
+  const paysL = keysL.map((k) => payments[k] ?? "");
+  const paysR = keysR.map((k) => payments[k] ?? "");
+
+  const toSum = (arr) => arr.reduce((a, v) => a + (toNum(v) || 0), 0);
+  const sumL = toSum(paysL);
+  const sumR = toSum(paysR);
+
+  const filled = (arr, expected) => arr.length === expected && arr.every((v) => toNum(v) != null);
+  const filledL = filled(paysL, nL);
+  const filledR = filled(paysR, nR);
+  const bothReady = filledL && filledR;
+
+  let winner = null;
+  if (bothReady) {
+    if (sumL > sumR) winner = "L";
+    else if (sumR > sumL) winner = "R";
+  }
+
+  const parseMoney = (v) => {
+    if (v == null) return null;
+    const s = String(v).replace(/[^\d.,-]/g, "").replace(",", ".");
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const buyL = parseMoney(match.left?.buy_cost);
+  const buyR = parseMoney(match.right?.buy_cost);
+
+  const baseBetL = buyL != null ? buyL / 100 : null;
+  const baseBetR = buyR != null ? buyR / 100 : null;
+
+  const multL = baseBetL != null && sumL > 0 ? sumL / baseBetL : null;
+  const multR = baseBetR != null && sumR > 0 ? sumR / baseBetR : null;
+
+  const multTextL = multL != null ? Math.floor(multL).toString() : null;
+  const multTextR = multR != null ? Math.floor(multR).toString() : null;
+
+  const hasAnyL = paysL.some((v) => (toNum(v) || 0) > 0);
+  const hasAnyR = paysR.some((v) => (toNum(v) || 0) > 0);
+  const neutralL = !hasAnyL;
+  const neutralR = !hasAnyR;
+
+  const spendL = buyL != null ? buyL * nL : null;
+  const spendR = buyR != null ? buyR * nR : null;
+  const greenL = hasAnyL ? (multL != null && multL >= 300) || (spendL != null && sumL >= spendL) : null;
+  const greenR = hasAnyR ? (multR != null && multR >= 300) || (spendR != null && sumR >= spendR) : null;
 
   const title = `${match.leftSeed || "—"} × ${match.rightSeed || "—"}`;
 
   return (
     <div className="space-y-2">
       <div className="text-xs font-semibold opacity-70">{title}</div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-6">
         <BattleSide
           side="L"
           seedLabel={match.leftSeed}
           entry={match.left}
-          payValue={payL}
-          onPayChange={(v) => setPay(keyL, v)}
-          onClear={() => setPay(keyL, "")}
-          isWinner={both ? w === "L" : null}
-          showMult={multL}
+          values={paysL}
+          setValueAt={(i, v) => setPay(keysL[i], v)}
+          clearAt={(i) => setPay(keysL[i], "")}
+          isWinner={bothReady ? winner === "L" : null}
+          multText={multTextL}
+          totalEur={sumL}
+          badgeGreen={greenL}
+          neutral={neutralL}
         />
         <BattleSide
           side="R"
           seedLabel={match.rightSeed}
           entry={match.right}
-          payValue={payR}
-          onPayChange={(v) => setPay(keyR, v)}
-          onClear={() => setPay(keyR, "")}
-          isWinner={both ? w === "R" : null}
-          showMult={multR}
+          values={paysR}
+          setValueAt={(i, v) => setPay(keysR[i], v)}
+          clearAt={(i) => setPay(keysR[i], "")}
+          isWinner={bothReady ? winner === "R" : null}
+          multText={multTextR}
+          totalEur={sumR}
+          badgeGreen={greenR}
+          neutral={neutralR}
         />
       </div>
     </div>
@@ -602,17 +656,14 @@ export default function TournamentDetail({ tournamentId }) {
   const [knownCols, setKnownCols] = React.useState(new Set());
   const hasCol = React.useCallback((c) => !!c && knownCols.has(c), [knownCols]);
 
-  // seeds locais “fantasma”
+  // seeds “fantasma”
   const [ghostSeeds, setGhostSeeds] = React.useState([]);
   const [seed, setSeed] = React.useState("A");
 
-  // por seed: número de bonus buys (1–3)
+  // nº bonus buys por seed
   const [buysForSeed, setBuysForSeed] = React.useState({});
   const setBuys = (s, n) =>
-    setBuysForSeed((m) => {
-      const next = { ...m, [s]: Math.max(1, Math.min(3, Number(n) || 1)) };
-      return next;
-    });
+    setBuysForSeed((m) => ({ ...m, [s]: Math.max(1, Math.min(3, Number(n) || 1)) }));
 
   // form
   const [playerName, setPlayerName] = React.useState("");
@@ -625,7 +676,41 @@ export default function TournamentDetail({ tournamentId }) {
 
   // payments
   const [payments, setPayments] = React.useState({});
-  const setPay = (key, v) => setPayments((p) => ({ ...p, [key]: v }));
+
+  // persistência de pagamentos (debounced)
+  const persistPayment = React.useRef(
+    debounce(async ({ round, match, side, buy }, rawValue) => {
+      const amount = toNum(rawValue);
+      try {
+        const { error } = await supabase.from("tournament_payments").upsert({
+          tournament_id: tournamentId,
+          round_idx: round,
+          match_idx: match,
+          side,
+          buy_idx: buy,
+          amount,
+        });
+        if (error) console.warn("persistPayment:", error.message);
+      } catch (e) {
+        console.warn("persistPayment:", e?.message || e);
+      }
+    })
+  ).current;
+
+  // setPay + gravação
+  const setPay = React.useCallback(
+    (key, v) => {
+      setPayments((p) => ({ ...p, [key]: v }));
+      const m = key.match(/^R(\d+)M(\d+)-(L|R)-B(\d+)$/);
+      if (m) {
+        persistPayment(
+          { round: Number(m[1]), match: Number(m[2]), side: m[3], buy: Number(m[4]) },
+          v
+        );
+      }
+    },
+    [persistPayment]
+  );
 
   // map por seed
   const bySeed = React.useMemo(() => {
@@ -642,12 +727,20 @@ export default function TournamentDetail({ tournamentId }) {
     return arr.length ? arr : ["A"];
   }, [entries, ghostSeeds]);
 
+  // pode adicionar mais seeds? (de acordo com o limite da BD)
+  const canAddMoreSeeds = React.useMemo(() => {
+    const nextIdx = seedList.length
+      ? Math.max(...seedList.map((s) => indexFromLetters(s))) + 1
+      : 0;
+    return nextIdx <= indexFromLetters(MAX_SEED_LETTER);
+  }, [seedList]);
+
   // corrige seleção quando lista muda
   React.useEffect(() => {
     if (seedList.length && !seedList.includes(seed)) setSeed(seedList[0]);
   }, [seedList, seed]);
 
-  // enriquecer entradas
+  // enriquecer entradas com thumbs/provider
   const enrichEntries = React.useCallback(async (rows) => {
     const byId = new Map();
     const byName = new Map();
@@ -742,8 +835,9 @@ export default function TournamentDetail({ tournamentId }) {
       }
       setCols((c) => ({ ...c, ...detected }));
 
-      // ler possíveis 'buys' da BD
+      // ler e enriquecer
       const base = (ent || []).map((r) => ({
+        id: r.id,
         seed: r.seed,
         player_name:
           (detected.playerCol ? r[detected.playerCol] : undefined) ??
@@ -773,7 +867,7 @@ export default function TournamentDetail({ tournamentId }) {
       const rich = await enrichEntries(base);
       setEntries(rich);
 
-      // sincronia inicial buysForSeed
+      // sincronizar nº buys por seed
       setBuysForSeed((old) => {
         const next = { ...old };
         for (const row of rich) {
@@ -781,6 +875,20 @@ export default function TournamentDetail({ tournamentId }) {
         }
         return next;
       });
+
+      // pagamentos
+      const { data: payRows } = await supabase
+        .from("tournament_payments")
+        .select("*")
+        .eq("tournament_id", tournamentId);
+      if (Array.isArray(payRows)) {
+        const map = {};
+        for (const r of payRows) {
+          const k = `R${r.round_idx}M${r.match_idx}-${r.side}-B${r.buy_idx}`;
+          map[k] = r.amount != null ? String(r.amount) : "";
+        }
+        setPayments(map);
+      }
     } catch (e) {
       setErr(e?.message || "Falha ao carregar.");
       setEntries([]);
@@ -855,44 +963,50 @@ export default function TournamentDetail({ tournamentId }) {
   }, [slot?.id, slot?.name, tor, cols.slotIdCol, cols.slotNameCol, hasCol]);
 
   /* ---------- save / delete ---------- */
-  async function tryUpsertWithCols(mapping) {
-    const ownerId =
-      tor?.created_by ?? tor?.user_id ?? tor?.owner_id ?? tor?.profile_id ?? null;
-    if (!ownerId) throw new Error("Não foi possível determinar o user_id do torneio.");
 
-    const payload = {
-      tournament_id: tournamentId,
-      user_id: ownerId,
-      seed,
-    };
-    if (mapping.playerCol) payload[mapping.playerCol] = playerName || null;
-    if (mapping.slotNameCol) payload[mapping.slotNameCol] = slot?.name || null;
-    if (mapping.slotIdCol) payload[mapping.slotIdCol] = slot?.id ?? null;
-    if (mapping.buyCol) payload[mapping.buyCol] = buyCost === "" ? null : toNum(buyCost);
-    if (mapping.buysCol) payload[mapping.buysCol] = Math.max(1, Math.min(3, buysForSeed[seed] || 1));
-
-    const targets = ["tournament_id,seed", "tournament_id,user_id"];
-    let lastErr = null;
-    for (const onConflict of targets) {
-      try {
-        const { error } = await supabase.from("tournament_entries").upsert(payload, { onConflict });
-        if (error) throw error;
-        return;
-      } catch (e) {
-        lastErr = e;
-        const msg = String(e?.message || e?.details || "");
-        if (!/no unique|there is no unique/i.test(msg)) throw e;
-      }
-    }
-    throw lastErr || new Error("Falha no upsert.");
-  }
-
+  // Guardar/atualizar entrada — faz UPDATE se a seed existir, INSERT se não existir.
   const saveEntry = async () => {
+    // bloqueia salvar se a seed atual for > MAX_SEED_LETTER (evita erro do CHECK)
+    if (indexFromLetters(seed) > indexFromLetters(MAX_SEED_LETTER)) {
+      showToast(`Limite de seeds (${MAX_SEED_LETTER}) configurado na base de dados.`, "err");
+      return;
+    }
+
     const playerChoices = pickChoices(cols.playerCol, PLAYER_CANDIDATES, hasCol);
     const slotNameChoices = pickChoices(cols.slotNameCol, SLOTNAME_CANDIDATES, hasCol);
     const slotIdChoices = pickChoices(cols.slotIdCol, SLOTID_CANDIDATES, hasCol);
     const buyChoices = pickChoices(cols.buyCol, BUY_CANDIDATES, hasCol).concat([null]);
     const buysChoices = pickChoices(cols.buysCol, BUYS_CANDIDATES, hasCol).concat([null]);
+
+    const existing = entries.find((e) => e.seed === seed) || null;
+
+    const writeWithCols = async (mapping) => {
+      const ownerId =
+        tor?.created_by ?? tor?.user_id ?? tor?.owner_id ?? tor?.profile_id ?? null;
+      if (!ownerId) throw new Error("Não foi possível determinar o user_id do torneio.");
+
+      const payload = {
+        tournament_id: tournamentId,
+        user_id: ownerId,
+        seed,
+      };
+      if (mapping.playerCol) payload[mapping.playerCol] = playerName || null;
+      if (mapping.slotNameCol) payload[mapping.slotNameCol] = slot?.name || null;
+      if (mapping.slotIdCol) payload[mapping.slotIdCol] = slot?.id ?? null;
+      if (mapping.buyCol) payload[mapping.buyCol] = buyCost === "" ? null : toNum(buyCost);
+      if (mapping.buysCol) payload[mapping.buysCol] = Math.max(1, Math.min(3, buysForSeed[seed] || 1));
+
+      if (existing?.id) {
+        const { error } = await supabase
+          .from("tournament_entries")
+          .update(payload)
+          .eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("tournament_entries").insert(payload);
+        if (error) throw error;
+      }
+    };
 
     let combos = [];
     for (const p of playerChoices)
@@ -907,7 +1021,7 @@ export default function TournamentDetail({ tournamentId }) {
     while (combos.length && !saved) {
       const { p, sn, si, b, bu } = combos.shift();
       try {
-        await tryUpsertWithCols({
+        await writeWithCols({
           playerCol: p,
           slotNameCol: sn,
           slotIdCol: si,
@@ -920,7 +1034,12 @@ export default function TournamentDetail({ tournamentId }) {
         const missing = extractMissingColumn(e?.message || e?.details || "");
         if (missing) {
           combos = combos.filter(
-            (c) => c.p !== missing && c.sn !== missing && c.si !== missing && c.b !== missing && c.bu !== missing
+            (c) =>
+              c.p !== missing &&
+              c.sn !== missing &&
+              c.si !== missing &&
+              c.b !== missing &&
+              c.bu !== missing
           );
         }
       }
@@ -933,7 +1052,7 @@ export default function TournamentDetail({ tournamentId }) {
 
     setGhostSeeds((g) => g.filter((s) => s !== seed));
     await load();
-    showToast("Entrada guardada!");
+    showToast(existing ? "Entrada atualizada!" : "Entrada guardada!");
     setPlayerName("");
     setSlot({ id: null, name: "" });
     setBuyCost("");
@@ -968,10 +1087,17 @@ export default function TournamentDetail({ tournamentId }) {
     const nextIdx = all.length
       ? Math.max(...all.map((s) => indexFromLetters(s))) + 1
       : 0;
+
+    if (nextIdx > indexFromLetters(MAX_SEED_LETTER)) {
+      // bloqueia para evitar o erro do CHECK
+      showToast(`Limite de seeds (${MAX_SEED_LETTER}) configurado na base de dados.`, "err");
+      return;
+    }
+
     const next = lettersFromIndex(nextIdx);
     setGhostSeeds((g) => uniq([...g, next]));
     setSeed(next);
-    setBuys(next, 1);
+    setBuys(next, 3);
   }, [seedList]);
 
   /* ───────────── bracket (build) ───────────── */
@@ -1009,17 +1135,23 @@ export default function TournamentDetail({ tournamentId }) {
       r.push(next);
     }
 
-    // propagação visual (apenas quando há vencedor)
+    // Propagar vencedor quando ambos preenchidos
     for (let ridx = 0; ridx < r.length - 1; ridx++) {
       const cur = r[ridx];
       const nxt = r[ridx + 1];
       for (let midx = 0; midx < cur.length; midx++) {
         const m = cur[midx];
-        const keyL = `R${ridx}M${midx}-L`;
-        const keyR = `R${ridx}M${midx}-R`;
-        const payL = payments[keyL];
-        const payR = payments[keyR];
-        const w = winnerSide(payL, payR);
+        const baseK = `R${ridx}M${midx}`;
+        const nL = Math.max(1, buysForSeed[m.leftSeed] || DEFAULT_BUYS);
+        const nR = Math.max(1, buysForSeed[m.rightSeed] || DEFAULT_BUYS);
+        const paysL = Array.from({ length: nL }, (_, i) => toNum(payments[`${baseK}-L-B${i + 1}`]));
+        const paysR = Array.from({ length: nR }, (_, i) => toNum(payments[`${baseK}-R-B${i + 1}`]));
+        const filledL = paysL.length === nL && paysL.every((v) => v != null);
+        const filledR = paysR.length === nR && paysR.every((v) => v != null);
+        if (!(filledL && filledR)) continue;
+        const sumL = paysL.reduce((a, v) => a + (v || 0), 0);
+        const sumR = paysR.reduce((a, v) => a + (v || 0), 0);
+        const w = sumL > sumR ? "L" : sumR > sumL ? "R" : null;
         const target = nxt[Math.floor(midx / 2)];
         if (w === "L" && m.left) {
           target[midx % 2 === 0 ? "left" : "right"] = m.left;
@@ -1032,7 +1164,7 @@ export default function TournamentDetail({ tournamentId }) {
     }
 
     return r;
-  }, [seedList, bySeed, payments]);
+  }, [seedList, bySeed, payments, buysForSeed]);
 
   const totalRounds = rounds.length || 1;
   const tabs = labelsForTotalRounds(totalRounds);
@@ -1040,238 +1172,295 @@ export default function TournamentDetail({ tournamentId }) {
   React.useEffect(() => setActiveTab(0), [tabs.length]);
 
   /* ───────────────────────── render ───────────────────────── */
+  const totalEntries = entries.length;
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
       <Toast show={toast.show} kind={toast.kind} text={toast.text} />
 
       {/* topo */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={() => (window.location.hash = "#/tournaments")}>
-            <ChevronLeft className="h-4 w-4 mr-1" /> Voltar
-          </Button>
-          <h1 className="text-xl font-semibold flex items-center gap-2">
-            <Trophy className="h-5 w-5" /> {tor?.title || "Tournament"}
-          </h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <span
-            className={`text-xs font-semibold rounded-full px-2 py-0.5 border ${
-              (tor?.status || "scheduled") === "running"
-                ? "border-emerald-400/50 text-emerald-300"
-                : (tor?.status || "scheduled") === "finished"
-                ? "border-blue-400/50 text-blue-300"
-                : (tor?.status || "scheduled") === "canceled"
-                ? "border-rose-400/50 text-rose-300"
-                : "border-white/20 text-white/70"
-            }`}
-          >
-            {tor?.status || "scheduled"}
-          </span>
-          <span className="text-sm font-semibold">
-            {tor?.prize_pool != null ? fmtMoney(tor.prize_pool) : ""}
-          </span>
+      <div className="sticky top-0 z-30 -mx-4 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-zinc-950/40 border-b border-white/10">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Button variant="outline" onClick={() => (window.location.hash = "#/tournaments")}>
+              <ChevronLeft className="h-4 w-4 mr-1" /> Back
+            </Button>
+            <h1 className="text-lg font-semibold flex items-center gap-2">
+              <Trophy className="h-5 w-5" /> {tor?.title || "Torneio"}
+            </h1>
+          </div>
+          <div className="flex items-center gap-2">
+          </div>
         </div>
       </div>
 
-      {/* Form + Preview */}
-      <Card className={isDark ? "border-white/10 bg-white/5" : ""}>
-        <CardHeader>
-          <CardTitle>Adicionar / editar entrada</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid lg:grid-cols-12 gap-6">
-            {/* ESQUERDA: form */}
-            <div className="lg:col-span-7 space-y-4">
-              <div className="grid lg:grid-cols-12 gap-4 items-end">
-                <div className="lg:col-span-12">
-                  <div className="text-xs opacity-70 mb-1">Seed</div>
-                  <SeedChipsAdd list={seedList} value={seed} onSelect={setSeed} onAdd={addSeed} />
-                </div>
+      {/* mini cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 mb-6">
+        <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+          <div className="text-xs opacity-70">Entrys</div>
+          <div className="text-lg font-semibold">{totalEntries}</div>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+          <div className="text-xs opacity-70">Seeds</div>
+          <div className="text-lg font-semibold">{seedList.length}</div>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+          <div className="text-xs opacity-70">Rounds</div>
+          <div className="text-lg font-semibold">{totalRounds}</div>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+          <div className="text-xs opacity-70">Prize pool</div>
+          <div className="text-lg font-semibold">
+            {tor?.prize_pool != null ? fmtMoney(tor.prize_pool) : "—"}
+          </div>
+        </div>
+      </div>
 
-                <div className="lg:col-span-6">
-                  <div className="text-xs opacity-70 mb-1">Nome do player</div>
-                  <Input
-                    value={playerName}
-                    onChange={(e) => setPlayerName(e.target.value)}
-                    placeholder="ex.: Alex"
-                    className="h-11 rounded-xl bg-zinc-900/60 border-white/10 text-white pl-4 focus-visible:ring-1 focus-visible:ring-sky-400 placeholder:text-white/40"
+      <div className="grid xl:grid-cols-[460px_1fr] gap-6">
+        {/* esquerda: lista de seeds  -> sem sticky/overflow: página é que rola */}
+        <div className="space-y-4">
+          <Card className={isDark ? "border-white/10 bg-white/5" : ""}>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <GaugeCircle className="h-4 w-4" /> Seeds
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <SeedChipsAdd
+                list={seedList}
+                value={seed}
+                onSelect={setSeed}
+                onAdd={addSeed}
+                canAdd={canAddMoreSeeds}
+              />
+              <div className="h-2" />
+              {/* lista sem max-height nem overflow interno */}
+              <div className="space-y-2">
+                {seedList.map((s) => (
+                  <SeedRow
+                    key={`seedrow-${s}`}
+                    seed={s}
+                    entry={bySeed[s]}
+                    onClick={() => {
+                      setSeed(s);
+                      const e = bySeed[s];
+                      if (e) {
+                        setSlot({
+                          id: e.slot_id ?? null,
+                          name: e.slot_name ?? "",
+                          thumbnail: e.thumbnail ?? null,
+                          provider: e.slot_provider ?? null,
+                        });
+                        setPlayerName(e.player_name || "");
+                        setBuyCost(e.buy_cost ?? "");
+                      }
+                    }}
+                    onDelete={() => deleteEntry(s)}
                   />
-                </div>
-
-                <div className="lg:col-span-6">
-                  <div className="text-xs opacity-70 mb-1">
-                    Bonus buy (€){!cols.buyCol ? " • (coluna de buy não detetada)" : ""}
-                  </div>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/60">€</span>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      inputMode="decimal"
-                      value={buyCost}
-                      onChange={(e) => setBuyCost(e.target.value)}
-                      placeholder="ex.: 40"
-                      className="h-11 rounded-xl bg-zinc-900/60 border-white/10 text-white pl-7 focus-visible:ring-1 focus-visible:ring-sky-400 placeholder:text-white/40"
-                    />
-                  </div>
-                </div>
-
-                <div className="lg:col-span-12">
-                  <div className="text-xs opacity-70 mb-1">Slot / Jogo</div>
-                  <SlotsAutocomplete value={slot} onSelect={(s) => setSlot(s)} />
-                  {slot?.name && (
-                    <div className="mt-1 text-[11px] opacity-70">
-                      Selecionado: <span className="font-medium">{slot.name}</span>
-                      {slot.provider ? <span> • {slot.provider}</span> : null}
-                    </div>
-                  )}
-                </div>
-
-                <div className="lg:col-span-12">
-                  <Button className="h-11 rounded-xl" onClick={saveEntry}>
-                    Guardar entrada
-                  </Button>
-                </div>
+                ))}
               </div>
-            </div>
+            </CardContent>
+          </Card>
+        </div>
 
-            {/* DIREITA: preview slot */}
-            <div className="lg:col-span-5">
-              <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-                {!slot?.name ? (
-                  <div className="text-sm opacity-70">
-                    Escolhe uma slot para ver a preview e as estatísticas.
-                  </div>
-                ) : (
-                  <div className="flex gap-4">
-                    {slot.thumbnail ? (
-                      <img src={slot.thumbnail} alt="" className="h-16 w-16 rounded object-cover" />
-                    ) : (
-                      <div className="h-16 w-16 rounded bg-white/10" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="text-base font-semibold truncate">{slot.name}</div>
-                      <div className="text-xs opacity-70 truncate">{slot.provider || "—"}</div>
-                      {statsLoading ? (
-                        <div className="mt-2 text-xs opacity-70">A carregar estatísticas…</div>
-                      ) : slotStats ? (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {[
-                            ["Times", slotStats.count],
-                            ["Avg.", slotStats.avgBuy != null ? fmtMoney(slotStats.avgBuy) : "—"],
-                            ["Min", slotStats.minBuy != null ? fmtMoney(slotStats.minBuy) : "—"],
-                            ["Max", slotStats.maxBuy != null ? fmtMoney(slotStats.maxBuy) : "—"],
-                            ["Last", slotStats.lastPlayed || "—"],
-                          ].map(([k, v]) => (
-                            <div
-                              key={k}
-                              className="px-2 py-1 rounded-lg text-xs border border-white/10 bg-white/5"
-                            >
-                              <span className="opacity-70">{k}:</span>{" "}
-                              <span className="font-semibold">{v}</span>
-                            </div>
-                          ))}
+        {/* direita: formulário + bracket */}
+        <div className="space-y-6">
+          {/* Form + Preview */}
+          <Card className={isDark ? "border-white/10 bg-white/5" : ""}>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Add / Edit Entry</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid lg:grid-cols-12 gap-6">
+                {/* form */}
+                <div className="lg:col-span-7 space-y-4">
+                  <div className="grid lg:grid-cols-12 gap-4 items-end">
+                    <div className="lg:col-span-6">
+                      <div className="text-xs opacity-70 mb-1">Active Seed</div>
+                      <SeedChip label={seed} active onClick={() => {}} />
+                    </div>
+                    <div className="lg:col-span-6">
+                      <div className="text-xs opacity-70 mb-1">Bonus Buys</div>
+                      <div className="flex gap-2 items-center">
+                        {[1, 2, 3].map((n) => (
+                          <button
+                            key={`bb-${n}`}
+                            type="button"
+                            onClick={() => setBuys(seed, n)}
+                            className={[
+                              "h-8 w-8 rounded grid place-items-center text-xs font-bold",
+                              (buysForSeed[seed] || DEFAULT_BUYS) === n
+                                ? "bg-indigo-500 text-white"
+                                : "bg-white/5 text-white/70 hover:bg-white/10 border border-white/10",
+                            ].join(" ")}
+                          >
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="lg:col-span-6">
+                      <div className="text-xs opacity-70 mb-1">Player Name</div>
+                      <Input
+                        value={playerName}
+                        onChange={(e) => setPlayerName(e.target.value)}
+                        placeholder="ex.: Alex"
+                        className="h-11 rounded-xl bg-zinc-900/60 border-white/10 text-white pl-4 focus-visible:ring-1 focus-visible:ring-sky-400 placeholder:text-white/40"
+                      />
+                    </div>
+
+                    <div className="lg:col-span-6">
+                      <div className="text-xs opacity-70 mb-1">Bonus Buy (€)</div>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/60">€</span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          inputMode="decimal"
+                          value={buyCost}
+                          onChange={(e) => setBuyCost(e.target.value)}
+                          placeholder="ex.: 40"
+                          className="h-11 rounded-xl bg-zinc-900/60 border-white/10 text-white pl-7 focus-visible:ring-1 focus-visible:ring-sky-400 placeholder:text-white/40"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="lg:col-span-12">
+                      <div className="text-xs opacity-70 mb-1">Slot</div>
+                      <SlotsAutocomplete value={slot} onSelect={(s) => setSlot(s)} />
+                      {slot?.name && (
+                        <div className="mt-1 text-[11px] opacity-70">
+                          Selected: <span className="font-medium">{slot.name}</span>
+                          {slot.provider ? <span> • {slot.provider}</span> : null}
                         </div>
-                      ) : (
-                        <div className="mt-2 text-xs opacity-70">Sem histórico.</div>
                       )}
                     </div>
+
+                    <div className="lg:col-span-12">
+                      <div className="flex items-center gap-2">
+                        <Button className="h-11 rounded-xl" onClick={saveEntry}>
+                          Save
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-11 rounded-xl"
+                          onClick={() => {
+                            setPlayerName("");
+                            setSlot({ id: null, name: "" });
+                            setBuyCost("");
+                          }}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                )}
+                </div>
+
+                {/* preview slot */}
+                <div className="lg:col-span-5">
+                  <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                    {!slot?.name ? (
+                      <div className="text-sm opacity-70">
+                        Choose a slot to see the preview and statistics.
+                      </div>
+                    ) : (
+                      <div className="flex gap-4">
+                        {slot.thumbnail ? (
+                          <div className="h-16 w-16 rounded-lg overflow-hidden grid place-items-center">
+                            <img src={slot.thumbnail} alt="" className="h-full w-full object-contain" />
+                          </div>
+                        ) : (
+                          <div className="h-16 w-16 rounded bg-white/10" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="text-base font-semibold truncate">{slot.name}</div>
+                          <div className="text-xs opacity-70 truncate">{slot.provider || "—"}</div>
+                          {statsLoading ? (
+                            <div className="mt-3 text-xs opacity-70">A carregar estatísticas…</div>
+                          ) : slotStats ? (
+                            <div className="mt-3 grid grid-cols-2 gap-2">
+                              {[
+                                ["Times", slotStats.count],
+                                ["Avg.", slotStats.avgBuy != null ? fmtMoney(slotStats.avgBuy) : "—"],
+                                ["Min", slotStats.minBuy != null ? fmtMoney(slotStats.minBuy) : "—"],
+                                ["Max", slotStats.maxBuy != null ? fmtMoney(slotStats.maxBuy) : "—"],
+                                ["Last", slotStats.lastPlayed || "—"],
+                              ].map(([k, v]) => (
+                                <div
+                                  key={k}
+                                  className="px-2 py-1 rounded-lg text-xs border border-white/10 bg-white/5"
+                                >
+                                  <span className="opacity-70">{k}:</span>{" "}
+                                  <span className="font-semibold">{v}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="mt-3 text-xs opacity-70">Sem histórico.</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
 
-      {/* Seeds */}
-      <div className="h-5" />
-      <Card className={isDark ? "border-white/10 bg-white/5" : ""}>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <GaugeCircle className="h-4 w-4" /> Seeds
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {seedList.map((s) => (
-              <SeedCard
-                key={`seedcard-${s}`}
-                seed={s}
-                entry={bySeed[s]}
-                buys={buysForSeed[s] || 1}
-                onChangeBuys={(n) => setBuys(s, n)}
-                onClick={() => {
-                  setSeed(s);
-                  const e = bySeed[s];
-                  if (e) {
-                    setSlot({
-                      id: e.slot_id ?? null,
-                      name: e.slot_name ?? "",
-                      thumbnail: e.thumbnail ?? null,
-                      provider: e.slot_provider ?? null,
-                    });
-                  }
-                }}
-                onDelete={() => deleteEntry(s)}
-              />
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Bracket por fase (abas) */}
-      <div className="h-5" />
-      <Card className={isDark ? "border-white/10 bg-white/5" : ""}>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Medal className="h-4 w-4" /> Bracket
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-4 flex flex-wrap gap-2">
-            {tabs.map((lab, i) => (
-              <button
-                key={`tab-${lab}`}
-                onClick={() => setActiveTab(i)}
-                className={[
-                  "px-3 py-1.5 rounded-lg text-sm border transition",
-                  activeTab === i
-                    ? "bg-indigo-500/20 border-indigo-400/40 text-indigo-200"
-                    : "bg-white/5 border-white/10 text-white/70 hover:bg-white/10",
-                ].join(" ")}
-                type="button"
-              >
-                {lab}
-              </button>
-            ))}
-          </div>
-
-          {rounds[activeTab] && (
-            <div className="space-y-4">
-              <div className="text-xs font-semibold opacity-70 mb-1">
-                {roundTitle(activeTab, totalRounds)}
+          {/* Bracket */}
+          <Card className={isDark ? "border-white/10 bg-white/5" : ""}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Medal className="h-4 w-4" /> Bracket
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="mb-4 flex flex-wrap gap-2">
+                {tabs.map((lab, i) => (
+                  <button
+                    key={`tab-${lab}`}
+                    onClick={() => setActiveTab(i)}
+                    className={[
+                      "px-3 py-1.5 rounded-lg text-sm border transition",
+                      activeTab === i
+                        ? "bg-indigo-500/20 border-indigo-400/40 text-indigo-200"
+                        : "bg-white/5 border-white/10 text-white/70 hover:bg-white/10",
+                    ].join(" ")}
+                    type="button"
+                  >
+                    {lab}
+                  </button>
+                ))}
               </div>
 
-              {rounds[activeTab].map((m, mi) => (
-                <MatchRow
-                  key={`r${activeTab}-m${mi}`}
-                  roundIndex={activeTab}
-                  matchIndex={mi}
-                  match={m}
-                  payments={payments}
-                  setPay={setPay}
-                  buysForSeed={buysForSeed}
-                />
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              {rounds[activeTab] && (
+                <div className="space-y-5">
+                  <div className="text-xs font-semibold opacity-70 mb-1">
+                    {roundTitle(activeTab, totalRounds)}
+                  </div>
+                  {rounds[activeTab].map((m, mi) => (
+                    <MatchRow
+                      key={`r${activeTab}-m${mi}`}
+                      roundIndex={activeTab}
+                      matchIndex={mi}
+                      match={m}
+                      payments={payments}
+                      setPay={setPay}
+                      buysForSeed={buysForSeed}
+                    />
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-      {busy && <div className="mt-4 text-sm opacity-70">A carregar…</div>}
-      {err && !busy && <div className="mt-4 text-sm text-rose-400">{err}</div>}
+          {busy && <div className="mt-4 text-sm opacity-70">A carregar…</div>}
+          {err && !busy && <div className="mt-4 text-sm text-rose-400">{err}</div>}
+        </div>
+      </div>
     </div>
   );
 }
