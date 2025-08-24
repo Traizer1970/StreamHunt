@@ -1446,6 +1446,42 @@ function AuthCallback({ onDone }) {
     </Section>
   );
 }
+// ---- container transparente para o overlay ----
+function BareOverlayContainer({ children }) {
+  React.useEffect(() => {
+    const html = document.documentElement;
+    const prevHtmlBg = html.style.background;
+    const prevBodyBg = document.body.style.background;
+    const prevBodyMargin = document.body.style.margin;
+    const prevOverflow = document.body.style.overflow;
+
+    html.style.background = "transparent";
+    document.body.style.background = "transparent";
+    document.body.style.margin = "0";
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      html.style.background = prevHtmlBg;
+      document.body.style.background = prevBodyBg;
+      document.body.style.margin = prevBodyMargin;
+      document.body.style.overflow = prevOverflow;
+    };
+  }, []);
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "transparent",
+        display: "grid",
+        placeItems: "center",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
 
 /* ---------------- App Root routing ---------------- */
 export default function App() {
@@ -1454,7 +1490,17 @@ export default function App() {
   // detail routes
   const huntDetailMatch = route.match(/^\/?hunts\/([^\/?#]+)$/);
   const tournamentDetailMatch = route.match(/^\/?tournaments\/([^\/?#]+)$/);
+  
+  const isOverlay = route.startsWith("overlay/battle/");
 
+  // ⬅️ overlay: sem header/rodapé, fundo transparente e widget centrado
+  if (isOverlay) {
+    return (
+      <BareOverlayContainer>
+        <WidgetOverlay />
+      </BareOverlayContainer>
+    );
+  }
   const isDetailRoute =
     !!huntDetailMatch ||
     !!tournamentDetailMatch ||
