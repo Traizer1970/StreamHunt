@@ -1057,36 +1057,39 @@ function WidgetCard({
 
   return (
     <>
-      <AccentCard title="Widget">
-        {/* Barra de ações — sem o texto "Preview" e ocupando 100% */}
-        <div className="mb-3 grid grid-cols-3 gap-2">
-          <Button
-            type="button"
-            onClick={() => navigator.clipboard.writeText(url)}
-            className="h-9 w-full justify-center"
-          >
-            <Copy className="h-4 w-4 mr-2" />
-            Copy URL
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-9 w-full justify-center"
-            onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
-          >
-            <ExternalLink className="h-4 w-4 mr-2" />
-            Open overlay
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            className="h-9 w-full justify-center"
-            onClick={() => setOpenDesigner(true)}
-          >
-            <SlidersHorizontal className="h-4 w-4 mr-2" />
-            Open Designer
-          </Button>
-        </div>
+     <AccentCard title="Widget">
+  <div className="mb-3 grid grid-cols-3 gap-2">
+    <Button
+      type="button"
+      onClick={copyOverlayUrl}
+      disabled={!overlayUrl}
+      className="h-9 w-full justify-center"
+    >
+      <Copy className="h-4 w-4 mr-2" />
+      Copy URL
+    </Button>
+
+    <Button
+      type="button"
+      variant="outline"
+      className="h-9 w-full justify-center"
+      disabled={!overlayUrl}
+      onClick={openOverlay}
+    >
+      <ExternalLink className="h-4 w-4 mr-2" />
+      Open overlay
+    </Button>
+
+    <Button
+      type="button"
+      variant="secondary"
+      className="h-9 w-full justify-center"
+      onClick={() => setOpenDesigner(true)}
+    >
+      <SlidersHorizontal className="h-4 w-4 mr-2" />
+      Open Designer
+    </Button>
+  </div>
 
         <WidgetPreviewPanel
           theme={theme}
@@ -1124,6 +1127,30 @@ function WidgetCard({
 /* ───────────────────────── Page ───────────────────────── */
 export default function BattleView() {
   const { isDark } = useTheme();
+
+  // URL absoluto do overlay para esta batalha
+const overlayUrl = React.useMemo(() => {
+  if (!battle?.id) return "";
+  const { origin, pathname } = window.location;
+  const base = `${origin}${pathname}`.replace(/\/+$/, ""); // remove / final
+  return `${base}#/overlay/battle/${battle.id}`;
+}, [battle?.id]);
+
+const openOverlay = () => {
+  if (!overlayUrl) return;
+  window.open(overlayUrl, "_blank", "noopener,noreferrer");
+};
+
+const copyOverlayUrl = async () => {
+  if (!overlayUrl) return;
+  try {
+    await navigator.clipboard.writeText(overlayUrl);
+    // opcional: mostra um toast
+  } catch (e) {
+    alert("Não consegui copiar o URL.");
+  }
+};
+
 
   const [battleId, setBattleId] = React.useState(null);
   React.useEffect(function () {
