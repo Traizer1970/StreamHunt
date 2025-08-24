@@ -1,6 +1,23 @@
 // src/widget-overlay.jsx
 import React from "react";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@supabase/supabase-js";
+
+/* ───────────── Supabase client só para o overlay (com header) ───────────── */
+const SUPABASE_URL =
+  (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_URL) ||
+  (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_SUPABASE_URL);
+const SUPABASE_ANON_KEY =
+  (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_ANON_KEY) ||
+  (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+
+function getOverlayClient(token) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error("Faltam as envs do Supabase (URL/ANON_KEY).");
+  }
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { "x-overlay-token": token || "" } },
+  });
+}
 
 /* ───────────────────────── helpers ───────────────────────── */
 const LOCALE = "pt-PT";
@@ -58,7 +75,7 @@ function parseHash() {
   };
 }
 
-/* ───────── tema/layout/opções (mesmo do battle-view) ───────── */
+/* ───────── tema/layout/opções ───────── */
 const DEFAULT_THEME = {
   bgStart: "#0b1020",
   bgEnd: "#111827",
@@ -131,29 +148,6 @@ function useFitScale(containerRef, baseW, baseH, pad = 24, min = 0.3, max = 3) {
     return () => ro.disconnect();
   }, [containerRef, baseW, baseH, pad, min, max]);
   return scale;
-}
-
-/* Enriquecer slot */
-async function enrichSlotInfo(slot) {
-  if (!slot) return slot;
-  if (slot.thumbnail && slot.provider) return slot;
-  try {
-    let q = supabase
-      .from("slots_catalog")
-      .select('id, "NAME", "PROVIDER", "THUMBNAIL"')
-      .limit(1);
-    if (slot.id) q = q.eq("id", slot.id);
-    else if (slot.name) q = q.ilike("NAME", `%${slot.name}%`);
-    const { data } = await q.maybeSingle();
-    if (data)
-      return {
-        id: data.id,
-        name: data["NAME"],
-        provider: data["PROVIDER"],
-        thumbnail: data["THUMBNAIL"],
-      };
-  } catch {}
-  return slot;
 }
 
 /* ───────── UI do widget ───────── */
@@ -564,6 +558,9 @@ export default function WidgetOverlay() {
     setLoc,
   ] = React.useState(parseHash());
 
+  // Supabase client c/ header do token
+  const db = React.useMemo(() => getOverlayClient(token), [token]);
+
   // CSS global
   React.useEffect(() => {
     const style = document.createElement("style");
@@ -623,9 +620,32 @@ export default function WidgetOverlay() {
     debounceRef.current = setTimeout(fn, 120);
   };
 
+  // helper: enriquecer slot via catálogo
+  async function enrichSlotInfo(slot) {
+    if (!slot) return slot;
+    if (slot.thumbnail && slot.provider) return slot;
+    try {
+      let q = db
+        .from("slots_catalog")
+        .select('id, "NAME", "PROVIDER", "THUMBNAIL"')
+        .limit(1);
+      if (slot.id) q = q.eq("id", slot.id);
+      else if (slot.name) q = q.ilike("NAME", `%${slot.name}%`);
+      const { data } = await q.maybeSingle();
+      if (data)
+        return {
+          id: data.id,
+          name: data["NAME"],
+          provider: data["PROVIDER"],
+          thumbnail: data["THUMBNAIL"],
+        };
+    } catch {}
+    return slot;
+  }
+
   async function loadAll({ ownerId, bId }) {
     // battle basics
-    const { data: bRow } = await supabase
+    const { data: bRow } = await db
       .from("battles")
       .select("id, best_of, buy_cost")
       .eq("id", bId)
@@ -638,7 +658,7 @@ export default function WidgetOverlay() {
     }
 
     // settings
-    const { data: ws } = await supabase
+    const { data: ws } = await db
       .from("battle_widget_settings")
       .select("theme, layout, options")
       .eq("battle_id", bId)
@@ -651,7 +671,7 @@ export default function WidgetOverlay() {
       setOpts({ ...DEFAULT_OPTS, ...ws.options });
 
     // entries
-    const { data: entries } = await supabase
+    const { data: entries } = await db
       .from("battle_entries")
       .select("seed, slot_name, slot_id, player_name")
       .eq("battle_id", bId);
@@ -682,7 +702,7 @@ export default function WidgetOverlay() {
     }
 
     // payments
-    const { data: pays } = await supabase
+    const { data: pays } = await db
       .from("battle_payments")
       .select("side, amount, buy_idx")
       .eq("battle_id", bId)
@@ -706,39 +726,35 @@ export default function WidgetOverlay() {
         setErr("");
 
         // descobrir o owner pela token
-        let ownerId = null;
-        if (token) {
-          if (!ownerId) {
-            const { data } = await supabase
-              .from("profiles")
-              .select("id")
-              .eq("widget_token", token)
-              .maybeSingle();
-            if (data?.id) ownerId = data.id;
-          }
-          if (!ownerId) {
-            const { data } = await supabase
-              .from("profiles")
-              .select("id")
-              .eq("public_token", token)
-              .maybeSingle();
-            if (data?.id) ownerId = data.id;
-          }
-          if (!ownerId && isUUID(token)) {
-            const { data } = await supabase
-              .from("profiles")
-              .select("id")
-              .eq("id", token)
-              .maybeSingle();
-            if (data?.id) ownerId = data.id;
-          }
-          if (!ownerId) throw new Error("Token inválida ou conta não encontrada.");
-        }
+// descobrir o ownerId a partir do token do link
+let ownerId = null;
+if (token) {
+  // 1) tenta pelo widget_token
+  if (!ownerId) {
+    const { data } = await db
+      .from("profiles")
+      .select("id")
+      .eq("widget_token", token)
+      .maybeSingle();
+    if (data?.id) ownerId = data.id;
+  }
+  // 2) se o token for um UUID, tenta ser o próprio id
+  if (!ownerId && /^[0-9a-fA-F-]{36}$/.test(token)) {
+    const { data } = await db
+      .from("profiles")
+      .select("id")
+      .eq("id", token)
+      .maybeSingle();
+    if (data?.id) ownerId = data.id;
+  }
+  if (!ownerId) throw new Error("Token inválida ou conta não encontrada.");
+}
+
 
         // battle alvo
         let bId = battleId || null;
         if (!bId) {
-          const { data: b } = await supabase
+          const { data: b } = await db
             .from("battles")
             .select("id")
             .eq("created_by", ownerId)
@@ -752,8 +768,8 @@ export default function WidgetOverlay() {
         await loadAll({ ownerId, bId });
 
         // realtime
-        if (channelRef.current) supabase.removeChannel(channelRef.current);
-        const ch = supabase
+        if (channelRef.current) db.removeChannel(channelRef.current);
+        const ch = db
           .channel(`overlay-${bId}`)
           .on(
             "postgres_changes",
@@ -789,7 +805,7 @@ export default function WidgetOverlay() {
     })();
 
     return () => {
-      if (channelRef.current) supabase.removeChannel(channelRef.current);
+      if (channelRef.current) db.removeChannel(channelRef.current);
       channelRef.current = null;
       if (pollRef.current) clearInterval(pollRef.current);
       pollRef.current = null;
@@ -798,7 +814,6 @@ export default function WidgetOverlay() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, battleId]);
 
-  // alinhamento vertical
   const alignItems =
     align === "top" ? "flex-start" : align === "bottom" ? "flex-end" : "center";
 
@@ -854,7 +869,6 @@ export default function WidgetOverlay() {
             {err}
           </div>
         ) : (
-          // Wrapper com scale (letterbox)
           <div style={{ position: "relative", width: bw * scale, height: bh * scale }}>
             <div
               style={{
