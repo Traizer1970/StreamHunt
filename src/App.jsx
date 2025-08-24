@@ -1492,36 +1492,40 @@ export default function App() {
   const huntDetailMatch = route.match(/^\/?hunts\/([^\/?#]+)$/);
   const tournamentDetailMatch = route.match(/^\/?tournaments\/([^\/?#]+)$/);
 
-  const isOverlay = route.startsWith("overlay/battle/");
+  // >>> overlay: battle OU token fixo para a conta
+  const isOverlay =
+    route.startsWith("overlay/battle/") || route.startsWith("w/");
 
   // ⬅️ overlay: sem header/rodapé, fundo transparente e widget centrado
   if (isOverlay) {
     return (
       <BareOverlayContainer>
-        <WidgetOverlay />
+        {route.startsWith("overlay/battle/")
+          ? <WidgetOverlay />
+          : <WidgetByToken />}
       </BareOverlayContainer>
     );
   }
+
   const isDetailRoute =
     !!huntDetailMatch ||
     !!tournamentDetailMatch ||
     route.startsWith("battles/") ||
-    route.startsWith("overlay/battle/"); // >>> NOVO: overlay
+    route.startsWith("overlay/battle/"); // (não chega aqui se for overlay)
 
   let content = null;
 
   if (huntDetailMatch) {
     const numberId = huntDetailMatch[1];
     content = <HuntDetail numberId={numberId} />;
-    } else if (route.startsWith("w/")) {
-  content = <WidgetByToken />;
-} else if (route.startsWith("overlay/battle/")) {
-  content = <WidgetOverlay />;
+  } else if (route.startsWith("w/")) {
+    // (não acontece porque já tratámos como overlay acima)
+    content = <WidgetByToken />;
   } else if (tournamentDetailMatch) {
     const tournamentId = tournamentDetailMatch[1];
     content = <TournamentDetail tournamentId={tournamentId} />;
   } else if (route.startsWith("overlay/battle/")) {
-    // >>> NOVO: rota do overlay (ex.: #/overlay/battle/1)
+    // (não acontece porque já tratámos como overlay acima)
     content = <WidgetOverlay />;
   } else {
     content = (
@@ -1556,4 +1560,3 @@ export default function App() {
     </Shell>
   );
 }
-

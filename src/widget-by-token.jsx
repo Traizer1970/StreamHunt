@@ -1,33 +1,42 @@
-// src/widget-by-token.jsx
 import React from "react";
 import { supabase } from "@/lib/supabase";
+import WidgetOverlay from "@/pages/overlay/battle"; // importa o teu overlay
 
 export default function WidgetByToken() {
-  const [err, setErr] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState("");
+  const [battleId, setBattleId] = React.useState(null);
 
-  React.useEffect(() => {
-    (async () => {
-      const h = String(window.location.hash || "").replace(/^#\//, "");
-      // form: #/w/<token>
-      const token = h.split("?")[0].split("/")[1];
-      if (!token) { setErr("Token em falta"); return; }
+  // lê o token a partir do hash: #/w/<token>
+  function getTokenFromHash() {
+    const h = String(window.location.hash || "").replace(/^#\//, "");
+    const parts = h.split("?")[0].split("/");
+    // ["w", "<token>", ...]
+    return parts[1] || "";
+  }
 
-      const { data, error } = await supabase.rpc("widget_state_by_token", {
-        p_token: token,
-      });
-      if (error) { setErr(error.message); return; }
+  const fetchState = React.useCallback(async () => {
+    const token = getTokenFromHash();
+    if (!token) { setError("Token em falta."); setLoading(false); return; }
 
-      const battle = data?.battle;
-      if (!battle) { setErr("Sem battle ativa para este token"); return; }
+    const { data, error } = await supabase.rpc("widget_state_by_token", { p_token: token });
+    if (error) { setError(error.message); setLoading(false); return; }
 
-      // usa o overlay já existente
-      window.location.hash = `#/overlay/battle/${battle.id}`;
-    })();
+    const id = data?.battle?.id || null;
+    setBattleId((prev) => (prev === id ? prev : id));
+    setLoading(false);
   }, []);
 
-  return (
-    <div style={{color:"#e5e7eb",background:"transparent",padding:12}}>
-      {err ? `⚠️ ${err}` : "A carregar widget..."}
-    </div>
-  );
+  React.useEffect(() => {
+    fetchState();                          // carga inicial
+    const id = setInterval(fetchState, 10000); // volta a verificar a cada 10s
+    return () => clearInterval(id);
+  }, [fetchState]);
+
+  if (loading) return <div style={{color:"#e5e7eb",padding:12}}>A carregar…</div>;
+  if (error) return <div style={{color:"#ef4444",padding:12}}>{error}</div>;
+  if (!battleId) return <div style={{color:"#e5e7eb",padding:12}}>Sem battle ativa.</div>;
+
+  // Mostra o mesmo overlay de sempre, mas passando o id via prop
+  return <WidgetOverlay battleId={battleId} />;
 }
