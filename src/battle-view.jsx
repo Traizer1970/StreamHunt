@@ -17,11 +17,12 @@ import {
   Palette,
   X,
   Save,
+  RotateCcw,
 } from "lucide-react";
 
 /* ───────────────────────── utils / style helpers ───────────────────────── */
 const cn = (...c) => c.filter(Boolean).join(" ");
-const LOCALE = "pt-PT"; // mantem formato € com vírgula
+const LOCALE = "pt-PT"; // mantém formatação € com vírgula; troca para "en-GB" se quiseres 94.43 €
 const fmtMoney = (n) =>
   Number.isFinite(Number(n))
     ? new Intl.NumberFormat(LOCALE, {
@@ -67,7 +68,7 @@ const DEFAULT_THEME = {
     "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji','Segoe UI Emoji'",
   fontScale: 100,
   fontWeight: 400,     // normal
-  strongWeight: 500,   // emphasis
+  strongWeight: 500,   // emphasis (set 400 to remove bold effect)
 
   showThumbs: true,
   shine: true,
@@ -87,17 +88,20 @@ const DEFAULT_LAYOUT = {
   },
 };
 
-/* Widget options */
+/* Widget options (now with Bonus docking & Total alignment) */
 const DEFAULT_OPTS = {
   bonusLabelMode: "label+value", // "label+value" | "value"
   bonusLabelText: "Bonus Buy",
   bonusDock: "left",             // "left" | "right"
   totalJustify: "center",        // "left" | "center" | "right"
+
+  // ⬇️ NOVO
   totalLabelMode: "label+value", // "label+value" | "value"
   totalLabelText: "Total paid",
 };
 
-/* presets */
+
+/* Presets */
 const PRESETS = [
   { name: "Neon", t: { bgStart: "#0f0c29", bgEnd: "#302b63", accent: "#22d3ee", pos: "#10b981", neg: "#ef4444", vsBg: "rgba(34,211,238,0.35)" } },
   { name: "Sunset", t: { bgStart: "#1f0a26", bgEnd: "#3a0b2e", accent: "#fb7185", pos: "#f59e0b", neg: "#ef4444", vsBg: "rgba(251,113,133,0.35)" } },
@@ -132,7 +136,7 @@ async function dbSaveWidgetSettings(battleId, theme, layout, options) {
   ]);
 }
 
-/* enriquecer slot (pega thumbnail/provider quando só existe name/id) */
+/* Enrich slot */
 async function enrichSlotInfo(slot) {
   if (!slot) return slot;
   if (slot.thumbnail && slot.provider) return slot;
@@ -487,9 +491,10 @@ function WidgetPreviewPanel({
           />
         )}
 
-        {/* default layout */}
+        {/* ---------- default layout (no drag) ---------- */}
         {layout?.mode !== "free" && (
           <>
+            {/* badges row (Bonus can be docked right) */}
             {opts?.bonusDock === "right" ? (
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">{BadgeBest}</div>
@@ -513,6 +518,11 @@ function WidgetPreviewPanel({
                     {sideA?.name || "—"}
                   </div>
                 </div>
+                {theme.showThumbs && (
+                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
+                    {sideA?.thumbnail ? <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-center">
@@ -525,6 +535,11 @@ function WidgetPreviewPanel({
               </div>
 
               <div className="flex items-center gap-3">
+                {theme.showThumbs && (
+                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
+                    {sideB?.thumbnail ? <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
+                  </div>
+                )}
                 <div className="min-w-0 text-left">
                   <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
                     {playerB || "—"}
@@ -580,22 +595,24 @@ function WidgetPreviewPanel({
                 className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
                 style={{ background: theme.totalBg, border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`, borderRadius: theme.pillRadius, color: theme.accent, fontWeight: theme.strongWeight }}
               >
-                {opts.totalLabelMode === "value" ? fmtMoney(totalPay) : `Total paid: ${fmtMoney(totalPay)}`}
+                Total paid: {fmtMoney(totalPay)}
               </div>
             </div>
           </>
         )}
 
-        {/* free layout (drag & drop) — (mantido) */}
+        {/* ---------- free layout (drag & drop) ---------- */}
         {layout?.mode === "free" && (
           <>
             <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: "linear-gradient(transparent 95%, rgba(255,255,255,.05) 95%)", backgroundSize: "100% 40px" }} />
+
             <DragBox id="badges">
               <div className="flex items-center gap-2">
                 {BadgeBest}
                 {BadgeBonus}
               </div>
             </DragBox>
+
             <DragBox id="playerA">
               <div className="flex items-center justify-end gap-3">
                 <div className="min-w-0 text-right">
@@ -606,10 +623,21 @@ function WidgetPreviewPanel({
                     {sideA?.name || "—"}
                   </div>
                 </div>
+                {theme.showThumbs && (
+                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
+                    {sideA?.thumbnail ? <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
+                  </div>
+                )}
               </div>
             </DragBox>
+
             <DragBox id="playerB">
               <div className="flex items-center gap-3">
+                {theme.showThumbs && (
+                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
+                    {sideB?.thumbnail ? <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
+                  </div>
+                )}
                 <div className="min-w-0 text-left">
                   <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
                     {playerB || "—"}
@@ -620,6 +648,7 @@ function WidgetPreviewPanel({
                 </div>
               </div>
             </DragBox>
+
             <DragBox id="chipsA">
               <div>
                 <div className="flex flex-wrap">
@@ -636,6 +665,7 @@ function WidgetPreviewPanel({
                 </div>
               </div>
             </DragBox>
+
             <DragBox id="chipsB">
               <div>
                 <div className="flex flex-wrap">
@@ -652,12 +682,13 @@ function WidgetPreviewPanel({
                 </div>
               </div>
             </DragBox>
+
             <DragBox id="total">
               <div
                 className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
                 style={{ background: theme.totalBg, border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`, borderRadius: theme.pillRadius, color: theme.accent, fontWeight: theme.strongWeight }}
               >
-                {opts.totalLabelMode === "value" ? fmtMoney(totalPay) : `Total paid: ${fmtMoney(totalPay)}`}
+                Total paid: {fmtMoney(totalPay)}
               </div>
             </DragBox>
           </>
@@ -667,7 +698,7 @@ function WidgetPreviewPanel({
   );
 }
 
-/* ───────── ColorField (popover fixo) ───────── */
+/* ───────── ColorField (fixed popover) ───────── */
 function ColorField({ label, value, onChange }) {
   const swatchRef = React.useRef(null);
   const [open, setOpen] = React.useState(false);
@@ -899,9 +930,14 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
                 </div>
               </div>
 
-              {[ "showThumbs", "shine", "pulse" ].map((k) => (
+              {[
+                ["showThumbs", "Show thumbnails"],
+                ["shine", "Shine sweep"],
+                ["pulse", "VS/Chips pulse"],
+              ].map(([k, label]) => (
                 <label key={k} className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={!!DEFAULT_THEME[k] ? undefined : undefined} onChange={(e) => { /* mantido */ }} />
+                  <input type="checkbox" checked={!!theme[k]} onChange={(e) => setTheme((t) => ({ ...t, [k]: e.target.checked }))} />
+                  {label}
                 </label>
               ))}
             </div>
@@ -914,8 +950,8 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
                   <input
                     type="radio"
                     name="bonuslabel"
-                    checked={DEFAULT_OPTS.bonusLabelMode === "label+value" ? undefined : undefined}
-                    onChange={() => {}}
+                    checked={opts.bonusLabelMode === "label+value"}
+                    onChange={() => setOpts((o) => ({ ...o, bonusLabelMode: "label+value" }))}
                   />
                   Label + Value
                 </label>
@@ -923,8 +959,8 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
                   <input
                     type="radio"
                     name="bonuslabel"
-                    checked={DEFAULT_OPTS.bonusLabelMode === "value" ? undefined : undefined}
-                    onChange={() => {}}
+                    checked={opts.bonusLabelMode === "value"}
+                    onChange={() => setOpts((o) => ({ ...o, bonusLabelMode: "value" }))}
                   />
                   Value only
                 </label>
@@ -932,13 +968,31 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
               <div>
                 <div className="text-xs opacity-70 mb-1">Label text</div>
                 <Input
-                  value={DEFAULT_OPTS.bonusLabelText}
-                  onChange={() => {}}
+                  value={opts.bonusLabelText}
+                  onChange={(e) => setOpts((o) => ({ ...o, bonusLabelText: e.target.value }))}
                   className="h-9 bg-zinc-900 border-white/10 text-white"
                 />
               </div>
             </div>
 
+            {/* Save */}
+            <div className="flex gap-2 sticky bottom-3">
+              <Button onClick={persist} className="h-10">
+                <Save className="h-4 w-4 mr-2" />
+                Save
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setTheme({ ...DEFAULT_THEME });
+                  setLayout({ ...DEFAULT_LAYOUT, mode: layout.mode });
+                  setOpts({ ...DEFAULT_OPTS });
+                }}
+                className="h-10"
+              >
+                Restore defaults
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -957,9 +1011,7 @@ function WidgetCard({ battleId, sideA, sideB, playerA, playerB, bestOf, buyCost,
   const [layout, setLayout] = React.useState(DEFAULT_LAYOUT);
   const [opts, setOpts] = React.useState(DEFAULT_OPTS);
   const [openDesigner, setOpenDesigner] = React.useState(false);
-
-  // NOVO: rota do overlay
-  const url = `${window.location.origin}/#/overlay/battle/${battleId}`;
+  const url = `${window.location.origin}/#/widget/battle/${battleId}`;
 
   const previewProps = { bestOf, buyCost, totalPay, sideA, sideB, playerA, playerB, aPays, bPays };
 
@@ -981,25 +1033,22 @@ function WidgetCard({ battleId, sideA, sideB, playerA, playerB, bestOf, buyCost,
   return (
     <>
       <AccentCard title="Widget">
-        {/* NOVO: barra de ações ocupando toda a largura; sem 'Preview' */}
-        <div className="grid grid-cols-3 gap-3 mb-3">
-          <Button type="button" className="h-9 w-full" onClick={() => navigator.clipboard.writeText(url)}>
-            <Copy className="h-4 w-4 mr-2" />
-            Copy URL
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-9 w-full"
-            onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
-          >
-            <ExternalLink className="h-4 w-4 mr-2" />
-            Open overlay
-          </Button>
-          <Button type="button" variant="secondary" className="h-9 w-full" onClick={() => setOpenDesigner(true)}>
-            <SlidersHorizontal className="h-4 w-4 mr-2" />
-            Open Designer
-          </Button>
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-sm opacity-80">Preview</div>
+          <div className="flex items-center gap-2">
+            <Button type="button" onClick={() => navigator.clipboard.writeText(url)} className="h-9">
+              <Copy className="h-4 w-4 mr-2" />
+              Copy URL
+            </Button>
+            <Button type="button" variant="outline" className="h-9" onClick={() => window.open(url, "_blank", "noopener,noreferrer")}>
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Open overlay
+            </Button>
+            <Button type="button" variant="secondary" className="h-9" onClick={() => setOpenDesigner(true)}>
+              <SlidersHorizontal className="h-4 w-4 mr-2" />
+              Open Designer
+            </Button>
+          </div>
         </div>
 
         <WidgetPreviewPanel theme={theme} layout={layout} setLayout={setLayout} opts={opts} {...previewProps} />
@@ -1029,7 +1078,7 @@ function WidgetCard({ battleId, sideA, sideB, playerA, playerB, bestOf, buyCost,
   );
 }
 
-/* ───────────────────────── Página ───────────────────────── */
+/* ───────────────────────── Page ───────────────────────── */
 export default function BattleView() {
   const { isDark } = useTheme();
 
@@ -1114,7 +1163,6 @@ export default function BattleView() {
       const { data: ps } = await supabase.from("battle_payments").select("*").eq("battle_id", id).order("buy_idx", { ascending: true });
       setPays(ps || []);
 
-      // histórico (mantido)
       async function fetchSlotHistory(slotEntry) {
         try {
           let q = supabase.from("battle_entries").select("battle_id, slot_id, slot_name");
