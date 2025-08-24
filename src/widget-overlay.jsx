@@ -36,8 +36,8 @@ function parseHash() {
   const size = (name, def) => {
     const v = (qs.get(name) || "").trim();
     if (!v) return def;
-    if (/^\d+$/.test(v)) return `${v}px`; // "1080" -> "1080px"
-    return v; // "100%", "90vh", etc
+    if (/^\d+$/.test(v)) return `${v}px`;
+    return v;
   };
   const int = (name, def) => {
     const v = Number(qs.get(name));
@@ -47,15 +47,13 @@ function parseHash() {
   return {
     token: seg0 === "overlay" && seg1 === "battle" ? (seg2 || "").trim() : "",
     battleId: (qs.get("id") || "").trim(),
-    // Tamanho do stage
     w: size("w", "100vw"),
     h: size("h", "100vh"),
-    pinSize: (qs.get("pinsize") || "0") === "1", // se 1, respeita w/h fixos
-    // Proporção/base do painel interno (escala para caber)
+    pinSize: (qs.get("pinsize") || "0") === "1",
     bw: int("bw", 1100),
     bh: int("bh", 420),
     pad: int("pad", 24),
-    align: (qs.get("align") || "center").toLowerCase(), // top | center | bottom
+    align: (qs.get("align") || "center").toLowerCase(),
     enableAnim: (qs.get("anim") || "0") === "1",
   };
 }
@@ -115,7 +113,7 @@ const DEFAULT_OPTS = {
   totalLabelText: "Total paid",
 };
 
-/* Escala para caber (letterbox): calcula scale a partir do espaço disponível */
+/* Escala para caber (letterbox) */
 function useFitScale(containerRef, baseW, baseH, pad = 24, min = 0.3, max = 3) {
   const [scale, setScale] = React.useState(1);
   React.useEffect(() => {
@@ -135,7 +133,7 @@ function useFitScale(containerRef, baseW, baseH, pad = 24, min = 0.3, max = 3) {
   return scale;
 }
 
-/* Enriquecer slot com thumbnail/provider */
+/* Enriquecer slot */
 async function enrichSlotInfo(slot) {
   if (!slot) return slot;
   if (slot.thumbnail && slot.provider) return slot;
@@ -158,7 +156,7 @@ async function enrichSlotInfo(slot) {
   return slot;
 }
 
-/* ───────── UI do widget (default layout; sem flicker) ───────── */
+/* ───────── UI do widget ───────── */
 function WidgetPanel({
   theme,
   layout,
@@ -295,7 +293,7 @@ function WidgetPanel({
         />
       )}
 
-      {/* Default layout (sem drag) */}
+      {/* Default layout */}
       {layout?.mode !== "free" && (
         <>
           {/* badges */}
@@ -566,7 +564,7 @@ export default function WidgetOverlay() {
     setLoc,
   ] = React.useState(parseHash());
 
-  // CSS global: fundo transparente e sem margens/scroll (bom para OBS)
+  // CSS global
   React.useEffect(() => {
     const style = document.createElement("style");
     style.innerHTML = `
@@ -576,11 +574,11 @@ export default function WidgetOverlay() {
     return () => style.remove();
   }, []);
 
-  // Estado de carregamento/erros
+  // Estado
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState("");
 
-  // Dados da battle
+  // Dados
   const [bestOf, setBestOf] = React.useState(1);
   const [buyCost, setBuyCost] = React.useState(0);
   const [sideA, setSideA] = React.useState(null);
@@ -595,7 +593,7 @@ export default function WidgetOverlay() {
   const [layout, setLayout] = React.useState(DEFAULT_LAYOUT);
   const [opts, setOpts] = React.useState(DEFAULT_OPTS);
 
-  // animações por defeito: desligadas (ativo com ?anim=1)
+  // animações por defeito: off (ativa com ?anim=1)
   const effTheme = React.useMemo(() => {
     const t = { ...theme };
     if (!enableAnim) {
@@ -605,14 +603,14 @@ export default function WidgetOverlay() {
     return t;
   }, [theme, enableAnim]);
 
-  // ouvir alterações do hash (para mudar id/w/h/etc ao vivo)
+  // ouvir hash
   React.useEffect(() => {
     const onHash = () => setLoc(parseHash());
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  // Stage + escala para caber
+  // Stage + scale
   const stageRef = React.useRef(null);
   const scale = useFitScale(stageRef, bw, bh, pad, 0.3, 3);
 
@@ -707,7 +705,7 @@ export default function WidgetOverlay() {
         setLoading(true);
         setErr("");
 
-        // descobrir o owner pela token (widget_token -> public_token -> id)
+        // descobrir o owner pela token
         let ownerId = null;
         if (token) {
           if (!ownerId) {
@@ -856,7 +854,7 @@ export default function WidgetOverlay() {
             {err}
           </div>
         ) : (
-          // Wrapper com scale (nada é cortado; cabe sempre)
+          // Wrapper com scale (letterbox)
           <div style={{ position: "relative", width: bw * scale, height: bh * scale }}>
             <div
               style={{
