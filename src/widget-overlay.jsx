@@ -34,16 +34,25 @@ function parseHash() {
     const v = (qs.get(name) || "").trim();
     if (!v) return def;
     if (/^\d+$/.test(v)) return `${v}px`; // "1080" -> "1080px"
-    return v; // "100%", "90vh", "1920px"…
+    return v; // "100%", "90vh", etc.
+  };
+
+  const int = (name, def) => {
+    const v = Number(qs.get(name));
+    return Number.isFinite(v) && v > 0 ? v : def;
   };
 
   return {
     token: seg0 === "overlay" && seg1 === "battle" ? (seg2 || "").trim() : "",
     battleId: (qs.get("id") || "").trim(),
+    // tamanho do Browser Source
     w: size("w", "100vw"),
     h: size("h", "100vh"),
-    pad: Number(qs.get("pad") || 24), // padding dentro do painel
-    align: (qs.get("align") || "center").toLowerCase(), // center|top|bottom
+    // tamanho BASE do widget (é a “arte” no scale=1)
+    bw: int("bw", 1100),
+    bh: int("bh", 420),
+    pad: int("pad", 24),
+    align: (qs.get("align") || "center").toLowerCase(), // top|center|bottom
     enableAnim: (qs.get("anim") || "0") === "1",
   };
 }
@@ -101,27 +110,7 @@ const DEFAULT_OPTS = {
   totalLabelText: "Total paid",
 };
 
-/* Escala 2D: adapta à largura **e** à altura do container */
-function useContainerScale2D(ref, baseW = 960, baseH = 420, min = 0.6, max = 2) {
-  const [scale, setScale] = React.useState(1);
-  React.useEffect(() => {
-    if (!ref.current) return;
-    const ro = new ResizeObserver((entries) => {
-      const r = entries[0].contentRect;
-      const sx = r.width / baseW;
-      const sy = r.height / baseH;
-      const s = Math.max(min, Math.min(max, Math.min(sx, sy)));
-      setScale(s);
-    });
-    ro.observe(ref.current);
-    return () => ro.disconnect();
-  }, [ref, baseW, baseH, min, max]);
-  return scale;
-}
-
-function cn(...c) {
-  return c.filter(Boolean).join(" ");
-}
+function cn(...c) { return c.filter(Boolean).join(" "); }
 
 /* ───────── UI do widget ───────── */
 function WidgetPanel({
@@ -185,9 +174,7 @@ function WidgetPanel({
       }}
     >
       <span>Best of</span>
-      <span style={{ marginLeft: 6, fontWeight: theme.strongWeight }}>
-        {bestOf}
-      </span>
+      <span style={{ marginLeft: 6, fontWeight: theme.strongWeight }}>{bestOf}</span>
     </div>
   );
 
@@ -218,20 +205,13 @@ function WidgetPanel({
         }}
       >
         <span>{opts?.bonusLabelText || "Bonus Buy"}</span>
-        <span
-          style={{
-            marginLeft: 8,
-            color: theme.accent,
-            fontWeight: theme.strongWeight,
-          }}
-        >
+        <span style={{ marginLeft: 8, color: theme.accent, fontWeight: theme.strongWeight }}>
           {badgeBonusValue}
         </span>
       </div>
     );
 
-  const justify =
-    vAlign === "top" ? "justify-start" : vAlign === "bottom" ? "justify-end" : "justify-center";
+  const justify = vAlign === "top" ? "justify-start" : vAlign === "bottom" ? "justify-end" : "justify-center";
 
   return (
     <>
@@ -251,28 +231,27 @@ function WidgetPanel({
           fontSize: `${theme.fontScale}%`,
         }}
       >
-        {/* CONTENT WRAPPER – centra verticalmente o bloco todo */}
+        {/* wrapper que controla a posição vertical do MIÚDO todo */}
         <div className={cn("relative z-10 h-full flex flex-col", justify)}>
           <div className="space-y-5">
             {/* badges */}
-            <div className={opts?.bonusDock === "right" ? "flex items-center justify-between gap-2" : "flex items-center gap-2"}>
-              <div className="flex items-center gap-2">{BadgeBest}</div>
-              {opts?.bonusDock === "right" && <div>{BadgeBonus}</div>}
-              {opts?.bonusDock !== "right" && <>{BadgeBest && BadgeBonus}</>}
-            </div>
+            {opts?.bonusDock === "right" ? (
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">{BadgeBest}</div>
+                <div>{BadgeBonus}</div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                {BadgeBest}
+                {BadgeBonus}
+              </div>
+            )}
 
             {/* players */}
             <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-5">
               <div className="flex items-center justify-end gap-3 min-w-0">
                 <div className="min-w-0 text-right">
-                  <div
-                    className="truncate"
-                    style={{
-                      fontSize: "22px",
-                      color: theme.text,
-                      fontWeight: theme.strongWeight,
-                    }}
-                  >
+                  <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
                     {playerA || "—"}
                   </div>
                   <div className="text-[12px] truncate" style={{ color: theme.subtext }}>
@@ -280,15 +259,8 @@ function WidgetPanel({
                   </div>
                 </div>
                 {theme.showThumbs && (
-                  <div
-                    className="h-14 w-14 overflow-hidden ring-1 bg-white/5 shrink-0"
-                    style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}
-                  >
-                    {sideA?.thumbnail ? (
-                      <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="h-full w-full" />
-                    )}
+                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5 shrink-0" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
+                    {sideA?.thumbnail ? <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
                   </div>
                 )}
               </div>
@@ -296,12 +268,7 @@ function WidgetPanel({
               <div className="flex justify-center">
                 <div
                   className="px-3 py-1 text-xs"
-                  style={{
-                    background: theme.vsBg,
-                    border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
-                    borderRadius: 10,
-                    fontWeight: theme.strongWeight,
-                  }}
+                  style={{ background: theme.vsBg, border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`, borderRadius: 10, fontWeight: theme.strongWeight }}
                 >
                   VS
                 </div>
@@ -309,26 +276,12 @@ function WidgetPanel({
 
               <div className="flex items-center gap-3 min-w-0">
                 {theme.showThumbs && (
-                  <div
-                    className="h-14 w-14 overflow-hidden ring-1 bg-white/5 shrink-0"
-                    style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}
-                  >
-                    {sideB?.thumbnail ? (
-                      <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="h-full w-full" />
-                    )}
+                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5 shrink-0" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
+                    {sideB?.thumbnail ? <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
                   </div>
                 )}
                 <div className="min-w-0 text-left">
-                  <div
-                    className="truncate"
-                    style={{
-                      fontSize: "22px",
-                      color: theme.text,
-                      fontWeight: theme.strongWeight,
-                    }}
-                  >
+                  <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
                     {playerB || "—"}
                   </div>
                   <div className="text-[12px] truncate" style={{ color: theme.subtext }}>
@@ -343,54 +296,30 @@ function WidgetPanel({
               <div>
                 <div className="flex flex-wrap">
                   {aPays.map((p, i) => (
-                    <Chip
-                      key={`a-${i}`}
-                      amount={p.amount}
-                      ok={Number(p.amount || 0) >= Number(buyCost || 0)}
-                      i={i}
-                    />
+                    <Chip key={`a-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
                   ))}
                 </div>
                 <div
                   className="inline-flex mt-3 items-center gap-2 px-3 py-1.5 text-[12px]"
-                  style={{
-                    background: theme.chipBg,
-                    border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
-                    borderRadius: theme.radius,
-                    color: theme.subtext,
-                  }}
+                  style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext }}
                 >
                   <span>Subtotal</span>
-                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>
-                    {fmtMoney(aTotal)}
-                  </span>
+                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(aTotal)}</span>
                 </div>
               </div>
 
               <div>
                 <div className="flex flex-wrap">
                   {bPays.map((p, i) => (
-                    <Chip
-                      key={`b-${i}`}
-                      amount={p.amount}
-                      ok={Number(p.amount || 0) >= Number(buyCost || 0)}
-                      i={i}
-                    />
+                    <Chip key={`b-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
                   ))}
                 </div>
                 <div
                   className="inline-flex mt-3 items-center gap-2 px-3 py-1.5 text-[12px]"
-                  style={{
-                    background: theme.chipBg,
-                    border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
-                    borderRadius: theme.radius,
-                    color: theme.subtext,
-                  }}
+                  style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext }}
                 >
                   <span>Subtotal</span>
-                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>
-                    {fmtMoney(bTotal)}
-                  </span>
+                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(bTotal)}</span>
                 </div>
               </div>
             </div>
@@ -399,11 +328,7 @@ function WidgetPanel({
             <div
               className={cn(
                 "flex",
-                opts?.totalJustify === "left"
-                  ? "justify-start"
-                  : opts?.totalJustify === "right"
-                  ? "justify-end"
-                  : "justify-center"
+                opts?.totalJustify === "left" ? "justify-start" : opts?.totalJustify === "right" ? "justify-end" : "justify-center"
               )}
             >
               <div
@@ -417,9 +342,7 @@ function WidgetPanel({
                   boxShadow: "0 10px 30px rgba(0,0,0,.35)",
                 }}
               >
-                {opts?.totalLabelMode === "value"
-                  ? fmtMoney(aTotal + bTotal)
-                  : `Total paid: ${fmtMoney(aTotal + bTotal)}`}
+                {opts?.totalLabelMode === "value" ? fmtMoney(aTotal + bTotal) : `Total paid: ${fmtMoney(aTotal + bTotal)}`}
               </div>
             </div>
           </div>
@@ -431,7 +354,7 @@ function WidgetPanel({
 
 /* ───────── página ───────── */
 export default function WidgetOverlay() {
-  const [{ token, battleId, w, h, pad, align, enableAnim }, setLoc] =
+  const [{ token, battleId, w, h, bw, bh, pad, align, enableAnim }, setLoc] =
     React.useState(parseHash());
 
   React.useEffect(() => {
@@ -439,9 +362,25 @@ export default function WidgetOverlay() {
     document.body.style.margin = "0";
   }, []);
 
+  // OBSERVE o tamanho real do Browser Source para calcular o SCALE
   const stageRef = React.useRef(null);
-  // baseW/baseH são o "tamanho natural" do widget
-  const scale = useContainerScale2D(stageRef, 960, 420, 0.6, 2);
+  const [frame, setFrame] = React.useState({ w: 0, h: 0 });
+  React.useEffect(() => {
+    if (!stageRef.current) return;
+    const ro = new ResizeObserver((entries) => {
+      const r = entries[0].contentRect;
+      setFrame({ w: r.width, h: r.height });
+    });
+    ro.observe(stageRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  // scale = min(largura/BASE_W, altura/BASE_H) => nunca corta
+  const scale = React.useMemo(() => {
+    if (!frame.w || !frame.h) return 1;
+    const s = Math.min(frame.w / bw, frame.h / bh);
+    return Math.max(0.1, s); // limite de segurança
+  }, [frame, bw, bh]);
 
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState("");
@@ -459,14 +398,15 @@ export default function WidgetOverlay() {
   const [layout, setLayout] = React.useState(DEFAULT_LAYOUT);
   const [opts, setOpts] = React.useState(DEFAULT_OPTS);
 
+  // Mantemos o theme sem mexer no fontScale; o transform escala tudo.
   const effTheme = React.useMemo(() => {
-    const t = { ...theme, fontScale: Math.round(theme.fontScale * scale) };
+    const t = { ...theme };
     if (!enableAnim) {
       t.pulse = false;
       t.shine = false;
     }
     return t;
-  }, [theme, scale, enableAnim]);
+  }, [theme, enableAnim]);
 
   React.useEffect(() => {
     const onHash = () => setLoc(parseHash());
@@ -474,7 +414,7 @@ export default function WidgetOverlay() {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  // realtime + polling com RPC
+  // realtime + polling via snapshot RPC (sem flicker)
   const channelRef = React.useRef(null);
   const pollRef = React.useRef(null);
   const debounceRef = React.useRef(null);
@@ -586,39 +526,62 @@ export default function WidgetOverlay() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, battleId]);
 
+  // alinhamento vertical no “letterbox”
+  const alignItems =
+    align === "top" ? "flex-start" : align === "bottom" ? "flex-end" : "center";
+
   return (
     <div
       ref={stageRef}
-      className="overflow-hidden"
-      style={{ width: w || "100vw", height: h || "100vh", margin: 0, padding: 0 }}
+      style={{ width: w || "100vw", height: h || "100vh", margin: 0, padding: 0, overflow: "hidden" }}
     >
-      <div className="w-full h-full grid place-items-center">
-        {loading ? (
-          <div className="px-4 py-2 rounded-lg text-sm opacity-80 bg-black/40 text-white">
-            Loading overlay…
+      {/* área visível (letterbox); nunca corta o widget porque usamos scale */}
+      <div
+        className="w-full h-full"
+        style={{ display: "flex", justifyContent: "center", alignItems }}
+      >
+        {/* “spacer” com as dimensões ESCALADAS para centrar correctamente */}
+        <div style={{ width: bw * scale, height: bh * scale, position: "relative" }}>
+          {/* content real no tamanho base, escalado por transform */}
+          <div
+            style={{
+              width: bw,
+              height: bh,
+              transform: `scale(${scale})`,
+              transformOrigin: "top left",
+              position: "absolute",
+              left: 0,
+              top: 0,
+            }}
+          >
+            {loading ? (
+              <div className="px-4 py-2 rounded-lg text-sm opacity-80 bg-black/40 text-white absolute left-1/2 top-1/2" style={{ transform: "translate(-50%,-50%)" }}>
+                Loading overlay…
+              </div>
+            ) : err ? (
+              <div className="px-4 py-2 rounded-lg text-sm bg-red-500/15 text-red-200 border border-red-500/30 absolute left-1/2 top-1/2" style={{ transform: "translate(-50%,-50%)" }}>
+                {err}
+              </div>
+            ) : (
+              <WidgetPanel
+                theme={effTheme}
+                layout={layout}
+                opts={opts}
+                bestOf={bestOf}
+                buyCost={buyCost}
+                sideA={sideA}
+                sideB={sideB}
+                playerA={playerA}
+                playerB={playerB}
+                aPays={aPays}
+                bPays={bPays}
+                pad={pad}
+                vAlign={align}
+                enableAnim={enableAnim}
+              />
+            )}
           </div>
-        ) : err ? (
-          <div className="px-4 py-2 rounded-lg text-sm bg-red-500/15 text-red-200 border border-red-500/30">
-            {err}
-          </div>
-        ) : (
-          <WidgetPanel
-            theme={effTheme}
-            layout={layout}
-            opts={opts}
-            bestOf={bestOf}
-            buyCost={buyCost}
-            sideA={sideA}
-            sideB={sideB}
-            playerA={playerA}
-            playerB={playerB}
-            aPays={aPays}
-            bPays={bPays}
-            pad={pad}
-            vAlign={align}
-            enableAnim={enableAnim}
-          />
-        )}
+        </div>
       </div>
     </div>
   );
