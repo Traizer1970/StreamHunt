@@ -1006,19 +1006,44 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
 }
 
 /* ───────── Widget Card ───────── */
-function WidgetCard({ battleId, sideA, sideB, playerA, playerB, bestOf, buyCost, totalPay, aPays = [], bPays = [] }) {
+function WidgetCard({
+  battleId,
+  sideA,
+  sideB,
+  playerA,
+  playerB,
+  bestOf,
+  buyCost,
+  totalPay,
+  aPays = [],
+  bPays = [],
+}) {
   const [theme, setTheme] = React.useState(DEFAULT_THEME);
   const [layout, setLayout] = React.useState(DEFAULT_LAYOUT);
   const [opts, setOpts] = React.useState(DEFAULT_OPTS);
   const [openDesigner, setOpenDesigner] = React.useState(false);
-  const url = `${window.location.origin}/#/widget/battle/${battleId}`;
 
-  const previewProps = { bestOf, buyCost, totalPay, sideA, sideB, playerA, playerB, aPays, bPays };
+  // >>> LINK AJUSTADO PARA A ROTA DE OVERLAY
+  const url = `${window.location.origin}/#/overlay/battle/${battleId}`;
+
+  const previewProps = {
+    bestOf,
+    buyCost,
+    totalPay,
+    sideA,
+    sideB,
+    playerA,
+    playerB,
+    aPays,
+    bPays,
+  };
 
   React.useEffect(() => {
     (async () => {
       if (!battleId) return;
-      const { theme: t, layout: l, options: o } = await dbLoadWidgetSettings(battleId);
+      const { theme: t, layout: l, options: o } = await dbLoadWidgetSettings(
+        battleId
+      );
       if (t) setTheme({ ...DEFAULT_THEME, ...t });
       if (l) setLayout({ ...DEFAULT_LAYOUT, ...l });
       if (o) setOpts({ ...DEFAULT_OPTS, ...o });
@@ -1033,25 +1058,43 @@ function WidgetCard({ battleId, sideA, sideB, playerA, playerB, bestOf, buyCost,
   return (
     <>
       <AccentCard title="Widget">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-sm opacity-80">Preview</div>
-          <div className="flex items-center gap-2">
-            <Button type="button" onClick={() => navigator.clipboard.writeText(url)} className="h-9">
-              <Copy className="h-4 w-4 mr-2" />
-              Copy URL
-            </Button>
-            <Button type="button" variant="outline" className="h-9" onClick={() => window.open(url, "_blank", "noopener,noreferrer")}>
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Open overlay
-            </Button>
-            <Button type="button" variant="secondary" className="h-9" onClick={() => setOpenDesigner(true)}>
-              <SlidersHorizontal className="h-4 w-4 mr-2" />
-              Open Designer
-            </Button>
-          </div>
+        {/* Barra de ações — sem o texto "Preview" e ocupando 100% */}
+        <div className="mb-3 grid grid-cols-3 gap-2">
+          <Button
+            type="button"
+            onClick={() => navigator.clipboard.writeText(url)}
+            className="h-9 w-full justify-center"
+          >
+            <Copy className="h-4 w-4 mr-2" />
+            Copy URL
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-9 w-full justify-center"
+            onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+          >
+            <ExternalLink className="h-4 w-4 mr-2" />
+            Open overlay
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            className="h-9 w-full justify-center"
+            onClick={() => setOpenDesigner(true)}
+          >
+            <SlidersHorizontal className="h-4 w-4 mr-2" />
+            Open Designer
+          </Button>
         </div>
 
-        <WidgetPreviewPanel theme={theme} layout={layout} setLayout={setLayout} opts={opts} {...previewProps} />
+        <WidgetPreviewPanel
+          theme={theme}
+          layout={layout}
+          setLayout={setLayout}
+          opts={opts}
+          {...previewProps}
+        />
 
         <div className="mt-3 flex justify-end">
           <Button onClick={persist} className="h-9">
