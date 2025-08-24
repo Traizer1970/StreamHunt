@@ -2,23 +2,7 @@
 import React from "react";
 import { supabase } from "@/lib/supabase";
 
-/** ───────────────────────── Hash params ─────────────────────────
- * Aceita: "#/overlay/battle/<token>?id=<battleId>"
- * - <token> = widget_token (ou public_token / id do profile, como fallback)
- * - id=<battleId> é opcional; sem ele, usa a batalha mais recente do dono
- */
-function parseHash() {
-  const hash = typeof window !== "undefined" ? window.location.hash : "";
-  const clean = hash.replace(/^#\/?/, "");
-  const [seg0, seg1, seg2] = clean.split("?")[0].split("/");
-  const qs = new URLSearchParams(clean.split("?")[1] || "");
-  return {
-    token: seg0 === "overlay" && seg1 === "battle" ? (seg2 || "").trim() : "",
-    battleId: (qs.get("id") || "").trim(),
-  };
-}
-
-/* ───────────────────────── utils / style helpers ───────────────────────── */
+/* ───────────────────────── helpers ───────────────────────── */
 const cn = (...c) => c.filter(Boolean).join(" ");
 const LOCALE = "pt-PT";
 const fmtMoney = (n) =>
@@ -31,51 +15,56 @@ const fmtMoney = (n) =>
       }).format(Number(n))
     : "—";
 
-/* Theme (with border widths & typography) - deve bater com o battle-view */
+const isUUID =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+function parseHash() {
+  const hash = typeof window !== "undefined" ? window.location.hash : "";
+  const clean = hash.replace(/^#\/?/, "");
+  const [seg0, seg1, seg2] = clean.split("?")[0].split("/");
+  const qs = new URLSearchParams(clean.split("?")[1] || "");
+  return {
+    token: seg0 === "overlay" && seg1 === "battle" ? (seg2 || "").trim() : "",
+    battleId: (qs.get("id") || "").trim(),
+  };
+}
+
+/* Theme/Layout/Options (iguais ao battle-view) */
 const DEFAULT_THEME = {
   bgStart: "#0b1020",
   bgEnd: "#111827",
-
   panelBorder: "rgba(255,255,255,0.12)",
   panelBorderWidth: 1,
-
   text: "#e5e7eb",
   subtext: "#9ca3af",
   accent: "#7dd3fc",
-
   chipBg: "rgba(255,255,255,0.08)",
   chipBorder: "rgba(255,255,255,0.18)",
   chipBorderWidth: 1,
   chipRadius: 12,
-
   badgeBg: "rgba(255,255,255,0.08)",
   badgeBorder: "rgba(255,255,255,0.18)",
   badgeBorderWidth: 1,
-
   totalBg: "rgba(255,255,255,0.10)",
   totalBorder: "rgba(255,255,255,0.18)",
   totalBorderWidth: 1,
-
   pos: "#22c55e",
   neg: "#ef4444",
   vsBg: "rgba(99,102,241,0.35)",
-
-  radius: 18, // boxes
-  pillRadius: 16, // badges/total
+  radius: 18,
+  pillRadius: 16,
   fontFamily:
     "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji','Segoe UI Emoji'",
   fontScale: 100,
-  fontWeight: 400, // normal
-  strongWeight: 500, // emphasis
-
+  fontWeight: 400,
+  strongWeight: 500,
   showThumbs: true,
   shine: true,
   pulse: true,
 };
 
-/* Default layout + free drag positions */
 const DEFAULT_LAYOUT = {
-  mode: "default", // "default" | "free"
+  mode: "default",
   positions: {
     badges: { x: 16, y: 12 },
     playerA: { x: 40, y: 92 },
@@ -86,19 +75,32 @@ const DEFAULT_LAYOUT = {
   },
 };
 
-/* Widget options (dock/justify + labels) */
 const DEFAULT_OPTS = {
-  bonusLabelMode: "label+value", // "label+value" | "value"
+  bonusLabelMode: "label+value",
   bonusLabelText: "Bonus Buy",
-  bonusDock: "left", // "left" | "right"
-  totalJustify: "center", // "left" | "center" | "right"
-
-  // (presentes no battle-view; podes usar no futuro)
-  totalLabelMode: "label+value", // "label+value" | "value"
+  bonusDock: "left",
+  totalJustify: "center",
+  totalLabelMode: "label+value",
   totalLabelText: "Total paid",
 };
 
-/* Enrich slot -> thumbnail/provider a partir do catálogo (igual ao battle-view) */
+/* Escala automática: ajusta tipografia ao tamanho da janela */
+function useAutoFontScale(baseWidth = 960, min = 0.85, max = 1.15) {
+  const [scale, setScale] = React.useState(1);
+  React.useEffect(() => {
+    const calc = () => {
+      const w = Math.max(320, Math.min(window.innerWidth * 0.95, 1400));
+      const s = Math.max(min, Math.min(max, w / baseWidth));
+      setScale(s);
+    };
+    calc();
+    window.addEventListener("resize", calc);
+    return () => window.removeEventListener("resize", calc);
+  }, [baseWidth, min, max]);
+  return scale;
+}
+
+/* Enriquecer slot com thumbnail/provider (igual ao battle-view) */
 async function enrichSlotInfo(slot) {
   if (!slot) return slot;
   if (slot.thumbnail && slot.provider) return slot;
@@ -121,7 +123,7 @@ async function enrichSlotInfo(slot) {
   return slot;
 }
 
-/* ───────── Free-drag helper (igual ao battle-view) ───────── */
+/* ───────── Free-drag helper (mantido para layout "free") ───────── */
 function useDrag(containerRef, id, layout, setLayout) {
   const onMouseDown = (e) => {
     if (layout?.mode !== "free") return;
@@ -130,7 +132,6 @@ function useDrag(containerRef, id, layout, setLayout) {
     const startY = e.clientY;
     const rect = containerRef.current?.getBoundingClientRect();
     const cur = layout.positions?.[id] || { x: 0, y: 0 };
-
     const onMove = (ev) => {
       if (!rect) return;
       const dx = ev.clientX - startX;
@@ -152,7 +153,7 @@ function useDrag(containerRef, id, layout, setLayout) {
   return onMouseDown;
 }
 
-/* ───────── Preview Panel (copiado do battle-view) ───────── */
+/* ───────── UI do widget (igual à do battle-view) ───────── */
 function WidgetPreviewPanel({
   theme,
   layout,
@@ -299,7 +300,7 @@ function WidgetPreviewPanel({
         {/* default layout */}
         {layout?.mode !== "free" && (
           <>
-            {/* badges row (Bonus dock configurável) */}
+            {/* badges row */}
             {opts?.bonusDock === "right" ? (
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">{BadgeBest}</div>
@@ -466,7 +467,7 @@ function WidgetPreviewPanel({
               </div>
             </div>
 
-            {/* total (left/center/right) */}
+            {/* total */}
             <div
               className={cn(
                 "mt-6 flex",
@@ -487,14 +488,15 @@ function WidgetPreviewPanel({
                   fontWeight: theme.strongWeight,
                 }}
               >
-                {/* Podes adaptar para usar opts.totalLabelMode/totalLabelText se quiseres */}
-                Total paid: {fmtMoney(aTotal + bTotal)}
+                {opts?.totalLabelMode === "value"
+                  ? fmtMoney(aTotal + bTotal)
+                  : `Total paid: ${fmtMoney(aTotal + bTotal)}`}
               </div>
             </div>
           </>
         )}
 
-        {/* free layout (drag) */}
+        {/* free layout */}
         {layout?.mode === "free" && (
           <>
             <div
@@ -680,50 +682,115 @@ function WidgetPreviewPanel({
   );
 }
 
-/* ───────────────────────── Overlay Page ───────────────────────── */
+/* ───────────────────────── Página Overlay ───────────────────────── */
 export default function WidgetOverlay() {
   const [{ token, battleId }, setLoc] = React.useState(parseHash());
 
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState("");
 
-  // dados da batalha
+  // dados
   const [bestOf, setBestOf] = React.useState(1);
   const [buyCost, setBuyCost] = React.useState(0);
-
   const [sideA, setSideA] = React.useState(null);
   const [sideB, setSideB] = React.useState(null);
   const [playerA, setPlayerA] = React.useState("");
   const [playerB, setPlayerB] = React.useState("");
-
   const [aPays, setAPays] = React.useState([]);
   const [bPays, setBPays] = React.useState([]);
   const [totalPay, setTotalPay] = React.useState(0);
 
-  // tema/layout/opções vindos da tabela (igual ao battle-view)
+  // tema/layout/opções (vindos da DB)
   const [theme, setTheme] = React.useState(DEFAULT_THEME);
   const [layout, setLayout] = React.useState(DEFAULT_LAYOUT);
   const [opts, setOpts] = React.useState(DEFAULT_OPTS);
 
-  // reagir a alterações do hash (OBS)
+  // Responsivo – reescala a fonte do tema
+  const autoScale = useAutoFontScale(960, 0.85, 1.15);
+  const effTheme = React.useMemo(
+    () => ({ ...theme, fontScale: Math.round(theme.fontScale * autoScale) }),
+    [theme, autoScale]
+  );
+
+  // observar alterações do hash (OBS)
   React.useEffect(() => {
     const onHash = () => setLoc(parseHash());
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  // carregar dados + settings
+  const channelRef = React.useRef(null);
+  const pollRef = React.useRef(null);
+
+  async function loadAll({ ownerId, bId }) {
+    // battles (bo & buy)
+    const { data: bRow } = await supabase
+      .from("battles")
+      .select("id, best_of, buy_cost")
+      .eq("id", bId)
+      .maybeSingle();
+    setBestOf(Number(bRow?.best_of || 1));
+    setBuyCost(Number(bRow?.buy_cost || 0));
+
+    // settings
+    const { data: ws } = await supabase
+      .from("battle_widget_settings")
+      .select("theme, layout, options")
+      .eq("battle_id", bId)
+      .maybeSingle();
+    setTheme(ws?.theme ? { ...DEFAULT_THEME, ...ws.theme } : { ...DEFAULT_THEME });
+    setLayout(ws?.layout ? { ...DEFAULT_LAYOUT, ...ws.layout } : { ...DEFAULT_LAYOUT });
+    setOpts(ws?.options ? { ...DEFAULT_OPTS, ...ws.options } : { ...DEFAULT_OPTS });
+
+    // entries
+    const { data: entries } = await supabase
+      .from("battle_entries")
+      .select("seed, slot_name, slot_id, player_name")
+      .eq("battle_id", bId);
+    const bySeed = new Map();
+    for (const e of entries || []) {
+      if (e?.seed) bySeed.set(String(e.seed).toUpperCase(), e);
+    }
+    const A = bySeed.get("A") || (entries && entries[0]) || null;
+    const B = bySeed.get("B") || (entries && entries[1]) || null;
+    let aBase = A ? { id: A.slot_id ?? null, name: A.slot_name || "" } : null;
+    let bBase = B ? { id: B.slot_id ?? null, name: B.slot_name || "" } : null;
+    if (aBase) aBase = await enrichSlotInfo(aBase);
+    if (bBase) bBase = await enrichSlotInfo(bBase);
+    setSideA(aBase);
+    setPlayerA(A?.player_name || "");
+    setSideB(bBase);
+    setPlayerB(B?.player_name || "");
+
+    // pays
+    const { data: pays } = await supabase
+      .from("battle_payments")
+      .select("side, amount, buy_idx")
+      .eq("battle_id", bId)
+      .order("buy_idx", { ascending: true });
+
+    const as = (pays || [])
+      .filter((p) => String(p.side || "").toUpperCase() === "L")
+      .map((p) => ({ amount: Number(p.amount) || 0 }));
+    const bs = (pays || [])
+      .filter((p) => String(p.side || "").toUpperCase() === "R")
+      .map((p) => ({ amount: Number(p.amount) || 0 }));
+    setAPays(as);
+    setBPays(bs);
+    const sum = (arr) => arr.reduce((s, r) => s + Number(r.amount || 0), 0);
+    setTotalPay(sum(as) + sum(bs));
+  }
+
   React.useEffect(() => {
     (async () => {
       try {
         setLoading(true);
         setErr("");
 
-        // 1) Resolver dono pelo token (widget_token -> fallback public_token -> fallback id)
+        // 1) descobrir o dono pela token
         let ownerId = null;
-        if (token) {
-          let prof = null;
 
+        if (token) {
           // widget_token
           if (!ownerId) {
             const { data } = await supabase
@@ -731,8 +798,7 @@ export default function WidgetOverlay() {
               .select("id")
               .eq("widget_token", token)
               .maybeSingle();
-            prof = data || null;
-            if (prof?.id) ownerId = prof.id;
+            if (data?.id) ownerId = data.id;
           }
           // public_token
           if (!ownerId) {
@@ -741,120 +807,89 @@ export default function WidgetOverlay() {
               .select("id")
               .eq("public_token", token)
               .maybeSingle();
-            prof = data || null;
-            if (prof?.id) ownerId = prof.id;
+            if (data?.id) ownerId = data.id;
           }
-          // id (uuid)
-          if (!ownerId) {
+          // id (uuid) – só tenta se parecer UUID para evitar erro do Postgres
+          if (!ownerId && isUUID(token)) {
             const { data } = await supabase
               .from("profiles")
               .select("id")
               .eq("id", token)
               .maybeSingle();
-            prof = data || null;
-            if (prof?.id) ownerId = prof.id;
+            if (data?.id) ownerId = data.id;
           }
 
           if (!ownerId) throw new Error("Token inválida ou conta não encontrada.");
         }
 
-        // 2) Determinar battle id
+        // 2) battle alvo
         let bId = battleId || null;
         if (!bId) {
-          const { data: b, error: eB } = await supabase
+          const { data: b } = await supabase
             .from("battles")
-            .select("id, best_of, buy_cost, created_at")
+            .select("id")
             .eq("created_by", ownerId)
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle();
-          if (eB) throw eB;
-          if (!b?.id) throw new Error("Nenhuma batalha encontrada para esta conta.");
+          if (!b?.id)
+            throw new Error("Nenhuma batalha encontrada para esta conta.");
           bId = b.id;
-          setBestOf(Number(b.best_of || 1));
-          setBuyCost(Number(b.buy_cost || 0));
-        } else {
-          const { data: b, error: eB } = await supabase
-            .from("battles")
-            .select("id, best_of, buy_cost")
-            .eq("id", bId)
-            .maybeSingle();
-          if (eB) throw eB;
-          setBestOf(Number(b?.best_of || 1));
-          setBuyCost(Number(b?.buy_cost || 0));
         }
 
-        // 3) Carregar widget settings (tema/layout/opções)
-        const { data: ws } = await supabase
-          .from("battle_widget_settings")
-          .select("theme, layout, options")
-          .eq("battle_id", bId)
-          .maybeSingle();
-        if (ws?.theme) setTheme({ ...DEFAULT_THEME, ...ws.theme });
-        else setTheme({ ...DEFAULT_THEME });
-        if (ws?.layout) setLayout({ ...DEFAULT_LAYOUT, ...ws.layout });
-        else setLayout({ ...DEFAULT_LAYOUT });
-        if (ws?.options) setOpts({ ...DEFAULT_OPTS, ...ws.options });
-        else setOpts({ ...DEFAULT_OPTS });
+        // 3) carregar tudo
+        await loadAll({ ownerId, bId });
 
-        // 4) Entradas (A/B) + enriquecimento
-        const { data: entries } = await supabase
-          .from("battle_entries")
-          .select("seed, slot_name, slot_id, player_name")
-          .eq("battle_id", bId);
-
-        const bySeed = new Map();
-        for (const e of entries || []) {
-          if (e?.seed) bySeed.set(String(e.seed).toUpperCase(), e);
+        // 4) subscrever realtime + fallback polling
+        if (channelRef.current) {
+          supabase.removeChannel(channelRef.current);
+          channelRef.current = null;
         }
-        const A = bySeed.get("A") || (entries && entries[0]) || null;
-        const B = bySeed.get("B") || (entries && entries[1]) || null;
+        const ch = supabase
+          .channel(`overlay-${bId}`)
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "battle_payments", filter: `battle_id=eq.${bId}` },
+            () => loadAll({ ownerId, bId })
+          )
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "battle_entries", filter: `battle_id=eq.${bId}` },
+            () => loadAll({ ownerId, bId })
+          )
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "battle_widget_settings", filter: `battle_id=eq.${bId}` },
+            () => loadAll({ ownerId, bId })
+          )
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "battles", filter: `id=eq.${bId}` },
+            () => loadAll({ ownerId, bId })
+          )
+          .subscribe();
+        channelRef.current = ch;
 
-        let aBase = A ? { id: A.slot_id ?? null, name: A.slot_name || "" } : null;
-        let bBase = B ? { id: B.slot_id ?? null, name: B.slot_name || "" } : null;
-        if (aBase) aBase = await enrichSlotInfo(aBase);
-        if (bBase) bBase = await enrichSlotInfo(bBase);
-
-        setSideA(aBase);
-        setPlayerA(A?.player_name || "");
-        setSideB(bBase);
-        setPlayerB(B?.player_name || "");
-
-        // 5) Pagamentos (L/R)
-        const { data: pays } = await supabase
-          .from("battle_payments")
-          .select("side, amount, buy_idx")
-          .eq("battle_id", bId)
-          .order("buy_idx", { ascending: true });
-
-        const as = (pays || [])
-          .filter((p) => String(p.side || "").toUpperCase() === "L")
-          .map((p) => ({ amount: Number(p.amount) || 0 }));
-        const bs = (pays || [])
-          .filter((p) => String(p.side || "").toUpperCase() === "R")
-          .map((p) => ({ amount: Number(p.amount) || 0 }));
-        setAPays(as);
-        setBPays(bs);
-        const sum = (arr) => arr.reduce((s, r) => s + Number(r.amount || 0), 0);
-        setTotalPay(sum(as) + sum(bs));
+        // polling de segurança (caso realtime esteja desligado)
+        if (pollRef.current) clearInterval(pollRef.current);
+        pollRef.current = setInterval(() => loadAll({ ownerId, bId }), 5000);
       } catch (e) {
         setErr(e?.message || "Falha a carregar overlay.");
-        setSideA(null);
-        setSideB(null);
-        setPlayerA("");
-        setPlayerB("");
-        setAPays([]);
-        setBPays([]);
-        setTotalPay(0);
       } finally {
         setLoading(false);
       }
     })();
+
+    return () => {
+      if (channelRef.current) supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+      if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = null;
+    };
   }, [token, battleId]);
 
   return (
     <div className="w-screen h-screen grid place-items-center bg-transparent">
-      {/* mensagem de erro / loading minimalista para OBS */}
       {loading ? (
         <div className="px-4 py-2 rounded-lg text-sm opacity-80 bg-black/40 text-white">
           Loading overlay…
@@ -864,11 +899,11 @@ export default function WidgetOverlay() {
           {err}
         </div>
       ) : (
-        <div className="max-w-[960px] w-[92vw]">
+        <div className="w-[min(96vw,1100px)]">
           <WidgetPreviewPanel
-            theme={theme}
+            theme={effTheme}
             layout={layout}
-            setLayout={() => {}} // overlay não precisa arrastar; ignora
+            setLayout={() => {}}
             opts={opts}
             bestOf={bestOf}
             buyCost={buyCost}
