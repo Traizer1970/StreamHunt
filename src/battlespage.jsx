@@ -302,9 +302,9 @@ function UpsertBattleModal({ open, initial, onClose, onSaved }) {
         const { error } = await supabase.from("battles").update(payload).eq("id", id);
         if (error) throw error;
       } else {
-        const { data, error } = await supabase
-          .from("battles") // ← change if needed
-          .insert([payload])
+ const { data, error } = await supabase
+   .from("battles")
+   .insert([{ ...payload, created_by: profile?.id }]) // <-- define o dono
           .select("id")
           .single();
         if (error) throw error;
@@ -514,7 +514,12 @@ export default function BattlesPage() {
       setBusy(true);
       setErr("");
       // MAIN LIST -------------------------------------------------
-      const { data, error } = await supabase.from("battles").select("*").limit(500);
+         const { data, error } = await supabase
+   .from("battles")
+   .select("*")
+   .eq("created_by", profile?.id)   // <-- só as da conta atual
+   .order("created_at", { ascending: false })
+   .limit(500);
       // ^^^ change table name if needed
       if (error) throw error;
 
