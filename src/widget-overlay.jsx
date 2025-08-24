@@ -2,7 +2,7 @@
 import React from "react";
 import { supabase } from "@/lib/supabase";
 
-/* ───────── helpers ───────── */
+/* ───────────────────────── helpers ───────────────────────── */
 const LOCALE = "pt-PT";
 const fmtMoney = (n) =>
   Number.isFinite(Number(n))
@@ -13,6 +13,9 @@ const fmtMoney = (n) =>
         maximumFractionDigits: 2,
       }).format(Number(n))
     : "—";
+
+const isUUID =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 const shallowEq = (a, b) => {
   if (a === b) return true;
@@ -34,9 +37,8 @@ function parseHash() {
     const v = (qs.get(name) || "").trim();
     if (!v) return def;
     if (/^\d+$/.test(v)) return `${v}px`; // "1080" -> "1080px"
-    return v; // "100%", "90vh", etc.
+    return v; // "100%", "90vh", etc
   };
-
   const int = (name, def) => {
     const v = Number(qs.get(name));
     return Number.isFinite(v) && v > 0 ? v : def;
@@ -45,19 +47,20 @@ function parseHash() {
   return {
     token: seg0 === "overlay" && seg1 === "battle" ? (seg2 || "").trim() : "",
     battleId: (qs.get("id") || "").trim(),
-    // tamanho do Browser Source
+    // Tamanho do stage
     w: size("w", "100vw"),
     h: size("h", "100vh"),
-    // tamanho BASE do widget (é a “arte” no scale=1)
+    pinSize: (qs.get("pinsize") || "0") === "1", // se 1, respeita w/h fixos
+    // Proporção/base do painel interno (escala para caber)
     bw: int("bw", 1100),
     bh: int("bh", 420),
     pad: int("pad", 24),
-    align: (qs.get("align") || "center").toLowerCase(), // top|center|bottom
+    align: (qs.get("align") || "center").toLowerCase(), // top | center | bottom
     enableAnim: (qs.get("anim") || "0") === "1",
   };
 }
 
-/* ───────── tema/layout/opções ───────── */
+/* ───────── tema/layout/opções (mesmo do battle-view) ───────── */
 const DEFAULT_THEME = {
   bgStart: "#0b1020",
   bgEnd: "#111827",
@@ -90,6 +93,7 @@ const DEFAULT_THEME = {
   shine: true,
   pulse: true,
 };
+
 const DEFAULT_LAYOUT = {
   mode: "default",
   positions: {
@@ -101,6 +105,7 @@ const DEFAULT_LAYOUT = {
     total: { x: 360, y: 330 },
   },
 };
+
 const DEFAULT_OPTS = {
   bonusLabelMode: "label+value",
   bonusLabelText: "Bonus Buy",
@@ -110,9 +115,50 @@ const DEFAULT_OPTS = {
   totalLabelText: "Total paid",
 };
 
-function cn(...c) { return c.filter(Boolean).join(" "); }
+/* Escala para caber (letterbox): calcula scale a partir do espaço disponível */
+function useFitScale(containerRef, baseW, baseH, pad = 24, min = 0.3, max = 3) {
+  const [scale, setScale] = React.useState(1);
+  React.useEffect(() => {
+    if (!containerRef.current) return;
+    const el = containerRef.current;
+    const ro = new ResizeObserver((entries) => {
+      const rect = entries[0].contentRect;
+      const availW = Math.max(100, rect.width - pad * 2);
+      const availH = Math.max(100, rect.height - pad * 2);
+      const s = Math.min(availW / baseW, availH / baseH);
+      const clamped = Math.max(min, Math.min(max, s));
+      setScale(clamped);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [containerRef, baseW, baseH, pad, min, max]);
+  return scale;
+}
 
-/* ───────── UI do widget ───────── */
+/* Enriquecer slot com thumbnail/provider */
+async function enrichSlotInfo(slot) {
+  if (!slot) return slot;
+  if (slot.thumbnail && slot.provider) return slot;
+  try {
+    let q = supabase
+      .from("slots_catalog")
+      .select('id, "NAME", "PROVIDER", "THUMBNAIL"')
+      .limit(1);
+    if (slot.id) q = q.eq("id", slot.id);
+    else if (slot.name) q = q.ilike("NAME", `%${slot.name}%`);
+    const { data } = await q.maybeSingle();
+    if (data)
+      return {
+        id: data.id,
+        name: data["NAME"],
+        provider: data["PROVIDER"],
+        thumbnail: data["THUMBNAIL"],
+      };
+  } catch {}
+  return slot;
+}
+
+/* ───────── UI do widget (default layout; sem flicker) ───────── */
 function WidgetPanel({
   theme,
   layout,
@@ -125,9 +171,7 @@ function WidgetPanel({
   playerB,
   aPays,
   bPays,
-  pad = 24,
-  vAlign = "center",
-  enableAnim = false,
+  animations = false,
 }) {
   const aTotal = aPays.reduce((s, r) => s + Number(r?.amount || 0), 0);
   const bTotal = bPays.reduce((s, r) => s + Number(r?.amount || 0), 0);
@@ -141,19 +185,20 @@ function WidgetPanel({
         background: ok ? `${theme.pos}1F` : `${theme.neg}1F`,
         border: `${theme.chipBorderWidth}px solid ${ok ? theme.pos : theme.neg}`,
         color: ok ? theme.pos : theme.neg,
-        animation: enableAnim ? `pop .16s ease-out both` : "none",
+        boxShadow:
+          "0 0 0 1px rgba(0,0,0,0.25) inset, 0 6px 18px rgba(0,0,0,.36)",
+        animation: animations ? `pop .16s ease-out both` : "none",
         animationDelay: `${i * 45}ms`,
         fontSize: `calc(12px * ${theme.fontScale / 100})`,
         fontFamily: theme.fontFamily,
         fontWeight: theme.strongWeight,
-        boxShadow:
-          "0 0 0 1px rgba(0,0,0,0.25) inset, 0 6px 18px rgba(0,0,0,.36)",
       }}
       title={ok ? "Covers buy" : "Below buy"}
     >
       <span
         className="h-1.5 w-1.5 rounded-full"
         style={{
+          display: "inline-block",
           background: ok ? theme.pos : theme.neg,
           boxShadow: `0 0 0 2px ${ok ? theme.pos : theme.neg}26`,
         }}
@@ -174,7 +219,9 @@ function WidgetPanel({
       }}
     >
       <span>Best of</span>
-      <span style={{ marginLeft: 6, fontWeight: theme.strongWeight }}>{bestOf}</span>
+      <span style={{ marginLeft: 6, fontWeight: theme.strongWeight }}>
+        {bestOf}
+      </span>
     </div>
   );
 
@@ -205,186 +252,335 @@ function WidgetPanel({
         }}
       >
         <span>{opts?.bonusLabelText || "Bonus Buy"}</span>
-        <span style={{ marginLeft: 8, color: theme.accent, fontWeight: theme.strongWeight }}>
+        <span
+          style={{ marginLeft: 8, color: theme.accent, fontWeight: theme.strongWeight }}
+        >
           {badgeBonusValue}
         </span>
       </div>
     );
 
-  const justify = vAlign === "top" ? "justify-start" : vAlign === "bottom" ? "justify-end" : "justify-center";
-
   return (
-    <>
+    <div
+      className="relative overflow-hidden"
+      style={{
+        width: "100%",
+        height: "100%",
+        padding: 24,
+        background: `linear-gradient(135deg, ${theme.bgStart}, ${theme.bgEnd})`,
+        border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
+        borderRadius: theme.radius,
+        color: theme.text,
+        fontFamily: theme.fontFamily,
+        fontSize: `${theme.fontScale}%`,
+      }}
+    >
       <style>{`
+        @keyframes sweep { 0% { transform: translateX(-120%);} 100% { transform: translateX(120%);} }
         @keyframes pop { 0% { transform: scale(.96); opacity: 0;} 100% { transform: scale(1); opacity: 1;} }
       `}</style>
 
-      <div
-        className="relative overflow-hidden w-full h-full"
-        style={{
-          padding: pad,
-          background: `linear-gradient(135deg, ${theme.bgStart}, ${theme.bgEnd})`,
-          border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
-          borderRadius: theme.radius,
-          color: theme.text,
-          fontFamily: theme.fontFamily,
-          fontSize: `${theme.fontScale}%`,
-        }}
-      >
-        {/* wrapper que controla a posição vertical do MIÚDO todo */}
-        <div className={cn("relative z-10 h-full flex flex-col", justify)}>
-          <div className="space-y-5">
-            {/* badges */}
-            {opts?.bonusDock === "right" ? (
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">{BadgeBest}</div>
-                <div>{BadgeBonus}</div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                {BadgeBest}
-                {BadgeBonus}
-              </div>
-            )}
+      {(animations && theme.shine) && (
+        <div
+          className="pointer-events-none"
+          style={{
+            position: "absolute",
+            inset: "0 0 0 0",
+            width: "33%",
+            background:
+              "linear-gradient(to right, transparent, rgba(255,255,255,.10), transparent)",
+            animation: "sweep 4.8s linear infinite",
+            mixBlendMode: "screen",
+          }}
+        />
+      )}
 
-            {/* players */}
-            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-5">
-              <div className="flex items-center justify-end gap-3 min-w-0">
-                <div className="min-w-0 text-right">
-                  <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
-                    {playerA || "—"}
-                  </div>
-                  <div className="text-[12px] truncate" style={{ color: theme.subtext }}>
-                    {sideA?.name || "—"}
-                  </div>
-                </div>
-                {theme.showThumbs && (
-                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5 shrink-0" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
-                    {sideA?.thumbnail ? <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-center">
-                <div
-                  className="px-3 py-1 text-xs"
-                  style={{ background: theme.vsBg, border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`, borderRadius: 10, fontWeight: theme.strongWeight }}
-                >
-                  VS
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 min-w-0">
-                {theme.showThumbs && (
-                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5 shrink-0" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
-                    {sideB?.thumbnail ? <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
-                  </div>
-                )}
-                <div className="min-w-0 text-left">
-                  <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
-                    {playerB || "—"}
-                  </div>
-                  <div className="text-[12px] truncate" style={{ color: theme.subtext }}>
-                    {sideB?.name || "—"}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* chips + subtotais */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div>
-                <div className="flex flex-wrap">
-                  {aPays.map((p, i) => (
-                    <Chip key={`a-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
-                  ))}
-                </div>
-                <div
-                  className="inline-flex mt-3 items-center gap-2 px-3 py-1.5 text-[12px]"
-                  style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext }}
-                >
-                  <span>Subtotal</span>
-                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(aTotal)}</span>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex flex-wrap">
-                  {bPays.map((p, i) => (
-                    <Chip key={`b-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
-                  ))}
-                </div>
-                <div
-                  className="inline-flex mt-3 items-center gap-2 px-3 py-1.5 text-[12px]"
-                  style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext }}
-                >
-                  <span>Subtotal</span>
-                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(bTotal)}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* total */}
+      {/* Default layout (sem drag) */}
+      {layout?.mode !== "free" && (
+        <>
+          {/* badges */}
+          {opts?.bonusDock === "right" ? (
             <div
-              className={cn(
-                "flex",
-                opts?.totalJustify === "left" ? "justify-start" : opts?.totalJustify === "right" ? "justify-end" : "justify-center"
-              )}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 8,
+              }}
             >
+              <div style={{ display: "flex", gap: 8 }}>{BadgeBest}</div>
+              <div>{BadgeBonus}</div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {BadgeBest}
+              {BadgeBonus}
+            </div>
+          )}
+
+          {/* players */}
+          <div
+            style={{
+              marginTop: 20,
+              display: "grid",
+              gridTemplateColumns: "1fr auto 1fr",
+              alignItems: "center",
+              gap: 20,
+            }}
+          >
+            {/* A */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                gap: 12,
+                minWidth: 0,
+              }}
+            >
+              <div style={{ minWidth: 0, textAlign: "right" }}>
+                <div
+                  className="truncate"
+                  style={{
+                    fontSize: "22px",
+                    color: theme.text,
+                    fontWeight: theme.strongWeight,
+                  }}
+                >
+                  {playerA || "—"}
+                </div>
+                <div
+                  className="truncate"
+                  style={{ fontSize: 12, color: theme.subtext }}
+                >
+                  {sideA?.name || "—"}
+                </div>
+              </div>
+              {theme.showThumbs && (
+                <div
+                  style={{
+                    height: 56,
+                    width: 56,
+                    overflow: "hidden",
+                    borderRadius: theme.radius,
+                    background: "rgba(255,255,255,.05)",
+                    border: `1px solid ${theme.panelBorder}`,
+                    flexShrink: 0,
+                  }}
+                >
+                  {sideA?.thumbnail ? (
+                    <img
+                      src={sideA.thumbnail}
+                      alt=""
+                      style={{ height: "100%", width: "100%", objectFit: "cover" }}
+                    />
+                  ) : null}
+                </div>
+              )}
+            </div>
+
+            {/* VS */}
+            <div style={{ display: "flex", justifyContent: "center" }}>
               <div
-                className="px-4 py-2"
                 style={{
-                  background: theme.totalBg,
-                  border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`,
-                  borderRadius: theme.pillRadius,
-                  color: theme.accent,
+                  padding: "4px 10px",
+                  fontSize: 12,
+                  background: theme.vsBg,
+                  border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
+                  borderRadius: 10,
                   fontWeight: theme.strongWeight,
-                  boxShadow: "0 10px 30px rgba(0,0,0,.35)",
                 }}
               >
-                {opts?.totalLabelMode === "value" ? fmtMoney(aTotal + bTotal) : `Total paid: ${fmtMoney(aTotal + bTotal)}`}
+                VS
+              </div>
+            </div>
+
+            {/* B */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                minWidth: 0,
+              }}
+            >
+              {theme.showThumbs && (
+                <div
+                  style={{
+                    height: 56,
+                    width: 56,
+                    overflow: "hidden",
+                    borderRadius: theme.radius,
+                    background: "rgba(255,255,255,.05)",
+                    border: `1px solid ${theme.panelBorder}`,
+                    flexShrink: 0,
+                  }}
+                >
+                  {sideB?.thumbnail ? (
+                    <img
+                      src={sideB.thumbnail}
+                      alt=""
+                      style={{ height: "100%", width: "100%", objectFit: "cover" }}
+                    />
+                  ) : null}
+                </div>
+              )}
+              <div style={{ minWidth: 0, textAlign: "left" }}>
+                <div
+                  className="truncate"
+                  style={{
+                    fontSize: "22px",
+                    color: theme.text,
+                    fontWeight: theme.strongWeight,
+                  }}
+                >
+                  {playerB || "—"}
+                </div>
+                <div
+                  className="truncate"
+                  style={{ fontSize: 12, color: theme.subtext }}
+                >
+                  {sideB?.name || "—"}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    </>
+
+          {/* chips + subtotais */}
+          <div
+            style={{
+              marginTop: 24,
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 24,
+            }}
+          >
+            <div>
+              <div style={{ display: "flex", flexWrap: "wrap" }}>
+                {aPays.map((p, i) => (
+                  <Chip
+                    key={`a-${i}`}
+                    amount={p.amount}
+                    ok={Number(p.amount || 0) >= Number(buyCost || 0)}
+                    i={i}
+                  />
+                ))}
+              </div>
+              <div
+                style={{
+                  display: "inline-flex",
+                  marginTop: 10,
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "6px 12px",
+                  fontSize: 12,
+                  background: theme.chipBg,
+                  border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
+                  borderRadius: theme.radius,
+                  color: theme.subtext,
+                }}
+              >
+                <span>Subtotal</span>
+                <span
+                  style={{ color: theme.text, fontWeight: theme.strongWeight }}
+                >
+                  {fmtMoney(aTotal)}
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <div style={{ display: "flex", flexWrap: "wrap" }}>
+                {bPays.map((p, i) => (
+                  <Chip
+                    key={`b-${i}`}
+                    amount={p.amount}
+                    ok={Number(p.amount || 0) >= Number(buyCost || 0)}
+                    i={i}
+                  />
+                ))}
+              </div>
+              <div
+                style={{
+                  display: "inline-flex",
+                  marginTop: 10,
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "6px 12px",
+                  fontSize: 12,
+                  background: theme.chipBg,
+                  border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
+                  borderRadius: theme.radius,
+                  color: theme.subtext,
+                }}
+              >
+                <span>Subtotal</span>
+                <span
+                  style={{ color: theme.text, fontWeight: theme.strongWeight }}
+                >
+                  {fmtMoney(bTotal)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* total */}
+          <div
+            style={{
+              marginTop: 24,
+              display: "flex",
+              justifyContent:
+                opts?.totalJustify === "left"
+                  ? "flex-start"
+                  : opts?.totalJustify === "right"
+                  ? "flex-end"
+                  : "center",
+            }}
+          >
+            <div
+              style={{
+                padding: "8px 16px",
+                background: theme.totalBg,
+                border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`,
+                borderRadius: theme.pillRadius,
+                color: theme.accent,
+                fontWeight: theme.strongWeight,
+                boxShadow: "0 10px 30px rgba(0,0,0,.35)",
+              }}
+            >
+              {opts?.totalLabelMode === "value"
+                ? fmtMoney(aTotal + bTotal)
+                : `Total paid: ${fmtMoney(aTotal + bTotal)}`}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
-/* ───────── página ───────── */
+/* ───────────────────────── Página Overlay ───────────────────────── */
 export default function WidgetOverlay() {
-  const [{ token, battleId, w, h, bw, bh, pad, align, enableAnim }, setLoc] =
-    React.useState(parseHash());
+  const [
+    { token, battleId, w, h, bw, bh, pad, align, enableAnim, pinSize },
+    setLoc,
+  ] = React.useState(parseHash());
 
+  // CSS global: fundo transparente e sem margens/scroll (bom para OBS)
   React.useEffect(() => {
-    document.documentElement.style.margin = "0";
-    document.body.style.margin = "0";
+    const style = document.createElement("style");
+    style.innerHTML = `
+      html,body,#root,#__next{height:100%;width:100%;margin:0;padding:0;background:transparent;overflow:hidden}
+    `;
+    document.head.appendChild(style);
+    return () => style.remove();
   }, []);
 
-  // OBSERVE o tamanho real do Browser Source para calcular o SCALE
-  const stageRef = React.useRef(null);
-  const [frame, setFrame] = React.useState({ w: 0, h: 0 });
-  React.useEffect(() => {
-    if (!stageRef.current) return;
-    const ro = new ResizeObserver((entries) => {
-      const r = entries[0].contentRect;
-      setFrame({ w: r.width, h: r.height });
-    });
-    ro.observe(stageRef.current);
-    return () => ro.disconnect();
-  }, []);
-
-  // scale = min(largura/BASE_W, altura/BASE_H) => nunca corta
-  const scale = React.useMemo(() => {
-    if (!frame.w || !frame.h) return 1;
-    const s = Math.min(frame.w / bw, frame.h / bh);
-    return Math.max(0.1, s); // limite de segurança
-  }, [frame, bw, bh]);
-
+  // Estado de carregamento/erros
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState("");
 
+  // Dados da battle
   const [bestOf, setBestOf] = React.useState(1);
   const [buyCost, setBuyCost] = React.useState(0);
   const [sideA, setSideA] = React.useState(null);
@@ -394,11 +590,12 @@ export default function WidgetOverlay() {
   const [aPays, setAPays] = React.useState([]);
   const [bPays, setBPays] = React.useState([]);
 
+  // tema/layout/opções
   const [theme, setTheme] = React.useState(DEFAULT_THEME);
   const [layout, setLayout] = React.useState(DEFAULT_LAYOUT);
   const [opts, setOpts] = React.useState(DEFAULT_OPTS);
 
-  // Mantemos o theme sem mexer no fontScale; o transform escala tudo.
+  // animações por defeito: desligadas (ativo com ?anim=1)
   const effTheme = React.useMemo(() => {
     const t = { ...theme };
     if (!enableAnim) {
@@ -408,69 +605,100 @@ export default function WidgetOverlay() {
     return t;
   }, [theme, enableAnim]);
 
+  // ouvir alterações do hash (para mudar id/w/h/etc ao vivo)
   React.useEffect(() => {
     const onHash = () => setLoc(parseHash());
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  // realtime + polling via snapshot RPC (sem flicker)
+  // Stage + escala para caber
+  const stageRef = React.useRef(null);
+  const scale = useFitScale(stageRef, bw, bh, pad, 0.3, 3);
+
+  // realtime + polling
   const channelRef = React.useRef(null);
   const pollRef = React.useRef(null);
   const debounceRef = React.useRef(null);
-  const schedule = (fn) => {
+  const scheduleLoad = (fn) => {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(fn, 120);
   };
 
-  async function loadFromSnapshot(tok, bIdMaybe) {
-    const withTimeout = (p, ms = 10000) =>
-      Promise.race([
-        p,
-        new Promise((_, rej) =>
-          setTimeout(() => rej(new Error("Timeout a carregar overlay.")), ms)
-        ),
-      ]);
+  async function loadAll({ ownerId, bId }) {
+    // battle basics
+    const { data: bRow } = await supabase
+      .from("battles")
+      .select("id, best_of, buy_cost")
+      .eq("id", bId)
+      .maybeSingle();
+    if (bRow) {
+      const nb = Number(bRow.best_of || 1);
+      const bc = Number(bRow.buy_cost || 0);
+      setBestOf((v) => (v !== nb ? nb : v));
+      setBuyCost((v) => (v !== bc ? bc : v));
+    }
 
-    const { data: snap, error } = await withTimeout(
-      supabase.rpc("overlay_snapshot", {
-        p_token: tok || "",
-        p_battle_id: bIdMaybe ? Number(bIdMaybe) : null,
-      })
-    );
-    if (error) throw error;
-    if (!snap) throw new Error("Snapshot vazio.");
+    // settings
+    const { data: ws } = await supabase
+      .from("battle_widget_settings")
+      .select("theme, layout, options")
+      .eq("battle_id", bId)
+      .maybeSingle();
+    if (ws?.theme && !shallowEq(ws.theme, theme))
+      setTheme({ ...DEFAULT_THEME, ...ws.theme });
+    if (ws?.layout && !shallowEq(ws.layout, layout))
+      setLayout({ ...DEFAULT_LAYOUT, ...ws.layout });
+    if (ws?.options && !shallowEq(ws.options, opts))
+      setOpts({ ...DEFAULT_OPTS, ...ws.options });
 
-    const b = snap.battle || {};
-    setBestOf((v) => (v !== Number(b.best_of || 1) ? Number(b.best_of || 1) : v));
-    setBuyCost((v) => (v !== Number(b.buy_cost || 0) ? Number(b.buy_cost || 0) : v));
+    // entries
+    const { data: entries } = await supabase
+      .from("battle_entries")
+      .select("seed, slot_name, slot_id, player_name")
+      .eq("battle_id", bId);
 
-    const ws = snap.settings || {};
-    if (ws.theme && !shallowEq(ws.theme, theme)) setTheme({ ...DEFAULT_THEME, ...ws.theme });
-    if (ws.layout && !shallowEq(ws.layout, layout)) setLayout({ ...DEFAULT_LAYOUT, ...ws.layout });
-    if (ws.options && !shallowEq(ws.options, opts)) setOpts({ ...DEFAULT_OPTS, ...ws.options });
+    const map = new Map();
+    for (const e of entries || []) if (e?.seed) map.set(String(e.seed).toUpperCase(), e);
+    const A = map.get("A") || (entries && entries[0]) || null;
+    const B = map.get("B") || (entries && entries[1]) || null;
 
-    const es = Array.isArray(snap.entries) ? snap.entries : [];
-    const bySeed = new Map();
-    for (const e of es) if (e?.seed) bySeed.set(String(e.seed).toUpperCase(), e);
-    const A = bySeed.get("A") || es[0] || null;
-    const B = bySeed.get("B") || es[1] || null;
+    if (A) {
+      let aBase = { id: A.slot_id ?? null, name: A.slot_name || "" };
+      aBase = await enrichSlotInfo(aBase);
+      setSideA((v) => (JSON.stringify(v) !== JSON.stringify(aBase) ? aBase : v));
+      setPlayerA((v) => (v !== (A.player_name || "") ? (A.player_name || "") : v));
+    } else {
+      setSideA(null);
+      setPlayerA("");
+    }
 
-    const aBase = A ? { id: A.slot_id ?? null, name: A.slot_name || "", thumbnail: A.thumbnail || null } : null;
-    const bBase = B ? { id: B.slot_id ?? null, name: B.slot_name || "", thumbnail: B.thumbnail || null } : null;
+    if (B) {
+      let bBase = { id: B.slot_id ?? null, name: B.slot_name || "" };
+      bBase = await enrichSlotInfo(bBase);
+      setSideB((v) => (JSON.stringify(v) !== JSON.stringify(bBase) ? bBase : v));
+      setPlayerB((v) => (v !== (B.player_name || "") ? (B.player_name || "") : v));
+    } else {
+      setSideB(null);
+      setPlayerB("");
+    }
 
-    setSideA((v) => (JSON.stringify(v) !== JSON.stringify(aBase) ? aBase : v));
-    setSideB((v) => (JSON.stringify(v) !== JSON.stringify(bBase) ? bBase : v));
-    setPlayerA((v) => (v !== (A?.player_name || "") ? (A?.player_name || "") : v));
-    setPlayerB((v) => (v !== (B?.player_name || "") ? (B?.player_name || "") : v));
+    // payments
+    const { data: pays } = await supabase
+      .from("battle_payments")
+      .select("side, amount, buy_idx")
+      .eq("battle_id", bId)
+      .order("buy_idx", { ascending: true });
 
-    const pays = Array.isArray(snap.pays) ? snap.pays : [];
-    const as = pays.filter((p) => String(p.side || "").toUpperCase() === "L").map((p) => ({ amount: Number(p.amount) || 0 }));
-    const bs = pays.filter((p) => String(p.side || "").toUpperCase() === "R").map((p) => ({ amount: Number(p.amount) || 0 }));
+    const as = (pays || [])
+      .filter((p) => String(p.side || "").toUpperCase() === "L")
+      .map((p) => ({ amount: Number(p.amount) || 0 }));
+    const bs = (pays || [])
+      .filter((p) => String(p.side || "").toUpperCase() === "R")
+      .map((p) => ({ amount: Number(p.amount) || 0 }));
+
     setAPays((v) => (JSON.stringify(v) !== JSON.stringify(as) ? as : v));
     setBPays((v) => (JSON.stringify(v) !== JSON.stringify(bs) ? bs : v));
-
-    return b.id;
   }
 
   React.useEffect(() => {
@@ -479,36 +707,82 @@ export default function WidgetOverlay() {
         setLoading(true);
         setErr("");
 
-        const bId = await loadFromSnapshot(token, battleId);
+        // descobrir o owner pela token (widget_token -> public_token -> id)
+        let ownerId = null;
+        if (token) {
+          if (!ownerId) {
+            const { data } = await supabase
+              .from("profiles")
+              .select("id")
+              .eq("widget_token", token)
+              .maybeSingle();
+            if (data?.id) ownerId = data.id;
+          }
+          if (!ownerId) {
+            const { data } = await supabase
+              .from("profiles")
+              .select("id")
+              .eq("public_token", token)
+              .maybeSingle();
+            if (data?.id) ownerId = data.id;
+          }
+          if (!ownerId && isUUID(token)) {
+            const { data } = await supabase
+              .from("profiles")
+              .select("id")
+              .eq("id", token)
+              .maybeSingle();
+            if (data?.id) ownerId = data.id;
+          }
+          if (!ownerId) throw new Error("Token inválida ou conta não encontrada.");
+        }
 
+        // battle alvo
+        let bId = battleId || null;
+        if (!bId) {
+          const { data: b } = await supabase
+            .from("battles")
+            .select("id")
+            .eq("created_by", ownerId)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (!b?.id) throw new Error("Nenhuma batalha encontrada para esta conta.");
+          bId = b.id;
+        }
+
+        await loadAll({ ownerId, bId });
+
+        // realtime
         if (channelRef.current) supabase.removeChannel(channelRef.current);
         const ch = supabase
           .channel(`overlay-${bId}`)
           .on(
             "postgres_changes",
             { event: "*", schema: "public", table: "battle_payments", filter: `battle_id=eq.${bId}` },
-            () => schedule(() => loadFromSnapshot(token, bId))
+            () => scheduleLoad(() => loadAll({ ownerId, bId }))
           )
           .on(
             "postgres_changes",
             { event: "*", schema: "public", table: "battle_entries", filter: `battle_id=eq.${bId}` },
-            () => schedule(() => loadFromSnapshot(token, bId))
+            () => scheduleLoad(() => loadAll({ ownerId, bId }))
           )
           .on(
             "postgres_changes",
             { event: "*", schema: "public", table: "battle_widget_settings", filter: `battle_id=eq.${bId}` },
-            () => schedule(() => loadFromSnapshot(token, bId))
+            () => scheduleLoad(() => loadAll({ ownerId, bId }))
           )
           .on(
             "postgres_changes",
-            { event: "UPDATE", schema: "public", table: "battles", filter: `id=eq.${bId}` },
-            () => schedule(() => loadFromSnapshot(token, bId))
+            { event: "*", schema: "public", table: "battles", filter: `id=eq.${bId}` },
+            () => scheduleLoad(() => loadAll({ ownerId, bId }))
           )
           .subscribe();
         channelRef.current = ch;
 
+        // polling de segurança
         if (pollRef.current) clearInterval(pollRef.current);
-        pollRef.current = setInterval(() => loadFromSnapshot(token, bId), 8000);
+        pollRef.current = setInterval(() => loadAll({ ownerId, bId }), 7000);
       } catch (e) {
         setErr(e?.message || "Falha a carregar overlay.");
       } finally {
@@ -526,43 +800,75 @@ export default function WidgetOverlay() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, battleId]);
 
-  // alinhamento vertical no “letterbox”
+  // alinhamento vertical
   const alignItems =
     align === "top" ? "flex-start" : align === "bottom" ? "flex-end" : "center";
 
   return (
     <div
       ref={stageRef}
-      style={{ width: w || "100vw", height: h || "100vh", margin: 0, padding: 0, overflow: "hidden" }}
+      style={{
+        position: "fixed",
+        inset: 0,
+        width: pinSize ? w : "100vw",
+        height: pinSize ? h : "100vh",
+        margin: 0,
+        padding: 0,
+        background: "transparent",
+        overflow: "hidden",
+      }}
     >
-      {/* área visível (letterbox); nunca corta o widget porque usamos scale */}
       <div
-        className="w-full h-full"
-        style={{ display: "flex", justifyContent: "center", alignItems }}
+        style={{
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          justifyContent: "center",
+          alignItems,
+          padding: pad,
+          boxSizing: "border-box",
+        }}
       >
-        {/* “spacer” com as dimensões ESCALADAS para centrar correctamente */}
-        <div style={{ width: bw * scale, height: bh * scale, position: "relative" }}>
-          {/* content real no tamanho base, escalado por transform */}
+        {loading ? (
           <div
             style={{
-              width: bw,
-              height: bh,
-              transform: `scale(${scale})`,
-              transformOrigin: "top left",
-              position: "absolute",
-              left: 0,
-              top: 0,
+              padding: "8px 12px",
+              borderRadius: 8,
+              fontSize: 12,
+              opacity: 0.8,
+              background: "rgba(0,0,0,.35)",
+              color: "white",
             }}
           >
-            {loading ? (
-              <div className="px-4 py-2 rounded-lg text-sm opacity-80 bg-black/40 text-white absolute left-1/2 top-1/2" style={{ transform: "translate(-50%,-50%)" }}>
-                Loading overlay…
-              </div>
-            ) : err ? (
-              <div className="px-4 py-2 rounded-lg text-sm bg-red-500/15 text-red-200 border border-red-500/30 absolute left-1/2 top-1/2" style={{ transform: "translate(-50%,-50%)" }}>
-                {err}
-              </div>
-            ) : (
+            Loading overlay…
+          </div>
+        ) : err ? (
+          <div
+            style={{
+              padding: "8px 12px",
+              borderRadius: 8,
+              fontSize: 12,
+              background: "rgba(239,68,68,.15)",
+              color: "rgb(252,165,165)",
+              border: "1px solid rgba(239,68,68,.35)",
+            }}
+          >
+            {err}
+          </div>
+        ) : (
+          // Wrapper com scale (nada é cortado; cabe sempre)
+          <div style={{ position: "relative", width: bw * scale, height: bh * scale }}>
+            <div
+              style={{
+                position: "absolute",
+                left: 0,
+                top: 0,
+                width: bw,
+                height: bh,
+                transform: `scale(${scale})`,
+                transformOrigin: "top left",
+              }}
+            >
               <WidgetPanel
                 theme={effTheme}
                 layout={layout}
@@ -575,13 +881,11 @@ export default function WidgetOverlay() {
                 playerB={playerB}
                 aPays={aPays}
                 bPays={bPays}
-                pad={pad}
-                vAlign={align}
-                enableAnim={enableAnim}
+                animations={enableAnim}
               />
-            )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
