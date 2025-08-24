@@ -17,11 +17,12 @@ import {
   Palette,
   X,
   Save,
+  RotateCcw,
 } from "lucide-react";
 
 /* ───────────────────────── utils / style helpers ───────────────────────── */
 const cn = (...c) => c.filter(Boolean).join(" ");
-const LOCALE = "pt-PT"; // mantém formatação € com vírgula; troca para "en-GB" se quiseres 94.43 €
+const LOCALE = "pt-PT";
 const fmtMoney = (n) =>
   Number.isFinite(Number(n))
     ? new Intl.NumberFormat(LOCALE, {
@@ -67,7 +68,7 @@ const DEFAULT_THEME = {
     "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji','Segoe UI Emoji'",
   fontScale: 100,
   fontWeight: 400,     // normal
-  strongWeight: 500,   // emphasis (set 400 to remove bold effect)
+  strongWeight: 500,   // emphasis
 
   showThumbs: true,
   shine: true,
@@ -87,7 +88,6 @@ const DEFAULT_LAYOUT = {
   },
 };
 
-/* Widget options (now with Bonus docking & Total alignment) */
 /* Widget options (… + OBS sizing) */
 const DEFAULT_OPTS = {
   bonusLabelMode: "label+value",
@@ -97,19 +97,16 @@ const DEFAULT_OPTS = {
   totalLabelMode: "label+value",
   totalLabelText: "Total paid",
 
-  // ⬇️ NOVO: definições de saída para o OBS
   overlay: {
-    mode: "auto",     // "auto" = preenche Browser Source | "fixed" = tamanho fixo
-    width: 1920,      // só usado se mode === "fixed"
-    height: 1080,     // só usado se mode === "fixed"
-    baseW: 1100,      // largura do painel interno (base para o scale)
-    baseH: 420,       // altura do painel interno (base para o scale)
-    pad: 24,          // margem interna (letterbox)
+    mode: "auto",     // "auto" | "fixed"
+    width: 1920,      // fixed only
+    height: 1080,     // fixed only
+    baseW: 1100,      // panel base (scale)
+    baseH: 420,
+    pad: 24,
     align: "center",  // "top" | "center" | "bottom"
   },
 };
-
-
 
 /* Presets */
 const PRESETS = [
@@ -121,18 +118,21 @@ const PRESETS = [
   { name: "Twilight", t: { bgStart: "#0b1b3a", bgEnd: "#112a46", accent: "#7dd3fc", pos: "#22c55e", neg: "#fb7185", vsBg: "rgba(125,211,252,0.30)" } },
 ];
 
-// ---- URL builder para o overlay (VISÍVEL a todos os componentes) ----
-function buildOverlayUrl(base, token, opts) {
+/* ---- URL builder para o overlay — agora inclui o id da battle ---- */
+function buildOverlayUrl(base, token, opts, battleId) {
   const o = (opts && opts.overlay) || {};
   const qs = new URLSearchParams();
 
-  // base do painel para scaling no overlay
+  // id explícito da battle
+  if (battleId) qs.set("id", String(battleId));
+
+  // base para scale
   if (o.baseW) qs.set("bw", String(o.baseW));
   if (o.baseH) qs.set("bh", String(o.baseH));
   if (o.pad)   qs.set("pad", String(o.pad));
   if (o.align) qs.set("align", String(o.align));
 
-  // tamanho fixo (para usar no Browser Source com as mesmas dimensões)
+  // modo fixed = travar tamanho no OBS
   if (o.mode === "fixed") {
     qs.set("pinsize", "1");
     if (o.width)  qs.set("w", String(o.width));
@@ -494,6 +494,13 @@ function WidgetPreviewPanel({
       </div>
     );
 
+  // —— mini stage para pré-visualizar o efeito do Canvas/OBS (baseW/baseH/pad/align) ——
+  const stagePad = opts?.overlay?.pad ?? 24;
+  const baseW = opts?.overlay?.baseW ?? 1100;
+  const baseH = opts?.overlay?.baseH ?? 420;
+  const vAlign = (opts?.overlay?.align ?? "center");
+  const alignItems = vAlign === "top" ? "flex-start" : vAlign === "bottom" ? "flex-end" : "center";
+
   return (
     <>
       <style>{`
@@ -502,229 +509,225 @@ function WidgetPreviewPanel({
         @keyframes glow { 0% { box-shadow: 0 0 0 rgba(0,0,0,0);} 100% { box-shadow: 0 15px 40px rgba(0,0,0,.45);} }
       `}</style>
 
+      {/* Stage que simula o “Browser Source” com letterbox */}
       <div
         ref={containerRef}
-        className="relative overflow-hidden p-5 sm:p-6"
+        className="relative overflow-hidden p-0"
         style={{
-          background: `linear-gradient(135deg, ${theme.bgStart}, ${theme.bgEnd})`,
-          border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
           borderRadius: theme.radius,
-          color: theme.text,
-          fontFamily: theme.fontFamily,
-          fontSize: `${theme.fontScale}%`,
           animation: "glow .3s ease-out both",
-          minHeight: layout?.mode === "free" ? 420 : "auto",
+          background: "transparent",
         }}
       >
-        {theme.shine && (
+        <div
+          className="w-full h-full flex justify-center"
+          style={{ alignItems, padding: stagePad, boxSizing: "border-box" }}
+        >
           <div
-            className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/10 to-transparent"
-            style={{ animation: "sweep 4.8s linear infinite" }}
-          />
-        )}
+            className="shadow-[0_10px_30px_rgba(0,0,0,.35)]"
+            style={{
+              width: baseW,
+              height: baseH,
+              background: `linear-gradient(135deg, ${theme.bgStart}, ${theme.bgEnd})`,
+              border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
+              borderRadius: theme.radius,
+              color: theme.text,
+              fontFamily: theme.fontFamily,
+              fontSize: `${theme.fontScale}%`,
+            }}
+          >
+            {/* ---------- default layout (no drag) ---------- */}
+            {layout?.mode !== "free" && (
+              <>
+                {/* badges row */}
+                {opts?.bonusDock === "right" ? (
+                  <div className="flex items-center justify-between gap-2 p-5">
+                    <div className="flex items-center gap-2">{BadgeBest}</div>
+                    <div>{BadgeBonus}</div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 p-5">
+                    {BadgeBest}
+                    {BadgeBonus}
+                  </div>
+                )}
 
-        {/* ---------- default layout (no drag) ---------- */}
-        {layout?.mode !== "free" && (
-          <>
-            {/* badges row (Bonus can be docked right) */}
-            {opts?.bonusDock === "right" ? (
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">{BadgeBest}</div>
-                <div>{BadgeBonus}</div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                {BadgeBest}
-                {BadgeBonus}
-              </div>
+                {/* players */}
+                <div className="px-5 grid grid-cols-[1fr_auto_1fr] items-center gap-5">
+                  <div className="flex items-center justify-end gap-3">
+                    <div className="min-w-0 text-right">
+                      <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
+                        {playerA || "—"}
+                      </div>
+                      <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>
+                        {sideA?.name || "—"}
+                      </div>
+                    </div>
+                    {theme.showThumbs && (
+                      <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
+                        {sideA?.thumbnail ? <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex justify-center">
+                    <div
+                      className={cn("px-3 py-1 text-xs", theme.pulse ? "animate-pulse" : "")}
+                      style={{ background: theme.vsBg, border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`, borderRadius: 10, fontWeight: theme.strongWeight }}
+                    >
+                      VS
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    {theme.showThumbs && (
+                      <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
+                        {sideB?.thumbnail ? <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
+                      </div>
+                    )}
+                    <div className="min-w-0 text-left">
+                      <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
+                        {playerB || "—"}
+                      </div>
+                      <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>
+                        {sideB?.name || "—"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* chips + subtotals */}
+                <div className="px-5 mt-6 grid grid-cols-2 gap-6">
+                  <div>
+                    <div className="flex flex-wrap">
+                      {aPays.map((p, i) => (
+                        <Chip key={`a-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
+                      ))}
+                    </div>
+                    <div
+                      className="inline-flex mt-3 items-center gap-2 px-3 py-1.5 text-[12px]"
+                      style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}
+                    >
+                      <span>Subtotal</span>
+                      <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(aTotal)}</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex flex-wrap">
+                      {bPays.map((p, i) => (
+                        <Chip key={`b-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
+                      ))}
+                    </div>
+                    <div
+                      className="inline-flex mt-3 items-center gap-2 px-3 py-1.5 text-[12px]"
+                      style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}
+                    >
+                      <span>Subtotal</span>
+                      <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(bTotal)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* total (left/center/right) */}
+                <div
+                  className={cn(
+                    "px-5 mt-6 flex",
+                    opts?.totalJustify === "left" ? "justify-start" : opts?.totalJustify === "right" ? "justify-end" : "justify-center"
+                  )}
+                >
+                  <div
+                    className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
+                    style={{ background: theme.totalBg, border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`, borderRadius: theme.pillRadius, color: theme.accent, fontWeight: theme.strongWeight }}
+                  >
+                    Total paid: {fmtMoney(totalPay)}
+                  </div>
+                </div>
+              </>
             )}
 
-            {/* players */}
-            <div className="mt-5 grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-5">
-              <div className="flex items-center justify-end gap-3">
-                <div className="min-w-0 text-right">
-                  <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
-                    {playerA || "—"}
+            {/* ---------- free layout (drag & drop) ---------- */}
+            {layout?.mode === "free" && (
+              <div className="relative w-full h-full">
+                <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: "linear-gradient(transparent 95%, rgba(255,255,255,.05) 95%)", backgroundSize: "100% 40px" }} />
+                <DragBox id="badges">
+                  <div className="flex items-center gap-2 p-5">
+                    {BadgeBest}
+                    {BadgeBonus}
                   </div>
-                  <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>
-                    {sideA?.name || "—"}
+                </DragBox>
+                <DragBox id="playerA">
+                  <div className="flex items-center justify-end gap-3 px-5">
+                    <div className="min-w-0 text-right">
+                      <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>{playerA || "—"}</div>
+                      <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>{sideA?.name || "—"}</div>
+                    </div>
+                    {theme.showThumbs && (
+                      <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
+                        {sideA?.thumbnail ? <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
+                      </div>
+                    )}
                   </div>
-                </div>
-                {theme.showThumbs && (
-                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
-                    {sideA?.thumbnail ? <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
+                </DragBox>
+                <DragBox id="playerB">
+                  <div className="flex items-center gap-3 px-5">
+                    {theme.showThumbs && (
+                      <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
+                        {sideB?.thumbnail ? <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
+                      </div>
+                    )}
+                    <div className="min-w-0 text-left">
+                      <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>{playerB || "—"}</div>
+                      <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>{sideB?.name || "—"}</div>
+                    </div>
                   </div>
-                )}
-              </div>
-
-              <div className="flex justify-center">
-                <div
-                  className={cn("px-3 py-1 text-xs", theme.pulse ? "animate-pulse" : "")}
-                  style={{ background: theme.vsBg, border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`, borderRadius: 10, fontWeight: theme.strongWeight }}
-                >
-                  VS
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                {theme.showThumbs && (
-                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
-                    {sideB?.thumbnail ? <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
+                </DragBox>
+                <DragBox id="chipsA">
+                  <div className="px-5">
+                    <div className="flex flex-wrap">
+                      {aPays.map((p, i) => (
+                        <Chip key={`fa-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
+                      ))}
+                    </div>
+                    <div
+                      className="inline-flex mt-2 items-center gap-2 px-3 py-1.5 text-[12px]"
+                      style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}
+                    >
+                      <span>Subtotal</span>
+                      <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(aTotal)}</span>
+                    </div>
                   </div>
-                )}
-                <div className="min-w-0 text-left">
-                  <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
-                    {playerB || "—"}
+                </DragBox>
+                <DragBox id="chipsB">
+                  <div className="px-5">
+                    <div className="flex flex-wrap">
+                      {bPays.map((p, i) => (
+                        <Chip key={`fb-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
+                      ))}
+                    </div>
+                    <div
+                      className="inline-flex mt-2 items-center gap-2 px-3 py-1.5 text-[12px]"
+                      style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}
+                    >
+                      <span>Subtotal</span>
+                      <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(bTotal)}</span>
+                    </div>
                   </div>
-                  <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>
-                    {sideB?.name || "—"}
+                </DragBox>
+                <DragBox id="total">
+                  <div className="px-5">
+                    <div
+                      className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
+                      style={{ background: theme.totalBg, border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`, borderRadius: theme.pillRadius, color: theme.accent, fontWeight: theme.strongWeight }}
+                    >
+                      Total paid: {fmtMoney(aTotal + bTotal)}
+                    </div>
                   </div>
-                </div>
+                </DragBox>
               </div>
-            </div>
-
-            {/* chips + subtotals */}
-            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <div>
-                <div className="flex flex-wrap">
-                  {aPays.map((p, i) => (
-                    <Chip key={`a-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
-                  ))}
-                </div>
-                <div
-                  className="inline-flex mt-3 items-center gap-2 px-3 py-1.5 text-[12px]"
-                  style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}
-                >
-                  <span>Subtotal</span>
-                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(aTotal)}</span>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex flex-wrap">
-                  {bPays.map((p, i) => (
-                    <Chip key={`b-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
-                  ))}
-                </div>
-                <div
-                  className="inline-flex mt-3 items-center gap-2 px-3 py-1.5 text-[12px]"
-                  style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}
-                >
-                  <span>Subtotal</span>
-                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(bTotal)}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* total (left/center/right) */}
-            <div
-              className={cn(
-                "mt-6 flex",
-                opts?.totalJustify === "left" ? "justify-start" : opts?.totalJustify === "right" ? "justify-end" : "justify-center"
-              )}
-            >
-              <div
-                className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
-                style={{ background: theme.totalBg, border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`, borderRadius: theme.pillRadius, color: theme.accent, fontWeight: theme.strongWeight }}
-              >
-                Total paid: {fmtMoney(totalPay)}
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* ---------- free layout (drag & drop) ---------- */}
-        {layout?.mode === "free" && (
-          <>
-            <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: "linear-gradient(transparent 95%, rgba(255,255,255,.05) 95%)", backgroundSize: "100% 40px" }} />
-
-            <DragBox id="badges">
-              <div className="flex items-center gap-2">
-                {BadgeBest}
-                {BadgeBonus}
-              </div>
-            </DragBox>
-
-            <DragBox id="playerA">
-              <div className="flex items-center justify-end gap-3">
-                <div className="min-w-0 text-right">
-                  <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
-                    {playerA || "—"}
-                  </div>
-                  <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>
-                    {sideA?.name || "—"}
-                  </div>
-                </div>
-                {theme.showThumbs && (
-                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
-                    {sideA?.thumbnail ? <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
-                  </div>
-                )}
-              </div>
-            </DragBox>
-
-            <DragBox id="playerB">
-              <div className="flex items-center gap-3">
-                {theme.showThumbs && (
-                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
-                    {sideB?.thumbnail ? <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
-                  </div>
-                )}
-                <div className="min-w-0 text-left">
-                  <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
-                    {playerB || "—"}
-                  </div>
-                  <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>
-                    {sideB?.name || "—"}
-                  </div>
-                </div>
-              </div>
-            </DragBox>
-
-            <DragBox id="chipsA">
-              <div>
-                <div className="flex flex-wrap">
-                  {aPays.map((p, i) => (
-                    <Chip key={`fa-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
-                  ))}
-                </div>
-                <div
-                  className="inline-flex mt-2 items-center gap-2 px-3 py-1.5 text-[12px]"
-                  style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}
-                >
-                  <span>Subtotal</span>
-                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(aTotal)}</span>
-                </div>
-              </div>
-            </DragBox>
-
-            <DragBox id="chipsB">
-              <div>
-                <div className="flex flex-wrap">
-                  {bPays.map((p, i) => (
-                    <Chip key={`fb-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
-                  ))}
-                </div>
-                <div
-                  className="inline-flex mt-2 items-center gap-2 px-3 py-1.5 text-[12px]"
-                  style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}
-                >
-                  <span>Subtotal</span>
-                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(bTotal)}</span>
-                </div>
-              </div>
-            </DragBox>
-
-            <DragBox id="total">
-              <div
-                className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
-                style={{ background: theme.totalBg, border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`, borderRadius: theme.pillRadius, color: theme.accent, fontWeight: theme.strongWeight }}
-              >
-                Total paid: {fmtMoney(totalPay)}
-              </div>
-            </DragBox>
-          </>
-        )}
+            )}
+          </div>
+        </div>
       </div>
     </>
   );
@@ -828,56 +831,6 @@ function ColorField({ label, value, onChange }) {
   );
 }
 
-function ObsPreview({ opts, children }) {
-  const hostRef = React.useRef(null);
-  const [hostW, setHostW] = React.useState(0);
-
-  React.useLayoutEffect(() => {
-    const el = hostRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      const cr = entries[0].contentRect;
-      setHostW(cr.width);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  const o = opts?.overlay || {};
-  const targetW = o.mode === "fixed" ? (o.width || 1280) : 1280; // viewport simulado
-  const targetH = o.mode === "fixed" ? (o.height || 720)  : 720; // 16:9 no auto
-  const baseW   = o.baseW || 1100;  // painel “interno”
-  const baseH   = o.baseH || 420;
-  const pad     = o.pad   || 0;
-  const align   = o.align || "center";
-
-  const stageH = hostW ? Math.round(hostW * (targetH / targetW)) : baseH + pad * 2;
-  const scale  = hostW
-    ? Math.min((hostW - pad * 2) / baseW, (stageH - pad * 2) / baseH)
-    : 1;
-
-  const alignItems =
-    align === "top" ? "flex-start" : align === "bottom" ? "flex-end" : "center";
-
-  return (
-    <div ref={hostRef} className="w-full">
-      <div
-        className="relative mx-auto rounded-xl border border-white/10 bg-black/30 overflow-hidden"
-        style={{ width: "100%", height: stageH }}
-        title={`Preview ${o.mode === "fixed" ? `${targetW}×${targetH}` : "Auto-fit 16:9"}`}
-      >
-        <div className="absolute inset-0 flex justify-center" style={{ padding: pad, alignItems }}>
-          {/* Área base do painel — será escalada */}
-          <div style={{ width: baseW, height: baseH, transform: `scale(${scale})`, transformOrigin: "top center" }}>
-            {children}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
 /* ───────── Designer ───────── */
 function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setLayout, opts, setOpts, previewProps, persist }) {
   if (!open) return null;
@@ -979,115 +932,114 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
               <label className="block text-sm">Font weight (strong): {theme.strongWeight}</label>
               <input type="range" min={300} max={800} step={50} value={theme.strongWeight} onChange={(e) => setTheme((t) => ({ ...t, strongWeight: Number(e.target.value) }))} className="w-full" />
 
-                {/* Canvas / OBS */}
-<div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
-  <div className="text-xs opacity-70 mb-1">Canvas / OBS</div>
+              {/* Canvas / OBS */}
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
+                <div className="text-xs opacity-70 mb-1">Canvas / OBS</div>
 
-  <div className="flex items-center gap-3">
-    <div className="text-sm w-36">Output</div>
-    <label className="text-sm flex items-center gap-1">
-      <input
-        type="radio"
-        checked={opts.overlay.mode === "auto"}
-        onChange={() => setOpts(o => ({ ...o, overlay: { ...o.overlay, mode: "auto" } }))}
-      />
-      Auto-fit (preenche Browser Source)
-    </label>
-    <label className="text-sm flex items-center gap-1">
-      <input
-        type="radio"
-        checked={opts.overlay.mode === "fixed"}
-        onChange={() => setOpts(o => ({ ...o, overlay: { ...o.overlay, mode: "fixed" } }))}
-      />
-      Fixed (px)
-    </label>
-  </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-sm w-36">Output</div>
+                  <label className="text-sm flex items-center gap-1">
+                    <input
+                      type="radio"
+                      checked={opts.overlay.mode === "auto"}
+                      onChange={() => setOpts(o => ({ ...o, overlay: { ...o.overlay, mode: "auto" } }))}
+                    />
+                    Auto-fit (preenche Browser Source)
+                  </label>
+                  <label className="text-sm flex items-center gap-1">
+                    <input
+                      type="radio"
+                      checked={opts.overlay.mode === "fixed"}
+                      onChange={() => setOpts(o => ({ ...o, overlay: { ...o.overlay, mode: "fixed" } }))}
+                    />
+                    Fixed (px)
+                  </label>
+                </div>
 
-  {opts.overlay.mode === "fixed" && (
-    <div className="grid grid-cols-2 gap-2">
-      <div>
-        <div className="text-xs opacity-70 mb-1">Width (px)</div>
-        <Input
-          type="number"
-          value={opts.overlay.width}
-          onChange={(e) =>
-            setOpts(o => ({ ...o, overlay: { ...o.overlay, width: Number(e.target.value) || 0 } }))
-          }
-          className="h-9 bg-zinc-900 border-white/10 text-white"
-        />
-      </div>
-      <div>
-        <div className="text-xs opacity-70 mb-1">Height (px)</div>
-        <Input
-          type="number"
-          value={opts.overlay.height}
-          onChange={(e) =>
-            setOpts(o => ({ ...o, overlay: { ...o.overlay, height: Number(e.target.value) || 0 } }))
-          }
-          className="h-9 bg-zinc-900 border-white/10 text-white"
-        />
-      </div>
-    </div>
-  )}
+                {opts.overlay.mode === "fixed" && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <div className="text-xs opacity-70 mb-1">Width (px)</div>
+                      <Input
+                        type="number"
+                        value={opts.overlay.width}
+                        onChange={(e) =>
+                          setOpts(o => ({ ...o, overlay: { ...o.overlay, width: Number(e.target.value) || 0 } }))
+                        }
+                        className="h-9 bg-zinc-900 border-white/10 text-white"
+                      />
+                    </div>
+                    <div>
+                      <div className="text-xs opacity-70 mb-1">Height (px)</div>
+                      <Input
+                        type="number"
+                        value={opts.overlay.height}
+                        onChange={(e) =>
+                          setOpts(o => ({ ...o, overlay: { ...o.overlay, height: Number(e.target.value) || 0 } }))
+                        }
+                        className="h-9 bg-zinc-900 border-white/10 text-white"
+                      />
+                    </div>
+                  </div>
+                )}
 
-  <div className="grid grid-cols-2 gap-2">
-    <div>
-      <div className="text-xs opacity-70 mb-1">Panel base width</div>
-      <Input
-        type="number"
-        value={opts.overlay.baseW}
-        onChange={(e) =>
-          setOpts(o => ({ ...o, overlay: { ...o.overlay, baseW: Number(e.target.value) || 0 } }))
-        }
-        className="h-9 bg-zinc-900 border-white/10 text-white"
-      />
-    </div>
-    <div>
-      <div className="text-xs opacity-70 mb-1">Panel base height</div>
-      <Input
-        type="number"
-        value={opts.overlay.baseH}
-        onChange={(e) =>
-          setOpts(o => ({ ...o, overlay: { ...o.overlay, baseH: Number(e.target.value) || 0 } }))
-        }
-        className="h-9 bg-zinc-900 border-white/10 text-white"
-      />
-    </div>
-  </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <div className="text-xs opacity-70 mb-1">Panel base width</div>
+                    <Input
+                      type="number"
+                      value={opts.overlay.baseW}
+                      onChange={(e) =>
+                        setOpts(o => ({ ...o, overlay: { ...o.overlay, baseW: Number(e.target.value) || 0 } }))
+                      }
+                      className="h-9 bg-zinc-900 border-white/10 text-white"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs opacity-70 mb-1">Panel base height</div>
+                    <Input
+                      type="number"
+                      value={opts.overlay.baseH}
+                      onChange={(e) =>
+                        setOpts(o => ({ ...o, overlay: { ...o.overlay, baseH: Number(e.target.value) || 0 } }))
+                      }
+                      className="h-9 bg-zinc-900 border-white/10 text-white"
+                    />
+                  </div>
+                </div>
 
-  <div className="grid grid-cols-2 gap-2">
-    <div>
-      <div className="text-xs opacity-70 mb-1">Padding (px)</div>
-      <Input
-        type="number"
-        value={opts.overlay.pad}
-        onChange={(e) =>
-          setOpts(o => ({ ...o, overlay: { ...o.overlay, pad: Number(e.target.value) || 0 } }))
-        }
-        className="h-9 bg-zinc-900 border-white/10 text-white"
-      />
-    </div>
-    <div>
-      <div className="text-xs opacity-70 mb-1">Vertical align</div>
-      <select
-        value={opts.overlay.align}
-        onChange={(e) =>
-          setOpts(o => ({ ...o, overlay: { ...o.overlay, align: e.target.value } }))
-        }
-        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-      >
-        <option value="top">Top</option>
-        <option value="center">Center</option>
-        <option value="bottom">Bottom</option>
-      </select>
-    </div>
-  </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <div className="text-xs opacity-70 mb-1">Padding (px)</div>
+                    <Input
+                      type="number"
+                      value={opts.overlay.pad}
+                      onChange={(e) =>
+                        setOpts(o => ({ ...o, overlay: { ...o.overlay, pad: Number(e.target.value) || 0 } }))
+                      }
+                      className="h-9 bg-zinc-900 border-white/10 text-white"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs opacity-70 mb-1">Vertical align</div>
+                    <select
+                      value={opts.overlay.align}
+                      onChange={(e) =>
+                        setOpts(o => ({ ...o, overlay: { ...o.overlay, align: e.target.value } }))
+                      }
+                      className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+                    >
+                      <option value="top">Top</option>
+                      <option value="center">Center</option>
+                      <option value="bottom">Bottom</option>
+                    </select>
+                  </div>
+                </div>
 
-  <div className="text-[11px] opacity-70">
-    Em <b>Fixed</b>, usa o mesmo Width/Height no “Browser Source” do OBS. O overlay faz letterbox e nunca corta conteúdo.
-  </div>
-</div>
-
+                <div className="text-[11px] opacity-70">
+                  Em <b>Fixed</b>, usa o mesmo Width/Height no “Browser Source” do OBS. O overlay faz letterbox e nunca corta conteúdo.
+                </div>
+              </div>
 
               {/* Auto-placement options */}
               <div className="border-t border-white/10 pt-3 mt-2 space-y-2">
@@ -1190,17 +1142,8 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
 
         {/* Live preview */}
         <div className="p-6 overflow-auto">
-  <ObsPreview opts={opts}>
-    <WidgetPreviewPanel
-      theme={theme}
-      layout={layout}
-      setLayout={setLayout}
-      opts={opts}
-      {...previewProps}
-    />
-  </ObsPreview>
-</div>
-
+          <WidgetPreviewPanel theme={theme} layout={layout} setLayout={setLayout} opts={opts} {...previewProps} />
+        </div>
       </div>
     </div>
   );
@@ -1226,14 +1169,13 @@ function WidgetCard({
   const [opts, setOpts] = React.useState(DEFAULT_OPTS);
   const [openDesigner, setOpenDesigner] = React.useState(false);
 
-  // URL exclusivo do overlay, por perfil
-const overlayUrl = React.useMemo(() => {
-  const base = `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, "");
-  const token = profile?.public_token || profile?.widget_token || profile?.id || "";
-  if (!token) return "";
-  return buildOverlayUrl(base, token, opts);
-}, [profile?.public_token, profile?.widget_token, profile?.id, opts]);
-
+  // URL exclusivo do overlay (agora com ?id=)
+  const overlayUrl = React.useMemo(() => {
+    const base = `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, "");
+    const token = profile?.public_token || profile?.widget_token || profile?.id || "";
+    if (!token) return "";
+    return buildOverlayUrl(base, token, opts, battleId);
+  }, [profile?.public_token, profile?.widget_token, profile?.id, opts, battleId]);
 
   const openOverlay = () => {
     if (!overlayUrl) return;
@@ -1249,26 +1191,24 @@ const overlayUrl = React.useMemo(() => {
     }
   };
 
-
   const previewProps = {
     bestOf, buyCost, totalPay, sideA, sideB, playerA, playerB, aPays, bPays,
   };
-React.useEffect(() => {
-  (async () => {
-    if (!battleId) return;
-    const { theme: t, layout: l, options: o } = await dbLoadWidgetSettings(battleId);
-    if (t) setTheme({ ...DEFAULT_THEME, ...t });
-    if (l) setLayout({ ...DEFAULT_LAYOUT, ...l });
-    if (o) {
-      setOpts({
-        ...DEFAULT_OPTS,
-        ...o,
-        overlay: { ...DEFAULT_OPTS.overlay, ...(o.overlay || {}) },
-      });
-    }
-  })();
-}, [battleId]);
-
+  React.useEffect(() => {
+    (async () => {
+      if (!battleId) return;
+      const { theme: t, layout: l, options: o } = await dbLoadWidgetSettings(battleId);
+      if (t) setTheme({ ...DEFAULT_THEME, ...t });
+      if (l) setLayout({ ...DEFAULT_LAYOUT, ...l });
+      if (o) {
+        setOpts({
+          ...DEFAULT_OPTS,
+          ...o,
+          overlay: { ...DEFAULT_OPTS.overlay, ...(o.overlay || {}) },
+        });
+      }
+    })();
+  }, [battleId]);
 
   const persist = React.useCallback(async () => {
     if (!battleId) return;
@@ -1346,6 +1286,7 @@ React.useEffect(() => {
 
 /* ───────────────────────── Page ───────────────────────── */
 export default function BattleView() {
+  const { isDark } = useTheme();
 
   const [battleId, setBattleId] = React.useState(null);
   React.useEffect(function () {
@@ -1360,7 +1301,7 @@ export default function BattleView() {
     return function () { window.removeEventListener("hashchange", read); };
   }, []);
 
-  const [, setBusy] = React.useState(true);
+  const [busy, setBusy] = React.useState(true);
   const [row, setRow] = React.useState(null);
   const [err, setErr] = React.useState("");
 
@@ -1619,7 +1560,6 @@ export default function BattleView() {
                 <Kpi icon={<TrendingUp className="h-5 w-5" />} label="Profit" value={fmtMoney(profit)} tone={profitTone} />
               </div>
             </AccentCard>
-            
 
             <WidgetCard
               battleId={battleId}
