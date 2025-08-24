@@ -1,23 +1,6 @@
 // src/widget-overlay.jsx
 import React from "react";
-import { createClient } from "@supabase/supabase-js";
-
-/* ───────────── Supabase client só para o overlay (com header) ───────────── */
-const SUPABASE_URL =
-  (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_URL) ||
-  (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_SUPABASE_URL);
-const SUPABASE_ANON_KEY =
-  (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_ANON_KEY) ||
-  (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-
-function getOverlayClient(token) {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    throw new Error("Faltam as envs do Supabase (URL/ANON_KEY).");
-  }
-  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { "x-overlay-token": token || "" } },
-  });
-}
+import { supabase } from "@/lib/supabase";
 
 /* ───────────────────────── helpers ───────────────────────── */
 const LOCALE = "pt-PT";
@@ -53,8 +36,8 @@ function parseHash() {
   const size = (name, def) => {
     const v = (qs.get(name) || "").trim();
     if (!v) return def;
-    if (/^\d+$/.test(v)) return `${v}px`;
-    return v;
+    if (/^\d+$/.test(v)) return `${v}px`; // "1080" -> "1080px"
+    return v; // "100%", "90vh", etc
   };
   const int = (name, def) => {
     const v = Number(qs.get(name));
@@ -64,18 +47,22 @@ function parseHash() {
   return {
     token: seg0 === "overlay" && seg1 === "battle" ? (seg2 || "").trim() : "",
     battleId: (qs.get("id") || "").trim(),
+
+    // Stage size (URL)
     w: size("w", "100vw"),
     h: size("h", "100vh"),
     pinSize: (qs.get("pinsize") || "0") === "1",
+
+    // Panel base (URL)
     bw: int("bw", 1100),
     bh: int("bh", 420),
     pad: int("pad", 24),
-    align: (qs.get("align") || "center").toLowerCase(),
+    align: (qs.get("align") || "center").toLowerCase(), // top | center | bottom
     enableAnim: (qs.get("anim") || "0") === "1",
   };
 }
 
-/* ───────── tema/layout/opções ───────── */
+/* ───────── tema/layout/opções (defaults) ───────── */
 const DEFAULT_THEME = {
   bgStart: "#0b1020",
   bgEnd: "#111827",
@@ -128,6 +115,15 @@ const DEFAULT_OPTS = {
   totalJustify: "center",
   totalLabelMode: "label+value",
   totalLabelText: "Total paid",
+  overlay: {
+    mode: "auto", // "auto" | "fixed"
+    width: 1920,
+    height: 1080,
+    baseW: 1100,
+    baseH: 420,
+    pad: 24,
+    align: "center",
+  },
 };
 
 /* Escala para caber (letterbox) */
@@ -150,7 +146,30 @@ function useFitScale(containerRef, baseW, baseH, pad = 24, min = 0.3, max = 3) {
   return scale;
 }
 
-/* ───────── UI do widget ───────── */
+/* Enriquecer slot com thumbnail/provider */
+async function enrichSlotInfo(slot) {
+  if (!slot) return slot;
+  if (slot.thumbnail && slot.provider) return slot;
+  try {
+    let q = supabase
+      .from("slots_catalog")
+      .select('id, "NAME", "PROVIDER", "THUMBNAIL"')
+      .limit(1);
+    if (slot.id) q = q.eq("id", slot.id);
+    else if (slot.name) q = q.ilike("NAME", `%${slot.name}%`);
+    const { data } = await q.maybeSingle();
+    if (data)
+      return {
+        id: data.id,
+        name: data["NAME"],
+        provider: data["PROVIDER"],
+        thumbnail: data["THUMBNAIL"],
+      };
+  } catch {}
+  return slot;
+}
+
+/* ───────── UI do widget (default layout) ───────── */
 function WidgetPanel({
   theme,
   layout,
@@ -341,10 +360,7 @@ function WidgetPanel({
                 >
                   {playerA || "—"}
                 </div>
-                <div
-                  className="truncate"
-                  style={{ fontSize: 12, color: theme.subtext }}
-                >
+                <div className="truncate" style={{ fontSize: 12, color: theme.subtext }}>
                   {sideA?.name || "—"}
                 </div>
               </div>
@@ -428,10 +444,7 @@ function WidgetPanel({
                 >
                   {playerB || "—"}
                 </div>
-                <div
-                  className="truncate"
-                  style={{ fontSize: 12, color: theme.subtext }}
-                >
+                <div className="truncate" style={{ fontSize: 12, color: theme.subtext }}>
                   {sideB?.name || "—"}
                 </div>
               </div>
@@ -473,9 +486,7 @@ function WidgetPanel({
                 }}
               >
                 <span>Subtotal</span>
-                <span
-                  style={{ color: theme.text, fontWeight: theme.strongWeight }}
-                >
+                <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>
                   {fmtMoney(aTotal)}
                 </span>
               </div>
@@ -507,9 +518,7 @@ function WidgetPanel({
                 }}
               >
                 <span>Subtotal</span>
-                <span
-                  style={{ color: theme.text, fontWeight: theme.strongWeight }}
-                >
+                <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>
                   {fmtMoney(bTotal)}
                 </span>
               </div>
@@ -558,10 +567,7 @@ export default function WidgetOverlay() {
     setLoc,
   ] = React.useState(parseHash());
 
-  // Supabase client c/ header do token
-  const db = React.useMemo(() => getOverlayClient(token), [token]);
-
-  // CSS global
+  // CSS global: fundo transparente
   React.useEffect(() => {
     const style = document.createElement("style");
     style.innerHTML = `
@@ -571,11 +577,11 @@ export default function WidgetOverlay() {
     return () => style.remove();
   }, []);
 
-  // Estado
+  // Estado de carregamento/erros
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState("");
 
-  // Dados
+  // Dados da battle
   const [bestOf, setBestOf] = React.useState(1);
   const [buyCost, setBuyCost] = React.useState(0);
   const [sideA, setSideA] = React.useState(null);
@@ -590,7 +596,7 @@ export default function WidgetOverlay() {
   const [layout, setLayout] = React.useState(DEFAULT_LAYOUT);
   const [opts, setOpts] = React.useState(DEFAULT_OPTS);
 
-  // animações por defeito: off (ativa com ?anim=1)
+  // animações por defeito: desligadas (ativo com ?anim=1)
   const effTheme = React.useMemo(() => {
     const t = { ...theme };
     if (!enableAnim) {
@@ -600,16 +606,39 @@ export default function WidgetOverlay() {
     return t;
   }, [theme, enableAnim]);
 
-  // ouvir hash
+  // ouvir alterações do hash (muda id/w/h/etc ao vivo)
   React.useEffect(() => {
     const onHash = () => setLoc(parseHash());
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  // Stage + scale
+  // ---------- Overlay efetivo (URL tem prioridade só quando pinsize=1) ----------
+  const effOverlay = React.useMemo(() => {
+    const o = (opts && opts.overlay) || {};
+    const pin = pinSize || o.mode === "fixed";
+
+    const effW = pin
+      ? (pinSize ? w : `${o.width || 1920}px`)
+      : "100vw";
+    const effH = pin
+      ? (pinSize ? h : `${o.height || 1080}px`)
+      : "100vh";
+
+    return {
+      pin,
+      w: effW,
+      h: effH,
+      baseW: o.baseW || bw || DEFAULT_OPTS.overlay.baseW,
+      baseH: o.baseH || bh || DEFAULT_OPTS.overlay.baseH,
+      pad: o.pad ?? pad ?? DEFAULT_OPTS.overlay.pad,
+      align: (o.align || align || DEFAULT_OPTS.overlay.align).toLowerCase(),
+    };
+  }, [opts, w, h, bw, bh, pad, align, pinSize]);
+
+  // Stage + escala para caber
   const stageRef = React.useRef(null);
-  const scale = useFitScale(stageRef, bw, bh, pad, 0.3, 3);
+  const scale = useFitScale(stageRef, effOverlay.baseW, effOverlay.baseH, effOverlay.pad, 0.3, 3);
 
   // realtime + polling
   const channelRef = React.useRef(null);
@@ -620,32 +649,9 @@ export default function WidgetOverlay() {
     debounceRef.current = setTimeout(fn, 120);
   };
 
-  // helper: enriquecer slot via catálogo
-  async function enrichSlotInfo(slot) {
-    if (!slot) return slot;
-    if (slot.thumbnail && slot.provider) return slot;
-    try {
-      let q = db
-        .from("slots_catalog")
-        .select('id, "NAME", "PROVIDER", "THUMBNAIL"')
-        .limit(1);
-      if (slot.id) q = q.eq("id", slot.id);
-      else if (slot.name) q = q.ilike("NAME", `%${slot.name}%`);
-      const { data } = await q.maybeSingle();
-      if (data)
-        return {
-          id: data.id,
-          name: data["NAME"],
-          provider: data["PROVIDER"],
-          thumbnail: data["THUMBNAIL"],
-        };
-    } catch {}
-    return slot;
-  }
-
   async function loadAll({ ownerId, bId }) {
     // battle basics
-    const { data: bRow } = await db
+    const { data: bRow } = await supabase
       .from("battles")
       .select("id, best_of, buy_cost")
       .eq("id", bId)
@@ -658,7 +664,7 @@ export default function WidgetOverlay() {
     }
 
     // settings
-    const { data: ws } = await db
+    const { data: ws } = await supabase
       .from("battle_widget_settings")
       .select("theme, layout, options")
       .eq("battle_id", bId)
@@ -671,7 +677,7 @@ export default function WidgetOverlay() {
       setOpts({ ...DEFAULT_OPTS, ...ws.options });
 
     // entries
-    const { data: entries } = await db
+    const { data: entries } = await supabase
       .from("battle_entries")
       .select("seed, slot_name, slot_id, player_name")
       .eq("battle_id", bId);
@@ -702,7 +708,7 @@ export default function WidgetOverlay() {
     }
 
     // payments
-    const { data: pays } = await db
+    const { data: pays } = await supabase
       .from("battle_payments")
       .select("side, amount, buy_idx")
       .eq("battle_id", bId)
@@ -725,36 +731,40 @@ export default function WidgetOverlay() {
         setLoading(true);
         setErr("");
 
-        // descobrir o owner pela token
-// descobrir o ownerId a partir do token do link
-let ownerId = null;
-if (token) {
-  // 1) tenta pelo widget_token
-  if (!ownerId) {
-    const { data } = await db
-      .from("profiles")
-      .select("id")
-      .eq("widget_token", token)
-      .maybeSingle();
-    if (data?.id) ownerId = data.id;
-  }
-  // 2) se o token for um UUID, tenta ser o próprio id
-  if (!ownerId && /^[0-9a-fA-F-]{36}$/.test(token)) {
-    const { data } = await db
-      .from("profiles")
-      .select("id")
-      .eq("id", token)
-      .maybeSingle();
-    if (data?.id) ownerId = data.id;
-  }
-  if (!ownerId) throw new Error("Token inválida ou conta não encontrada.");
-}
-
+        // descobrir o owner pela token (widget_token -> public_token -> id)
+        let ownerId = null;
+        if (token) {
+          if (!ownerId) {
+            const { data } = await supabase
+              .from("profiles")
+              .select("id")
+              .eq("widget_token", token)
+              .maybeSingle();
+            if (data?.id) ownerId = data.id;
+          }
+          if (!ownerId) {
+            const { data } = await supabase
+              .from("profiles")
+              .select("id")
+              .eq("public_token", token)
+              .maybeSingle();
+            if (data?.id) ownerId = data.id;
+          }
+          if (!ownerId && isUUID(token)) {
+            const { data } = await supabase
+              .from("profiles")
+              .select("id")
+              .eq("id", token)
+              .maybeSingle();
+            if (data?.id) ownerId = data.id;
+          }
+          if (!ownerId) throw new Error("Token inválida ou conta não encontrada.");
+        }
 
         // battle alvo
         let bId = battleId || null;
         if (!bId) {
-          const { data: b } = await db
+          const { data: b } = await supabase
             .from("battles")
             .select("id")
             .eq("created_by", ownerId)
@@ -768,8 +778,8 @@ if (token) {
         await loadAll({ ownerId, bId });
 
         // realtime
-        if (channelRef.current) db.removeChannel(channelRef.current);
-        const ch = db
+        if (channelRef.current) supabase.removeChannel(channelRef.current);
+        const ch = supabase
           .channel(`overlay-${bId}`)
           .on(
             "postgres_changes",
@@ -805,7 +815,7 @@ if (token) {
     })();
 
     return () => {
-      if (channelRef.current) db.removeChannel(channelRef.current);
+      if (channelRef.current) supabase.removeChannel(channelRef.current);
       channelRef.current = null;
       if (pollRef.current) clearInterval(pollRef.current);
       pollRef.current = null;
@@ -814,8 +824,13 @@ if (token) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, battleId]);
 
+  // alinhamento vertical efetivo
   const alignItems =
-    align === "top" ? "flex-start" : align === "bottom" ? "flex-end" : "center";
+    effOverlay.align === "top"
+      ? "flex-start"
+      : effOverlay.align === "bottom"
+      ? "flex-end"
+      : "center";
 
   return (
     <div
@@ -823,8 +838,8 @@ if (token) {
       style={{
         position: "fixed",
         inset: 0,
-        width: pinSize ? w : "100vw",
-        height: pinSize ? h : "100vh",
+        width: effOverlay.pin ? effOverlay.w : "100vw",
+        height: effOverlay.pin ? effOverlay.h : "100vh",
         margin: 0,
         padding: 0,
         background: "transparent",
@@ -838,7 +853,7 @@ if (token) {
           display: "flex",
           justifyContent: "center",
           alignItems,
-          padding: pad,
+          padding: effOverlay.pad,
           boxSizing: "border-box",
         }}
       >
@@ -869,14 +884,15 @@ if (token) {
             {err}
           </div>
         ) : (
-          <div style={{ position: "relative", width: bw * scale, height: bh * scale }}>
+          // Wrapper com scale (nada é cortado; cabe sempre)
+          <div style={{ position: "relative", width: effOverlay.baseW * scale, height: effOverlay.baseH * scale }}>
             <div
               style={{
                 position: "absolute",
                 left: 0,
                 top: 0,
-                width: bw,
-                height: bh,
+                width: effOverlay.baseW,
+                height: effOverlay.baseH,
                 transform: `scale(${scale})`,
                 transformOrigin: "top left",
               }}
