@@ -828,6 +828,56 @@ function ColorField({ label, value, onChange }) {
   );
 }
 
+function ObsPreview({ opts, children }) {
+  const hostRef = React.useRef(null);
+  const [hostW, setHostW] = React.useState(0);
+
+  React.useLayoutEffect(() => {
+    const el = hostRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const cr = entries[0].contentRect;
+      setHostW(cr.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const o = opts?.overlay || {};
+  const targetW = o.mode === "fixed" ? (o.width || 1280) : 1280; // viewport simulado
+  const targetH = o.mode === "fixed" ? (o.height || 720)  : 720; // 16:9 no auto
+  const baseW   = o.baseW || 1100;  // painel “interno”
+  const baseH   = o.baseH || 420;
+  const pad     = o.pad   || 0;
+  const align   = o.align || "center";
+
+  const stageH = hostW ? Math.round(hostW * (targetH / targetW)) : baseH + pad * 2;
+  const scale  = hostW
+    ? Math.min((hostW - pad * 2) / baseW, (stageH - pad * 2) / baseH)
+    : 1;
+
+  const alignItems =
+    align === "top" ? "flex-start" : align === "bottom" ? "flex-end" : "center";
+
+  return (
+    <div ref={hostRef} className="w-full">
+      <div
+        className="relative mx-auto rounded-xl border border-white/10 bg-black/30 overflow-hidden"
+        style={{ width: "100%", height: stageH }}
+        title={`Preview ${o.mode === "fixed" ? `${targetW}×${targetH}` : "Auto-fit 16:9"}`}
+      >
+        <div className="absolute inset-0 flex justify-center" style={{ padding: pad, alignItems }}>
+          {/* Área base do painel — será escalada */}
+          <div style={{ width: baseW, height: baseH, transform: `scale(${scale})`, transformOrigin: "top center" }}>
+            {children}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 /* ───────── Designer ───────── */
 function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setLayout, opts, setOpts, previewProps, persist }) {
   if (!open) return null;
@@ -1140,8 +1190,17 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
 
         {/* Live preview */}
         <div className="p-6 overflow-auto">
-          <WidgetPreviewPanel theme={theme} layout={layout} setLayout={setLayout} opts={opts} {...previewProps} />
-        </div>
+  <ObsPreview opts={opts}>
+    <WidgetPreviewPanel
+      theme={theme}
+      layout={layout}
+      setLayout={setLayout}
+      opts={opts}
+      {...previewProps}
+    />
+  </ObsPreview>
+</div>
+
       </div>
     </div>
   );
