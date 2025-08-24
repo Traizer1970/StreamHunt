@@ -93,9 +93,8 @@ const DEFAULT_OPTS = {
   bonusLabelText: "Bonus Buy",
   bonusDock: "left",
 
-  // alinhamento do total
+  // alinhamento e texto do total
   totalJustify: "center",             // left | center | right
-  // NOVO: controlo de label do total
   totalLabelMode: "label+value",      // "label+value" | "value"
   totalLabelText: "Total paid",
 
@@ -430,10 +429,14 @@ function WidgetPreviewPanel({
   const isVertical = opts?.layoutKind === "vertical";
   const vsBig = opts?.vsStyle === "big";
 
-  const Chip = ({ amount, ok, i }) => (
+  // Chip com modo "tight" para vertical
+  const Chip = ({ amount, ok, i, tight = false }) => (
     <span
       key={i}
-      className="inline-flex items-center gap-1.5 px-3 py-1 mr-2 mb-2 shadow-[0_0_0_1px_rgba(0,0,0,0.25)_inset,0_6px_18px_rgba(0,0,0,.36)]"
+      className={cn(
+        "inline-flex items-center gap-1.5 mr-2 mb-2 shadow-[0_0_0_1px_rgba(0,0,0,0.25)_inset,0_6px_18px_rgba(0,0,0,.36)]",
+        tight ? "px-2.5 py-1" : "px-3 py-1"
+      )}
       style={{
         borderRadius: theme.chipRadius,
         background: ok ? `${theme.pos}1F` : `${theme.neg}1F`,
@@ -441,7 +444,7 @@ function WidgetPreviewPanel({
         color: ok ? theme.pos : theme.neg,
         animation: theme.pulse ? `pop .16s ease-out both` : "none",
         animationDelay: `${i * 45}ms`,
-        fontSize: `calc(12px * ${theme.fontScale / 100})`,
+        fontSize: `calc(${tight ? 11 : 12}px * ${theme.fontScale / 100})`,
         fontFamily: theme.fontFamily,
         fontWeight: theme.strongWeight,
       }}
@@ -663,7 +666,7 @@ function WidgetPreviewPanel({
               </div>
             </div>
 
-            {/* total — **alinhamento a funcionar** */}
+            {/* total — alinhamento a funcionar */}
             <div
               className={cn(
                 "mt-6 flex",
@@ -698,7 +701,10 @@ function WidgetPreviewPanel({
               </div>
             </div>
 
-            <div className="flex flex-wrap">{aPays.map((p,i)=>(<Chip key={`va-${i}`} amount={p.amount} ok={Number(p.amount||0)>=Number(buyCost||0)} i={i}/>))}</div>
+            {/* chips A – grid compacto */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px,1fr))", gap: 8 }}>
+              {aPays.map((p,i)=>(<Chip key={`va-${i}`} amount={p.amount} ok={Number(p.amount||0)>=Number(buyCost||0)} i={i} tight />))}
+            </div>
             <div className="inline-flex items-center gap-2 px-3 py-1.5 self-start text-[12px]"
                  style={{ background: theme.chipBg, border:`${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
                          borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}>
@@ -732,14 +738,17 @@ function WidgetPreviewPanel({
               </div>
             </div>
 
-            <div className="flex flex-wrap">{bPays.map((p,i)=>(<Chip key={`vb-${i}`} amount={p.amount} ok={Number(p.amount||0)>=Number(buyCost||0)} i={i}/>))}</div>
+            {/* chips B – grid compacto */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px,1fr))", gap: 8 }}>
+              {bPays.map((p,i)=>(<Chip key={`vb-${i}`} amount={p.amount} ok={Number(p.amount||0)>=Number(buyCost||0)} i={i} tight />))}
+            </div>
             <div className="inline-flex items-center gap-2 px-3 py-1.5 self-start text-[12px]"
                  style={{ background: theme.chipBg, border:`${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
                          borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}>
               <span>Subtotal</span><span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(bTotal)}</span>
             </div>
 
-            {/* total — **alinhamento também no vertical** */}
+            {/* total — alinhamento também no vertical */}
             <div
               className={cn(
                 "mt-auto flex pt-1",
@@ -1231,7 +1240,7 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
               </div>
             </div>
 
-            {/* NOVO: Total label */}
+            {/* Total label */}
             <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
               <div className="text-xs opacity-70">Total</div>
               <div className="flex flex-col gap-2 text-sm">
@@ -1247,7 +1256,7 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
               <div>
                 <div className="text-xs opacity-70 mb-1">Label text</div>
                 <Input value={opts.totalLabelText} onChange={(e) => setOpts((o) => ({ ...o, totalLabelText: e.target.value }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
-                <div className="text-[11px] opacity-60 mt-1">Deixa vazio para mostrar só o valor quando estiver em “Label + Value”.</div>
+                <div className="text-[11px] opacity-60 mt-1">Deixa vazio para só mostrar o valor quando estiver em “Label + Value”.</div>
               </div>
             </div>
 
