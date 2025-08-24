@@ -252,6 +252,7 @@ function Confirm({ open, title, body, confirmText, cancelText, onConfirm, onCanc
 /* ───────────────────────── Create/Edit Modal ───────────────────────── */
 // NOTE: If your DB uses different table names, swap "battles"/"battle_prizes" for yours.
 function UpsertBattleModal({ open, initial, onClose, onSaved }) {
+  const { profile } = React.useContext(AuthCtx) || {};
   const [busy, setBusy] = React.useState(false);
   const [title, setTitle] = React.useState("");
   const [description, setDescription] = React.useState("");
@@ -291,6 +292,7 @@ function UpsertBattleModal({ open, initial, onClose, onSaved }) {
   async function save() {
     try {
       setBusy(true);
+      if (!profile?.id) { throw new Error("User not ready – try again."); }
       const payload = {
         title: title || null,
         description: description || null,
@@ -304,7 +306,7 @@ function UpsertBattleModal({ open, initial, onClose, onSaved }) {
       } else {
  const { data, error } = await supabase
    .from("battles")
-   .insert([{ ...payload, created_by: profile?.id }]) // <-- define o dono
+   .insert([{ ...payload, created_by: profile.id }]) // ← dono explícito
           .select("id")
           .single();
         if (error) throw error;
@@ -510,6 +512,11 @@ export default function BattlesPage() {
   const [lastWinner, setLastWinner] = React.useState({ player: "", slot: "" });
 
   const load = React.useCallback(async () => {
+   if (!profile?.id) {             // ← evita query com undefined
+     setRows([]);
+     setBusy(false);
+     return;
+   }
     try {
       setBusy(true);
       setErr("");
@@ -517,7 +524,7 @@ export default function BattlesPage() {
          const { data, error } = await supabase
    .from("battles")
    .select("*")
-   .eq("created_by", profile?.id)   // <-- só as da conta atual
+   .eq("created_by", profile.id)
    .order("created_at", { ascending: false })
    .limit(500);
       // ^^^ change table name if needed
@@ -555,9 +562,11 @@ export default function BattlesPage() {
     } finally {
       setBusy(false);
     }
-  }, []);
+}, [profile?.id]);
 
-  React.useEffect(() => { if (!isFree) load(); }, [load, isFree]);
+ React.useEffect(() => {
+   if (!isFree && profile?.id) load();
+ }, [isFree, profile?.id, load]);
 
   // Mapa No. por battle (1..N por ordem de criação)
   const userNoById = React.useMemo(() => {
