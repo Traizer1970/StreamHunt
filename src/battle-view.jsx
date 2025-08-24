@@ -93,10 +93,14 @@ const DEFAULT_OPTS = {
   bonusLabelText: "Bonus Buy",
   bonusDock: "left",
 
-  // alinhamento e texto do total
+  // total
   totalJustify: "center",             // left | center | right
   totalLabelMode: "label+value",      // "label+value" | "value"
   totalLabelText: "Total paid",
+
+  // NEW: subtotal (para A e B)
+  subtotalLabelMode: "label+value",   // "label+value" | "value"
+  subtotalLabelText: "Subtotal",
 
   // orientação e estilo
   layoutKind: "horizontal", // 'horizontal' | 'vertical'
@@ -123,14 +127,14 @@ const PRESETS = [
   { name: "Twilight",t: { bgStart: "#0b1b3a", bgEnd: "#112a46", accent: "#7dd3fc", pos: "#22c55e", neg: "#fb7185", vsBg: "rgba(125,211,252,0.30)" } },
 ];
 
-/* Presets de tamanho — horizontais + **VERTICAIS MAIS COMPACTOS** */
+/* Presets de tamanho — horizontais + verticais compactos */
 const SIZE_PRESETS = [
   // horizontais
   { name: "Small",       dir: "h", o: { baseW: 880,  baseH: 360, pad: 20, align: "center" }, theme: { fontScale: 95 } },
   { name: "Default",     dir: "h", o: { baseW: 1100, baseH: 420, pad: 24, align: "center" }, theme: { fontScale: 100 } },
   { name: "Wide Bar",    dir: "h", o: { baseW: 1400, baseH: 360, pad: 20, align: "center" }, theme: { fontScale: 98, pillRadius: 14 } },
   { name: "XL Showmatch",dir: "h", o: { baseW: 1500, baseH: 520, pad: 28, align: "center" }, theme: { fontScale: 108 } },
-  // verticais (reduzidos)
+  // verticais
   { name: "Vertical • Compact", dir: "v", o: { baseW: 440, baseH: 640, pad: 16, align: "center" }, theme: { fontScale: 96 } },
   { name: "Vertical • Sidebar", dir: "v", o: { baseW: 480, baseH: 720, pad: 18, align: "center" }, theme: { fontScale: 96 } },
   { name: "Vertical • Tall",    dir: "v", o: { baseW: 560, baseH: 860, pad: 20, align: "center" }, theme: { fontScale: 98 } },
@@ -429,7 +433,6 @@ function WidgetPreviewPanel({
   const isVertical = opts?.layoutKind === "vertical";
   const vsBig = opts?.vsStyle === "big";
 
-  // Chip com modo "tight" para vertical
   const Chip = ({ amount, ok, i, tight = false }) => (
     <span
       key={i}
@@ -518,6 +521,33 @@ function WidgetPreviewPanel({
       </div>
     );
 
+  // helper de Subtotal com label configurável
+  const SubtotalBadge = ({ value, className }) => {
+    const showOnlyValue = opts?.subtotalLabelMode === "value";
+    const label = (opts?.subtotalLabelText ?? "").trim();
+    return (
+      <div
+        className={cn("inline-flex items-center gap-2 px-3 py-1.5 text-[12px]", className)}
+        style={{
+          background: theme.chipBg,
+          border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
+          borderRadius: theme.radius,
+          color: theme.subtext,
+          fontWeight: theme.fontWeight,
+        }}
+      >
+        {showOnlyValue || !label ? (
+          <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(value)}</span>
+        ) : (
+          <>
+            <span>{label}</span>
+            <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(value)}</span>
+          </>
+        )}
+      </div>
+    );
+  };
+
   // helper do TOTAL com label configurável
   const TotalBadge = ({ value }) => {
     const showOnlyValue = opts?.totalLabelMode === "value";
@@ -595,7 +625,7 @@ function WidgetPreviewPanel({
                   </div>
                 </div>
                 {theme.showThumbs && (
-                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
+                  <div className="h-14 w-14 overflow-hidden ring-1 bg白/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
                     {sideA?.thumbnail ? <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
                   </div>
                 )}
@@ -641,13 +671,7 @@ function WidgetPreviewPanel({
                     <Chip key={`a-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
                   ))}
                 </div>
-                <div
-                  className="inline-flex mt-3 items-center gap-2 px-3 py-1.5 text-[12px]"
-                  style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}
-                >
-                  <span>Subtotal</span>
-                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(aTotal)}</span>
-                </div>
+                <SubtotalBadge value={aTotal} className="mt-3" />
               </div>
 
               <div>
@@ -656,17 +680,11 @@ function WidgetPreviewPanel({
                     <Chip key={`b-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
                   ))}
                 </div>
-                <div
-                  className="inline-flex mt-3 items-center gap-2 px-3 py-1.5 text-[12px]"
-                  style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}
-                >
-                  <span>Subtotal</span>
-                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(bTotal)}</span>
-                </div>
+                <SubtotalBadge value={bTotal} className="mt-3" />
               </div>
             </div>
 
-            {/* total — alinhamento a funcionar */}
+            {/* total */}
             <div
               className={cn(
                 "mt-6 flex",
@@ -678,7 +696,7 @@ function WidgetPreviewPanel({
           </>
         )}
 
-        {/* VERTICAL (compacto) */}
+        {/* VERTICAL */}
         {opts?.layoutKind === "vertical" && (
           <div className="h-full flex flex-col gap-3">
             {/* badges */}
@@ -701,15 +719,10 @@ function WidgetPreviewPanel({
               </div>
             </div>
 
-            {/* chips A – grid compacto */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px,1fr))", gap: 8 }}>
               {aPays.map((p,i)=>(<Chip key={`va-${i}`} amount={p.amount} ok={Number(p.amount||0)>=Number(buyCost||0)} i={i} tight />))}
             </div>
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 self-start text-[12px]"
-                 style={{ background: theme.chipBg, border:`${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
-                         borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}>
-              <span>Subtotal</span><span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(aTotal)}</span>
-            </div>
+            <SubtotalBadge value={aTotal} className="self-start" />
 
             {/* VS */}
             <div className="w-full flex justify-center py-1">
@@ -738,17 +751,12 @@ function WidgetPreviewPanel({
               </div>
             </div>
 
-            {/* chips B – grid compacto */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px,1fr))", gap: 8 }}>
               {bPays.map((p,i)=>(<Chip key={`vb-${i}`} amount={p.amount} ok={Number(p.amount||0)>=Number(buyCost||0)} i={i} tight />))}
             </div>
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 self-start text-[12px]"
-                 style={{ background: theme.chipBg, border:`${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
-                         borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}>
-              <span>Subtotal</span><span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(bTotal)}</span>
-            </div>
+            <SubtotalBadge value={bTotal} className="self-start" />
 
-            {/* total — alinhamento também no vertical */}
+            {/* total */}
             <div
               className={cn(
                 "mt-auto flex pt-1",
@@ -760,7 +768,7 @@ function WidgetPreviewPanel({
           </div>
         )}
 
-        {/* FREE LAYOUT (drag & drop) */}
+        {/* FREE LAYOUT */}
         {layout?.mode === "free" && (
           <>
             <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: "linear-gradient(transparent 95%, rgba(255,255,255,.05) 95%)", backgroundSize: "100% 40px" }} />
@@ -815,13 +823,7 @@ function WidgetPreviewPanel({
                     <Chip key={`fa-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
                   ))}
                 </div>
-                <div
-                  className="inline-flex mt-2 items-center gap-2 px-3 py-1.5 text-[12px]"
-                  style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}
-                >
-                  <span>Subtotal</span>
-                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(aTotal)}</span>
-                </div>
+                <SubtotalBadge value={aTotal} className="mt-2" />
               </div>
             </DragBox>
 
@@ -832,13 +834,7 @@ function WidgetPreviewPanel({
                     <Chip key={`fb-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
                   ))}
                 </div>
-                <div
-                  className="inline-flex mt-2 items-center gap-2 px-3 py-1.5 text-[12px]"
-                  style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}
-                >
-                  <span>Subtotal</span>
-                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(bTotal)}</span>
-                </div>
+                <SubtotalBadge value={bTotal} className="mt-2" />
               </div>
             </DragBox>
 
@@ -1176,7 +1172,7 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
                 </div>
               </div>
 
-              {/* Auto placement (default layout) */}
+              {/* Auto placement */}
               <div className="border-t border-white/10 pt-3 mt-2 space-y-2">
                 <div className="text-xs opacity-70">Auto placement (default layout)</div>
 
@@ -1240,6 +1236,26 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
               </div>
             </div>
 
+            {/* Subtotal label (NOVO) */}
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
+              <div className="text-xs opacity-70">Subtotal</div>
+              <div className="flex flex-col gap-2 text-sm">
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="subtotallabel" checked={opts.subtotalLabelMode === "label+value"} onChange={() => setOpts((o) => ({ ...o, subtotalLabelMode: "label+value" }))} />
+                  Label + Value
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="subtotallabel" checked={opts.subtotalLabelMode === "value"} onChange={() => setOpts((o) => ({ ...o, subtotalLabelMode: "value" }))} />
+                  Value only
+                </label>
+              </div>
+              <div>
+                <div className="text-xs opacity-70 mb-1">Label text</div>
+                <Input value={opts.subtotalLabelText} onChange={(e) => setOpts((o) => ({ ...o, subtotalLabelText: e.target.value }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
+                <div className="text-[11px] opacity-60 mt-1">Se estiver em “Label + Value”, deixar vazio também mostra só o valor.</div>
+              </div>
+            </div>
+
             {/* Total label */}
             <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
               <div className="text-xs opacity-70">Total</div>
@@ -1281,7 +1297,7 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
           </div>
         </div>
 
-        {/* Live preview (canvas 1:1 com o overlay) */}
+        {/* Live preview */}
         <div className="p-6 overflow-auto">
           <WidgetPreviewPanel theme={theme} layout={layout} setLayout={setLayout} opts={opts} {...previewProps} />
         </div>
@@ -1310,7 +1326,6 @@ function WidgetCard({
   const [opts, setOpts] = React.useState(DEFAULT_OPTS);
   const [openDesigner, setOpenDesigner] = React.useState(false);
 
-  // URL exclusivo do overlay, por perfil
   const overlayUrl = React.useMemo(() => {
     const base = `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, "");
     const token = profile?.public_token || profile?.widget_token || profile?.id || "";
@@ -1318,18 +1333,10 @@ function WidgetCard({
     return buildOverlayUrl(base, token, opts);
   }, [profile?.public_token, profile?.widget_token, profile?.id, opts]);
 
-  const openOverlay = () => {
-    if (!overlayUrl) return;
-    window.open(overlayUrl, "_blank", "noopener,noreferrer");
-  };
-
+  const openOverlay = () => overlayUrl && window.open(overlayUrl, "_blank", "noopener,noreferrer");
   const copyOverlayUrl = async () => {
     if (!overlayUrl) return;
-    try {
-      await navigator.clipboard.writeText(overlayUrl);
-    } catch {
-      alert("Não consegui copiar o URL.");
-    }
+    try { await navigator.clipboard.writeText(overlayUrl); } catch { alert("Não consegui copiar o URL."); }
   };
 
   const previewProps = { bestOf, buyCost, totalPay, sideA, sideB, playerA, playerB, aPays, bPays };
