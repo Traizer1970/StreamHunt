@@ -30,6 +30,7 @@ import TournamentsPage from "@/tournaments";
 import TournamentDetail from "@/tournament-detail.jsx";
 import BattlesPage from "./battlespage.jsx";
 import BattleView  from "./battle-view.jsx";
+import WidgetByToken from "./widget-by-token.jsx";
 
 // >>> NOVO: Overlay do widget
 import WidgetOverlay from "./widget-overlay.jsx";
@@ -1490,7 +1491,7 @@ export default function App() {
   // detail routes
   const huntDetailMatch = route.match(/^\/?hunts\/([^\/?#]+)$/);
   const tournamentDetailMatch = route.match(/^\/?tournaments\/([^\/?#]+)$/);
-  
+
   const isOverlay = route.startsWith("overlay/battle/");
 
   // ⬅️ overlay: sem header/rodapé, fundo transparente e widget centrado
@@ -1512,6 +1513,10 @@ export default function App() {
   if (huntDetailMatch) {
     const numberId = huntDetailMatch[1];
     content = <HuntDetail numberId={numberId} />;
+    } else if (route.startsWith("w/")) {
+  content = <WidgetByToken />;
+} else if (route.startsWith("overlay/battle/")) {
+  content = <WidgetOverlay />;
   } else if (tournamentDetailMatch) {
     const tournamentId = tournamentDetailMatch[1];
     content = <TournamentDetail tournamentId={tournamentId} />;
