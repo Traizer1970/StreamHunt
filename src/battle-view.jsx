@@ -1,6 +1,6 @@
 // src/battle-view.jsx
 import React from "react";
-import { useTheme } from "@/contexts/auth-context";
+import { useTheme, AuthCtx } from "@/contexts/auth-context";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1006,38 +1006,28 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
 }
 
 /* ───────── Widget Card ───────── */
-function WidgetCard({ battleId, sideA, sideB, playerA, playerB, bestOf, buyCost, totalPay, aPays = [], bPays = [] }) {
-  const [theme, setTheme]   = React.useState(DEFAULT_THEME);
+function WidgetCard({
+  battleId,
+  sideA,
+  sideB,
+  playerA,
+  playerB,
+  bestOf,
+  buyCost,
+  totalPay,
+  aPays = [],
+  bPays = [],
+}) {
+  const { profile } = React.useContext(AuthCtx) || {};
+
+  const [theme, setTheme] = React.useState(DEFAULT_THEME);
   const [layout, setLayout] = React.useState(DEFAULT_LAYOUT);
-  const [opts, setOpts]     = React.useState(DEFAULT_OPTS);
+  const [opts, setOpts] = React.useState(DEFAULT_OPTS);
   const [openDesigner, setOpenDesigner] = React.useState(false);
 
-  // URL absoluto do overlay (compatível com subpaths do Netlify)
-  const overlayUrl = React.useMemo(() => {
-    if (!battleId) return "";
-    const { origin, pathname } = window.location;
-    const base = `${origin}${pathname}`
-      .replace(/index\.html$/, "")
-      .replace(/\/+$/, ""); // remove "/" final
-    return `${base}#/overlay/battle/${battleId}`;
-  }, [battleId]);
-
-  const openOverlay = () => {
-    if (!overlayUrl) return;
-    window.open(overlayUrl, "_blank", "noopener,noreferrer");
+  const previewProps = {
+    bestOf, buyCost, totalPay, sideA, sideB, playerA, playerB, aPays, bPays,
   };
-
-  const copyOverlayUrl = async () => {
-    if (!overlayUrl) return;
-    try {
-      await navigator.clipboard.writeText(overlayUrl);
-    } catch {
-      // fallback simples
-      window.prompt("Copy this URL:", overlayUrl);
-    }
-  };
-
-  const previewProps = { bestOf, buyCost, totalPay, sideA, sideB, playerA, playerB, aPays, bPays };
 
   React.useEffect(() => {
     (async () => {
@@ -1058,23 +1048,45 @@ function WidgetCard({ battleId, sideA, sideB, playerA, playerB, bestOf, buyCost,
     <>
       <AccentCard title="Widget">
         <div className="mb-3 grid grid-cols-3 gap-2">
-          <Button type="button" onClick={copyOverlayUrl} disabled={!overlayUrl} className="h-9 w-full justify-center">
+          <Button
+            type="button"
+            onClick={copyOverlayUrl}
+            disabled={!overlayUrl}
+            className="h-9 w-full justify-center"
+          >
             <Copy className="h-4 w-4 mr-2" />
             Copy URL
           </Button>
 
-          <Button type="button" variant="outline" className="h-9 w-full justify-center" disabled={!overlayUrl} onClick={openOverlay}>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-9 w-full justify-center"
+            disabled={!overlayUrl}
+            onClick={openOverlay}
+          >
             <ExternalLink className="h-4 w-4 mr-2" />
             Open overlay
           </Button>
 
-          <Button type="button" variant="secondary" className="h-9 w-full justify-center" onClick={() => setOpenDesigner(true)}>
+          <Button
+            type="button"
+            variant="secondary"
+            className="h-9 w-full justify-center"
+            onClick={() => setOpenDesigner(true)}
+          >
             <SlidersHorizontal className="h-4 w-4 mr-2" />
             Open Designer
           </Button>
         </div>
 
-        <WidgetPreviewPanel theme={theme} layout={layout} setLayout={setLayout} opts={opts} {...previewProps} />
+        <WidgetPreviewPanel
+          theme={theme}
+          layout={layout}
+          setLayout={setLayout}
+          opts={opts}
+          {...previewProps}
+        />
 
         <div className="mt-3 flex justify-end">
           <Button onClick={persist} className="h-9">
@@ -1100,7 +1112,6 @@ function WidgetCard({ battleId, sideA, sideB, playerA, playerB, bestOf, buyCost,
     </>
   );
 }
-
 
 /* ───────────────────────── Page ───────────────────────── */
 export default function BattleView() {
