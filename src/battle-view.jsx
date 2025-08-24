@@ -1,3 +1,4 @@
+// src/battle-view.jsx
 import React from "react";
 import { useTheme, AuthCtx } from "@/contexts/auth-context";
 import { supabase } from "@/lib/supabase";
@@ -31,43 +32,51 @@ const fmtMoney = (n) =>
       }).format(Number(n))
     : "—";
 
-/* Theme */
+/* Theme (with border widths & typography) */
 const DEFAULT_THEME = {
   bgStart: "#0b1020",
   bgEnd: "#111827",
+
   panelBorder: "rgba(255,255,255,0.12)",
   panelBorderWidth: 1,
+
   text: "#e5e7eb",
   subtext: "#9ca3af",
   accent: "#7dd3fc",
+
   chipBg: "rgba(255,255,255,0.08)",
   chipBorder: "rgba(255,255,255,0.18)",
   chipBorderWidth: 1,
   chipRadius: 12,
+
   badgeBg: "rgba(255,255,255,0.08)",
   badgeBorder: "rgba(255,255,255,0.18)",
   badgeBorderWidth: 1,
+
   totalBg: "rgba(255,255,255,0.10)",
   totalBorder: "rgba(255,255,255,0.18)",
   totalBorderWidth: 1,
+
   pos: "#22c55e",
   neg: "#ef4444",
   vsBg: "rgba(99,102,241,0.35)",
-  radius: 18,
-  pillRadius: 16,
+
+  radius: 18,      // boxes
+  pillRadius: 16,  // badges/total
   fontFamily:
     "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji','Segoe UI Emoji'",
   fontScale: 100,
   fontWeight: 400,
   strongWeight: 500,
+
   showThumbs: true,
   shine: true,
   pulse: true,
 };
 
-/* Layout */
+/* Default layout + free drag positions */
 const DEFAULT_LAYOUT = {
-  mode: "default",
+  mode: "default", // "default" | "free"
   positions: {
     badges: { x: 16, y: 12 },
     playerA: { x: 40, y: 92 },
@@ -78,7 +87,7 @@ const DEFAULT_LAYOUT = {
   },
 };
 
-/* Options (inclui OBS) */
+/* Widget options (+ OBS sizing) */
 const DEFAULT_OPTS = {
   bonusLabelMode: "label+value",
   bonusLabelText: "Bonus Buy",
@@ -87,13 +96,13 @@ const DEFAULT_OPTS = {
   totalLabelMode: "label+value",
   totalLabelText: "Total paid",
   overlay: {
-    mode: "auto",    // "auto" | "fixed"
-    width: 1920,     // only fixed
-    height: 1080,    // only fixed
-    baseW: 1100,
-    baseH: 420,
-    pad: 24,
-    align: "center", // "top" | "center" | "bottom"
+    mode: "auto",     // "auto" = preenche Browser Source | "fixed" = tamanho fixo
+    width: 1920,
+    height: 1080,
+    baseW: 1100,      // largura do painel (canvas do widget)
+    baseH: 420,       // altura do painel (canvas do widget)
+    pad: 24,          // margem no OBS (letterbox)
+    align: "center",  // "top" | "center" | "bottom"
   },
 };
 
@@ -107,20 +116,23 @@ const PRESETS = [
   { name: "Twilight", t: { bgStart: "#0b1b3a", bgEnd: "#112a46", accent: "#7dd3fc", pos: "#22c55e", neg: "#fb7185", vsBg: "rgba(125,211,252,0.30)" } },
 ];
 
-/* URL do overlay inclui a battle id */
-function buildOverlayUrl(base, token, opts, battleId) {
+// ---- URL builder para o overlay ----
+function buildOverlayUrl(base, token, opts) {
   const o = (opts && opts.overlay) || {};
   const qs = new URLSearchParams();
-  if (battleId) qs.set("id", String(battleId));
-  if (o.baseW) qs.set("bw", String(o.baseW));
-  if (o.baseH) qs.set("bh", String(o.baseH));
-  if (o.pad != null) qs.set("pad", String(o.pad));
+  // base do painel
+  if (typeof o.baseW === "number") qs.set("bw", String(o.baseW));
+  if (typeof o.baseH === "number") qs.set("bh", String(o.baseH));
+  if (typeof o.pad === "number")   qs.set("pad", String(o.pad));
   if (o.align) qs.set("align", String(o.align));
+  // tamanho fixo
   if (o.mode === "fixed") {
     qs.set("pinsize", "1");
     if (o.width)  qs.set("w", String(o.width));
     if (o.height) qs.set("h", String(o.height));
   }
+  // animações por defeito ativas; podes desligar com ?anim=0 manualmente
+  // (não forçamos nada aqui)
   const q = qs.toString();
   return `${base}#/overlay/battle/${token}${q ? `?${q}` : ""}`;
 }
@@ -140,9 +152,9 @@ async function dbLoadWidgetSettings(battleId) {
   };
 }
 async function dbSaveWidgetSettings(battleId, theme, layout, options) {
-  await supabase.from("battle_widget_settings").upsert([{
-    battle_id: battleId, theme, layout, options,
-  }]);
+  await supabase.from("battle_widget_settings").upsert([
+    { battle_id: battleId, theme, layout, options },
+  ]);
 }
 
 /* Enrich slot */
@@ -210,16 +222,27 @@ function SlotsAutocomplete({ value, onSelect, placeholder = "Add a Slot" }) {
   const commitFreeText = React.useCallback(() => {
     const q = (query || "").trim();
     const cur = (currentValueName || "").trim();
-    if (!q || q === cur) { setOpen(false); return; }
+    if (!q || q === cur) {
+      setOpen(false);
+      return;
+    }
     onSelect && onSelect({ id: null, name: q });
     setOpen(false);
   }, [onSelect, query, currentValueName]);
 
   React.useEffect(() => {
     const onDoc = (e) => {
-      if (boxRef.current && !boxRef.current.contains(e.target)) { setOpen(false); commitFreeText(); }
+      if (boxRef.current && !boxRef.current.contains(e.target)) {
+        setOpen(false);
+        commitFreeText();
+      }
     };
-    const onEsc = (e) => { if (e.key === "Escape") { setOpen(false); commitFreeText(); } };
+    const onEsc = (e) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        commitFreeText();
+      }
+    };
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onEsc);
     return () => {
@@ -233,7 +256,10 @@ function SlotsAutocomplete({ value, onSelect, placeholder = "Add a Slot" }) {
     (async function run() {
       const q = (dQuery || "").trim();
       setErrorMsg("");
-      if (q.length < 3) { if (!cancelled) setItems([]); return; }
+      if (q.length < 3) {
+        if (!cancelled) setItems([]);
+        return;
+      }
       try {
         const { data, error } = await supabase
           .from("slots_catalog")
@@ -244,10 +270,15 @@ function SlotsAutocomplete({ value, onSelect, placeholder = "Add a Slot" }) {
         if (error) throw error;
         if (!cancelled) setItems(data || []);
       } catch (e) {
-        if (!cancelled) { setErrorMsg(e?.message || "Search error."); setItems([]); }
+        if (!cancelled) {
+          setErrorMsg(e?.message || "Search error.");
+          setItems([]);
+        }
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [dQuery]);
 
   return (
@@ -255,7 +286,10 @@ function SlotsAutocomplete({ value, onSelect, placeholder = "Add a Slot" }) {
       <div className="relative">
         <Input
           value={query}
-          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+          }}
           onFocus={() => setOpen(true)}
           placeholder={placeholder}
           className="h-11 rounded-xl bg-zinc-900/60 border-white/10 text-white pl-9 focus-visible:ring-1 focus-visible:ring-sky-400 placeholder:text-white/40"
@@ -263,7 +297,12 @@ function SlotsAutocomplete({ value, onSelect, placeholder = "Add a Slot" }) {
         <Search className="h-4 w-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-white/60" />
       </div>
       {open && (
-        <div className={cn("absolute z-40 mt-2 w-full rounded-xl overflow-hidden border", isDark ? "bg-zinc-950/95 border-white/10 shadow-2xl" : "bg-white border-zinc-200 shadow-xl")}>
+        <div
+          className={cn(
+            "absolute z-40 mt-2 w-full rounded-xl overflow-hidden border",
+            isDark ? "bg-zinc-950/95 border-white/10 shadow-2xl" : "bg-white border-zinc-200 shadow-xl"
+          )}
+        >
           {errorMsg && <div className="px-3 py-2 text-sm text-red-400">{errorMsg}</div>}
           {!errorMsg && items.length === 0 ? (
             <div className="px-3 py-2 text-sm opacity-70">No results. Type the name and click outside to use free text.</div>
@@ -274,12 +313,22 @@ function SlotsAutocomplete({ value, onSelect, placeholder = "Add a Slot" }) {
                   <button
                     className="w-full text-left px-3 py-2 hover:bg-white/5 transition flex items-center gap-3"
                     onClick={() => {
-                      onSelect && onSelect({ id: it.id, name: it["NAME"], provider: it["PROVIDER"], thumbnail: it["THUMBNAIL"] });
+                      onSelect &&
+                        onSelect({
+                          id: it.id,
+                          name: it["NAME"],
+                          provider: it["PROVIDER"],
+                          thumbnail: it["THUMBNAIL"],
+                        });
                       setQuery(it["NAME"]);
                       setOpen(false);
                     }}
                   >
-                    {it["THUMBNAIL"] ? <img src={it["THUMBNAIL"]} alt="" className="h-6 w-6 rounded object-contain" /> : <div className="h-6 w-6 rounded bg-white/10" />}
+                    {it["THUMBNAIL"] ? (
+                      <img src={it["THUMBNAIL"]} alt="" className="h-6 w-6 rounded object-contain" />
+                    ) : (
+                      <div className="h-6 w-6 rounded bg-white/10" />
+                    )}
                     <div className="min-w-0">
                       <div className="truncate text-sm">{it["NAME"]}</div>
                       <div className="text-[11px] opacity-60 truncate">{it["PROVIDER"] || "—"}</div>
@@ -311,7 +360,10 @@ function useDrag(containerRef, id, layout, setLayout) {
       const dy = ev.clientY - startY;
       const nx = Math.max(0, Math.min((rect.width || 0) - 40, cur.x + dx));
       const ny = Math.max(0, Math.min((rect.height || 0) - 40, cur.y + dy));
-      setLayout((l) => ({ ...l, positions: { ...l.positions, [id]: { x: nx, y: ny } } }));
+      setLayout((l) => ({
+        ...l,
+        positions: { ...l.positions, [id]: { x: nx, y: ny } },
+      }));
     };
     const onUp = () => {
       window.removeEventListener("mousemove", onMove);
@@ -325,12 +377,27 @@ function useDrag(containerRef, id, layout, setLayout) {
 
 /* ───────── Preview Panel ───────── */
 function WidgetPreviewPanel({
-  theme, layout, setLayout, opts,
-  bestOf, buyCost, totalPay, sideA, sideB, playerA, playerB, aPays, bPays,
+  theme,
+  layout,
+  setLayout,
+  opts,
+  bestOf,
+  buyCost,
+  totalPay,
+  sideA,
+  sideB,
+  playerA,
+  playerB,
+  aPays,
+  bPays,
 }) {
   const aTotal = aPays.reduce((s, r) => s + Number(r?.amount || 0), 0);
   const bTotal = bPays.reduce((s, r) => s + Number(r?.amount || 0), 0);
   const containerRef = React.useRef(null);
+
+  // usar exatamente o canvas base do overlay
+  const baseW = Number(opts?.overlay?.baseW) || 1100;
+  const baseH = Number(opts?.overlay?.baseH) || 420;
 
   const Chip = ({ amount, ok, i }) => (
     <span
@@ -349,7 +416,10 @@ function WidgetPreviewPanel({
       }}
       title={ok ? "Covers buy" : "Below buy"}
     >
-      <span className="h-1.5 w-1.5 rounded-full" style={{ background: ok ? theme.pos : theme.neg, boxShadow: `0 0 0 2px ${ok ? theme.pos : theme.neg}26` }} />
+      <span
+        className="h-1.5 w-1.5 rounded-full"
+        style={{ background: ok ? theme.pos : theme.neg, boxShadow: `0 0 0 2px ${ok ? theme.pos : theme.neg}26` }}
+      />
       {fmtMoney(Number(amount || 0))}
     </span>
   );
@@ -358,170 +428,327 @@ function WidgetPreviewPanel({
     if (layout?.mode !== "free") return children;
     const pos = layout?.positions?.[id] || { x: 0, y: 0 };
     const onMouseDown = useDrag(containerRef, id, layout, setLayout);
-    return <div onMouseDown={onMouseDown} style={{ position: "absolute", left: pos.x, top: pos.y, cursor: "grab" }}>{children}</div>;
+    return (
+      <div onMouseDown={onMouseDown} style={{ position: "absolute", left: pos.x, top: pos.y, cursor: "grab" }}>
+        {children}
+      </div>
+    );
   };
 
   const BadgeBest = (
-    <div className="px-3 py-1.5" style={{
-      background: theme.badgeBg, border: `${theme.badgeBorderWidth}px solid ${theme.badgeBorder}`,
-      borderRadius: theme.pillRadius, color: theme.text, fontWeight: theme.fontWeight,
-    }}>
-      <span>Best of</span><span style={{ marginLeft: 6, fontWeight: theme.strongWeight }}>{bestOf}</span>
+    <div
+      className="px-3 py-1.5"
+      style={{
+        background: theme.badgeBg,
+        border: `${theme.badgeBorderWidth}px solid ${theme.badgeBorder}`,
+        borderRadius: theme.pillRadius,
+        color: theme.text,
+        fontWeight: theme.fontWeight,
+      }}
+    >
+      <span>Best of</span>
+      <span style={{ marginLeft: 6, fontWeight: theme.strongWeight }}>{bestOf}</span>
     </div>
   );
 
   const badgeBonusValue = fmtMoney(buyCost);
-  const BadgeBonus = (opts?.bonusLabelMode === "value"
-    ? <div className="px-3 py-1.5" style={{
-        background: theme.badgeBg, border: `${theme.badgeBorderWidth}px solid ${theme.badgeBorder}`,
-        borderRadius: theme.pillRadius, color: theme.accent, fontWeight: theme.strongWeight,
-      }}>{badgeBonusValue}</div>
-    : <div className="px-3 py-1.5" style={{
-        background: theme.badgeBg, border: `${theme.badgeBorderWidth}px solid ${theme.badgeBorder}`,
-        borderRadius: theme.pillRadius, color: theme.text, fontWeight: theme.fontWeight,
-      }}>
-        <span>{opts?.bonusLabelText || "Bonus Buy"}</span>
-        <span style={{ marginLeft: 8, color: theme.accent, fontWeight: theme.strongWeight }}>{badgeBonusValue}</span>
+  const BadgeBonus =
+    opts?.bonusLabelMode === "value" ? (
+      <div
+        className="px-3 py-1.5"
+        style={{
+          background: theme.badgeBg,
+          border: `${theme.badgeBorderWidth}px solid ${theme.badgeBorder}`,
+          borderRadius: theme.pillRadius,
+          color: theme.accent,
+          fontWeight: theme.strongWeight,
+        }}
+      >
+        {badgeBonusValue}
       </div>
-  );
-
-  // mini-stage para pré-visualizar Canvas/OBS
-  const stagePad = opts?.overlay?.pad ?? 24;
-  const baseW   = opts?.overlay?.baseW ?? 1100;
-  const baseH   = opts?.overlay?.baseH ?? 420;
-  const vAlign  = (opts?.overlay?.align ?? "center");
-  const alignItems = vAlign === "top" ? "flex-start" : vAlign === "bottom" ? "flex-end" : "center";
+    ) : (
+      <div
+        className="px-3 py-1.5"
+        style={{
+          background: theme.badgeBg,
+          border: `${theme.badgeBorderWidth}px solid ${theme.badgeBorder}`,
+          borderRadius: theme.pillRadius,
+          color: theme.text,
+          fontWeight: theme.fontWeight,
+        }}
+      >
+        <span>{opts?.bonusLabelText || "Bonus Buy"}</span>
+        <span style={{ marginLeft: 8, color: theme.accent, fontWeight: theme.strongWeight }}>
+          {badgeBonusValue}
+        </span>
+      </div>
+    );
 
   return (
     <>
       <style>{`
         @keyframes sweep { 0% { transform: translateX(-120%);} 100% { transform: translateX(120%);} }
         @keyframes pop { 0% { transform: scale(.96); opacity: 0;} 100% { transform: scale(1); opacity: 1;} }
-        @keyframes glow { 0% { box-shadow: 0 0 0 rgba(0,0,0,0);} 100% { box-shadow: 0 15px 40px rgba(0,0,0,.45);} }
-        @keyframes vsPulse { 0%,100% { transform: scale(1); opacity:.92;} 50% { transform: scale(1.06); opacity:1; } }
+        /* mesmo efeito do overlay */
+        @keyframes vsPulse { 0%{ transform:scale(1); opacity:1 } 50%{ transform:scale(1.04); opacity:.92 } 100%{ transform:scale(1); opacity:1 } }
       `}</style>
 
-      <div ref={containerRef} className="relative overflow-hidden p-0" style={{ borderRadius: theme.radius, animation: "glow .3s ease-out both", background: "transparent" }}>
-        <div className="w-full h-full flex justify-center" style={{ alignItems, padding: stagePad, boxSizing: "border-box" }}>
-          <div className="shadow-[0_10px_30px_rgba(0,0,0,.35)]" style={{
-            width: baseW, height: baseH,
-            background: `linear-gradient(135deg, ${theme.bgStart}, ${theme.bgEnd})`,
-            border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
-            borderRadius: theme.radius, color: theme.text, fontFamily: theme.fontFamily, fontSize: `${theme.fontScale}%`,
-          }}>
-            {/* default layout */}
-            {layout?.mode !== "free" && (
-              <>
-                {/* badges */}
-                {opts?.bonusDock === "right" ? (
-                  <div className="flex items-center justify-between gap-2 p-5">
-                    <div className="flex items-center gap-2">{BadgeBest}</div>
-                    <div>{BadgeBonus}</div>
+      <div
+        ref={containerRef}
+        className="relative overflow-hidden"
+        style={{
+          // canvas do widget (igual ao overlay)
+          width: baseW,
+          height: baseH,
+          padding: 24, // sempre 24px para ficar 1:1 com o overlay
+          background: `linear-gradient(135deg, ${theme.bgStart}, ${theme.bgEnd})`,
+          border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
+          borderRadius: theme.radius,
+          color: theme.text,
+          fontFamily: theme.fontFamily,
+          fontSize: `${theme.fontScale}%`,
+        }}
+      >
+        {theme.shine && (
+          <div
+            className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+            style={{ animation: "sweep 4.8s linear infinite" }}
+          />
+        )}
+
+        {/* default layout (no drag) */}
+        {layout?.mode !== "free" && (
+          <>
+            {/* badges row */}
+            {opts?.bonusDock === "right" ? (
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">{BadgeBest}</div>
+                <div>{BadgeBonus}</div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                {BadgeBest}
+                {BadgeBonus}
+              </div>
+            )}
+
+            {/* players */}
+            <div className="mt-5 grid grid-cols-[1fr_auto_1fr] items-center gap-5">
+              <div className="flex items-center justify-end gap-3">
+                <div className="min-w-0 text-right">
+                  <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
+                    {playerA || "—"}
                   </div>
-                ) : (
-                  <div className="flex items-center gap-2 p-5">
-                    {BadgeBest}
-                    {BadgeBonus}
+                  <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>
+                    {sideA?.name || "—"}
+                  </div>
+                </div>
+                {theme.showThumbs && (
+                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
+                    {sideA?.thumbnail ? <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
                   </div>
                 )}
+              </div>
 
-                {/* players */}
-                <div className="px-5 grid grid-cols-[1fr_auto_1fr] items-center gap-5">
-                  <div className="flex items-center justify-end gap-3">
-                    <div className="min-w-0 text-right">
-                      <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>{playerA || "—"}</div>
-                      <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>{sideA?.name || "—"}</div>
-                    </div>
-                    {theme.showThumbs && (
-                      <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
-                        {sideA?.thumbnail ? <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
-                      </div>
-                    )}
+              <div className="flex justify-center">
+                <div
+                  className="px-3 py-1 text-xs"
+                  style={{
+                    background: theme.vsBg,
+                    border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
+                    borderRadius: 10,
+                    fontWeight: theme.strongWeight,
+                    animation: theme.pulse ? "vsPulse 1.8s ease-in-out infinite" : "none",
+                  }}
+                >
+                  VS
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {theme.showThumbs && (
+                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
+                    {sideB?.thumbnail ? <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
                   </div>
-
-                  {/* VS — usa MESMA animação do overlay */}
-                  <div className="flex justify-center">
-                    <div
-                      className="px-3 py-1 text-xs"
-                      style={{
-                        background: theme.vsBg,
-                        border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
-                        borderRadius: 10,
-                        fontWeight: theme.strongWeight,
-                        animation: theme.pulse ? "vsPulse 1.25s ease-in-out infinite" : "none",
-                      }}
-                    >
-                      VS
-                    </div>
+                )}
+                <div className="min-w-0 text-left">
+                  <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
+                    {playerB || "—"}
                   </div>
-
-                  <div className="flex items-center gap-3">
-                    {theme.showThumbs && (
-                      <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
-                        {sideB?.thumbnail ? <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
-                      </div>
-                    )}
-                    <div className="min-w-0 text-left">
-                      <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>{playerB || "—"}</div>
-                      <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>{sideB?.name || "—"}</div>
-                    </div>
+                  <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>
+                    {sideB?.name || "—"}
                   </div>
                 </div>
+              </div>
+            </div>
 
-                {/* chips + subtotals */}
-                <div className="px-5 mt-6 grid grid-cols-2 gap-6">
-                  <div>
-                    <div className="flex flex-wrap">
-                      {aPays.map((p, i) => <Chip key={`a-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />)}
-                    </div>
-                    <div className="inline-flex mt-3 items-center gap-2 px-3 py-1.5 text-[12px]"
-                      style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}>
-                      <span>Subtotal</span>
-                      <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(aTotal)}</span>
-                    </div>
+            {/* chips + subtotals */}
+            <div className="mt-6 grid grid-cols-2 gap-6">
+              <div>
+                <div className="flex flex-wrap">
+                  {aPays.map((p, i) => (
+                    <Chip key={`a-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
+                  ))}
+                </div>
+                <div
+                  className="inline-flex mt-3 items-center gap-2 px-3 py-1.5 text-[12px]"
+                  style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}
+                >
+                  <span>Subtotal</span>
+                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(aTotal)}</span>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex flex-wrap">
+                  {bPays.map((p, i) => (
+                    <Chip key={`b-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
+                  ))}
+                </div>
+                <div
+                  className="inline-flex mt-3 items-center gap-2 px-3 py-1.5 text-[12px]"
+                  style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}
+                >
+                  <span>Subtotal</span>
+                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(bTotal)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* total */}
+            <div
+              className={cn(
+                "mt-6 flex",
+                opts?.totalJustify === "left" ? "justify-start" : opts?.totalJustify === "right" ? "justify-end" : "justify-center"
+              )}
+            >
+              <div
+                className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
+                style={{ background: theme.totalBg, border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`, borderRadius: theme.pillRadius, color: theme.accent, fontWeight: theme.strongWeight }}
+              >
+                {opts?.totalLabelMode === "value" ? fmtMoney(totalPay) : `Total paid: ${fmtMoney(totalPay)}`}
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* free layout (drag & drop) */}
+        {layout?.mode === "free" && (
+          <>
+            <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: "linear-gradient(transparent 95%, rgba(255,255,255,.05) 95%)", backgroundSize: "100% 40px" }} />
+
+            <DragBox id="badges">
+              <div className="flex items-center gap-2">
+                {BadgeBest}
+                {BadgeBonus}
+              </div>
+            </DragBox>
+
+            <DragBox id="playerA">
+              <div className="flex items-center justify-end gap-3">
+                <div className="min-w-0 text-right">
+                  <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
+                    {playerA || "—"}
                   </div>
-
-                  <div>
-                    <div className="flex flex-wrap">
-                      {bPays.map((p, i) => <Chip key={`b-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />)}
-                    </div>
-                    <div className="inline-flex mt-3 items-center gap-2 px-3 py-1.5 text-[12px]"
-                      style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}>
-                      <span>Subtotal</span>
-                      <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(bTotal)}</span>
-                    </div>
+                  <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>
+                    {sideA?.name || "—"}
                   </div>
                 </div>
+                {theme.showThumbs && (
+                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
+                    {sideA?.thumbnail ? <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
+                  </div>
+                )}
+              </div>
+            </DragBox>
 
-                {/* total */}
-                <div className={cn("px-5 mt-6 flex", opts?.totalJustify === "left" ? "justify-start" : opts?.totalJustify === "right" ? "justify-end" : "justify-center")}>
-                  <div className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
-                    style={{ background: theme.totalBg, border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`, borderRadius: theme.pillRadius, color: theme.accent, fontWeight: theme.strongWeight }}>
-                    Total paid: {fmtMoney(totalPay)}
+            <DragBox id="playerB">
+              <div className="flex items-center gap-3">
+                {theme.showThumbs && (
+                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
+                    {sideB?.thumbnail ? <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
+                  </div>
+                )}
+                <div className="min-w-0 text-left">
+                  <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
+                    {playerB || "—"}
+                  </div>
+                  <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>
+                    {sideB?.name || "—"}
                   </div>
                 </div>
-              </>
-            )}
-          </div>
-        </div>
+              </div>
+            </DragBox>
+
+            <DragBox id="chipsA">
+              <div>
+                <div className="flex flex-wrap">
+                  {aPays.map((p, i) => (
+                    <Chip key={`fa-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
+                  ))}
+                </div>
+                <div
+                  className="inline-flex mt-2 items-center gap-2 px-3 py-1.5 text-[12px]"
+                  style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}
+                >
+                  <span>Subtotal</span>
+                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(aTotal)}</span>
+                </div>
+              </div>
+            </DragBox>
+
+            <DragBox id="chipsB">
+              <div>
+                <div className="flex flex-wrap">
+                  {bPays.map((p, i) => (
+                    <Chip key={`fb-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
+                  ))}
+                </div>
+                <div
+                  className="inline-flex mt-2 items-center gap-2 px-3 py-1.5 text-[12px]"
+                  style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}
+                >
+                  <span>Subtotal</span>
+                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(bTotal)}</span>
+                </div>
+              </div>
+            </DragBox>
+
+            <DragBox id="total">
+              <div
+                className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
+                style={{ background: theme.totalBg, border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`, borderRadius: theme.pillRadius, color: theme.accent, fontWeight: theme.strongWeight }}
+              >
+                {opts?.totalLabelMode === "value" ? fmtMoney(aTotal + bTotal) : `Total paid: ${fmtMoney(aTotal + bTotal)}`}
+              </div>
+            </DragBox>
+          </>
+        )}
       </div>
     </>
   );
 }
 
-/* ───────── Designer ───────── */
+/* ───────── ColorField (fixo) ───────── */
 function ColorField({ label, value, onChange }) {
   const swatchRef = React.useRef(null);
   const [open, setOpen] = React.useState(false);
   const [anchor, setAnchor] = React.useState({ left: 0, top: 0 });
   const [tempHex, setTempHex] = React.useState("#ffffff");
   const [textValue, setTextValue] = React.useState(value || "");
+
   React.useEffect(() => setTextValue(value || ""), [value]);
 
   const toHex = React.useCallback((v) => {
     if (!v) return "#ffffff";
     v = String(v).trim();
-    if (v.startsWith("#")) { if (v.length === 4) { const r = v[1], g = v[2], b = v[3]; return `#${r}${r}${g}${g}${b}${b}`; } return v.slice(0, 7); }
+    if (v.startsWith("#")) {
+      if (v.length === 4) {
+        const r = v[1], g = v[2], b = v[3];
+        return `#${r}${r}${g}${g}${b}${b}`;
+      }
+      return v.slice(0, 7);
+    }
     const m = v.match(/rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
     if (m) {
       const clamp = (n) => Math.max(0, Math.min(255, n | 0));
@@ -534,7 +761,8 @@ function ColorField({ label, value, onChange }) {
   const openPicker = () => {
     const rect = swatchRef.current?.getBoundingClientRect();
     const panelW = 260, panelH = 220, pad = 8;
-    let left = rect?.left ?? 0, top = rect ? rect.bottom + pad : 0;
+    let left = rect?.left ?? 0;
+    let top = rect ? rect.bottom + pad : 0;
     left = Math.max(pad, Math.min(window.innerWidth - panelW - pad, left));
     top = Math.max(pad, Math.min(window.innerHeight - panelH - pad, top));
     setAnchor({ left, top });
@@ -542,24 +770,48 @@ function ColorField({ label, value, onChange }) {
     setOpen(true);
   };
 
-  const applyAndClose = () => { onChange?.(tempHex); setTextValue(tempHex); setOpen(false); };
+  const applyAndClose = () => {
+    onChange?.(tempHex);
+    setTextValue(tempHex);
+    setOpen(false);
+  };
 
   return (
     <div className="rounded-xl border border-white/10 bg-white/5 p-3">
       <div className="text-xs opacity-70 mb-1">{label}</div>
       <div className="flex items-center gap-3">
-        <button ref={swatchRef} type="button" onClick={openPicker}
+        <button
+          ref={swatchRef}
+          type="button"
+          onClick={openPicker}
           className="h-9 w-9 rounded-lg border border-white/10 shadow-inner"
-          style={{ background: textValue || value || "#ffffff" }} title="Pick color" />
-        <Input value={textValue} onChange={(e) => { setTextValue(e.target.value); onChange?.(e.target.value); }} className="h-9 bg-zinc-900 border-white/10 text-white" />
+          style={{ background: textValue || value || "#ffffff" }}
+          title="Pick color"
+        />
+        <Input
+          value={textValue}
+          onChange={(e) => {
+            setTextValue(e.target.value);
+            onChange?.(e.target.value);
+          }}
+          className="h-9 bg-zinc-900 border-white/10 text-white"
+        />
       </div>
+
       {open && (
         <div className="fixed inset-0 z-[9999]" onMouseDown={() => setOpen(false)}>
-          <div onMouseDown={(e) => e.stopPropagation()} className="rounded-xl border border-white/10 bg-zinc-900/95 p-3 shadow-2xl"
-               style={{ position: "fixed", left: anchor.left, top: anchor.top, width: 260, height: 220, backdropFilter: "blur(6px)" }}>
+          <div
+            onMouseDown={(e) => e.stopPropagation()}
+            className="rounded-xl border border-white/10 bg-zinc-900/95 p-3 shadow-2xl"
+            style={{ position: "fixed", left: anchor.left, top: anchor.top, width: 260, height: 220, backdropFilter: "blur(6px)" }}
+          >
             <div className="text-xs opacity-70 mb-2">Pick a color</div>
-            <input type="color" value={tempHex} onChange={(e) => setTempHex(e.target.value)}
-                   className="block w-full h-40 rounded-lg border border-white/10 p-0 cursor-pointer bg-transparent" />
+            <input
+              type="color"
+              value={tempHex}
+              onChange={(e) => setTempHex(e.target.value)}
+              className="block w-full h-40 rounded-lg border border-white/10 p-0 cursor-pointer bg-transparent"
+            />
             <div className="mt-2 flex items-center gap-2">
               <Input value={tempHex} onChange={(e) => setTempHex(e.target.value)} className="h-9 bg-zinc-800 border-white/10 text-white" />
               <Button type="button" className="h-9" onClick={applyAndClose}>OK</Button>
@@ -571,6 +823,7 @@ function ColorField({ label, value, onChange }) {
   );
 }
 
+/* ───────── Designer ───────── */
 function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setLayout, opts, setOpts, previewProps, persist }) {
   if (!open) return null;
   return (
@@ -582,8 +835,14 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
           <div className="text-xs opacity-60">Battle #{battleId}</div>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={() => { persist(); onClose(); }} className="h-9"><Save className="h-4 w-4 mr-2" />Save & Close</Button>
-          <Button variant="outline" onClick={onClose} className="h-9"><X className="h-4 w-4 mr-2" />Cancel</Button>
+          <Button onClick={() => { persist(); onClose(); }} className="h-9">
+            <Save className="h-4 w-4 mr-2" />
+            Save & Close
+          </Button>
+          <Button variant="outline" onClick={onClose} className="h-9">
+            <X className="h-4 w-4 mr-2" />
+            Cancel
+          </Button>
         </div>
       </div>
 
@@ -596,8 +855,12 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
               <div className="text-xs opacity-70 mb-2">Presets</div>
               <div className="grid grid-cols-2 gap-2">
                 {PRESETS.map((p) => (
-                  <button key={p.name} onClick={() => setTheme((t) => ({ ...t, ...p.t }))}
-                          className="rounded-lg overflow-hidden border border-white/10 hover:ring-2 hover:ring-sky-400 transition" title={p.name}>
+                  <button
+                    key={p.name}
+                    onClick={() => setTheme((t) => ({ ...t, ...p.t }))}
+                    className="rounded-lg overflow-hidden border border-white/10 hover:ring-2 hover:ring-sky-400 transition"
+                    title={p.name}
+                  >
                     <div className="h-10" style={{ background: `linear-gradient(135deg, ${p.t.bgStart || theme.bgStart}, ${p.t.bgEnd || theme.bgEnd})` }} />
                     <div className="px-2 py-1 text-[11px] opacity-80">{p.name}</div>
                   </button>
@@ -608,12 +871,23 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
             {/* Colors */}
             <div className="grid grid-cols-1 gap-4">
               {[
-                ["Background start","bgStart"],["Background end","bgEnd"],["Panel/Line border","panelBorder"],
-                ["Text","text"],["Subtext","subtext"],["Accent","accent"],["Chip bg","chipBg"],["Chip border","chipBorder"],
-                ["OK (green)","pos"],["NOK (red)","neg"],["Badge bg","badgeBg"],["Badge border","badgeBorder"],
-                ["Total bg","totalBg"],["Total border","totalBorder"],["VS bg","vsBg"],
-              ].map(([label, key]) => (
-                <ColorField key={key} label={label} value={theme[key]} onChange={(v) => setTheme((t) => ({ ...t, [key]: v }))} />
+                ["Background start", "bgStart"],
+                ["Background end", "bgEnd"],
+                ["Panel/Line border", "panelBorder"],
+                ["Text", "text"],
+                ["Subtext", "subtext"],
+                ["Accent", "accent"],
+                ["Chip bg", "chipBg"],
+                ["Chip border", "chipBorder"],
+                ["OK (green)", "pos"],
+                ["NOK (red)", "neg"],
+                ["Badge bg", "badgeBg"],
+                ["Badge border", "badgeBorder"],
+                ["Total bg", "totalBg"],
+                ["Total border", "totalBorder"],
+                ["VS bg", "vsBg"],
+              ].map(([lbl, key]) => (
+                <ColorField key={key} label={lbl} value={theme[key]} onChange={(v) => setTheme((t) => ({ ...t, [key]: v }))} />
               ))}
             </div>
 
@@ -622,42 +896,36 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
               <div className="text-xs opacity-70 mb-1">Layout</div>
 
               {[
-                ["Panel border width","panelBorderWidth",0,4],
-                ["Badge border width","badgeBorderWidth",0,4],
-                ["Total border width","totalBorderWidth",0,4],
-                ["Chip border width","chipBorderWidth",0,4],
-              ].map(([label, key, min, max]) => (
+                ["Panel border width", "panelBorderWidth", 0, 4],
+                ["Badge border width", "badgeBorderWidth", 0, 4],
+                ["Total border width", "totalBorderWidth", 0, 4],
+                ["Chip border width", "chipBorderWidth", 0, 4],
+              ].map(([lbl, key, min, max]) => (
                 <div key={key}>
-                  <label className="block text-sm">{label}: {theme[key]}px</label>
+                  <label className="block text-sm">{lbl}: {theme[key]}px</label>
                   <input type="range" min={min} max={max} step={1} value={theme[key]} onChange={(e) => setTheme((t) => ({ ...t, [key]: Number(e.target.value) }))} className="w-full" />
                 </div>
               ))}
 
               {[
-                ["Border radius (boxes)","radius",8,28],
-                ["Pill radius (Best/Bonus/Total)","pillRadius",8,30],
-                ["Chip radius","chipRadius",8,20],
-              ].map(([label, key, min, max]) => (
+                ["Border radius (boxes)", "radius", 8, 28],
+                ["Pill radius (Best/Bonus/Total)", "pillRadius", 8, 30],
+                ["Chip radius", "chipRadius", 8, 20],
+                ["Font size", "fontScale", 80, 130],
+                ["Font weight (normal)", "fontWeight", 300, 700],
+                ["Font weight (strong)", "strongWeight", 300, 800],
+              ].map(([lbl, key, min, max]) => (
                 <div key={key}>
-                  <label className="block text-sm">{label}: {theme[key]}px</label>
-                  <input type="range" min={min} max={max} step={1} value={theme[key]} onChange={(e) => setTheme((t) => ({ ...t, [key]: Number(e.target.value) }))} className="w-full" />
+                  <label className="block text-sm">{lbl}: {theme[key]}{key==="fontScale"?"%":"px"}</label>
+                  <input type="range" min={min} max={max} step={key.includes("Weight")?50:1} value={theme[key]} onChange={(e) => setTheme((t) => ({ ...t, [key]: Number(e.target.value) }))} className="w-full" />
                 </div>
               ))}
-
-              <label className="block text-sm">Font size: {theme.fontScale}%</label>
-              <input type="range" min={80} max={130} step={1} value={theme.fontScale} onChange={(e) => setTheme((t) => ({ ...t, fontScale: Number(e.target.value) }))} className="w-full" />
 
               <label className="block text-sm">Font family</label>
               <Input value={theme.fontFamily} onChange={(e) => setTheme((t) => ({ ...t, fontFamily: e.target.value }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
 
-              <label className="block text-sm">Font weight (normal): {theme.fontWeight}</label>
-              <input type="range" min={300} max={700} step={50} value={theme.fontWeight} onChange={(e) => setTheme((t) => ({ ...t, fontWeight: Number(e.target.value) }))} className="w-full" />
-
-              <label className="block text-sm">Font weight (strong): {theme.strongWeight}</label>
-              <input type="range" min={300} max={800} step={50} value={theme.strongWeight} onChange={(e) => setTheme((t) => ({ ...t, strongWeight: Number(e.target.value) }))} className="w-full" />
-
               {/* Canvas / OBS */}
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3 mt-3">
                 <div className="text-xs opacity-70 mb-1">Canvas / OBS</div>
 
                 <div className="flex items-center gap-3">
@@ -703,8 +971,7 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
                   </div>
                   <div>
                     <div className="text-xs opacity-70 mb-1">Vertical align</div>
-                    <select value={opts.overlay.align} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, align: e.target.value } }))}
-                            className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white px-3">
+                    <select value={opts.overlay.align} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, align: e.target.value } }))} className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white px-3">
                       <option value="top">Top</option>
                       <option value="center">Center</option>
                       <option value="bottom">Bottom</option>
@@ -724,31 +991,36 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
                 <div className="flex items-center gap-3">
                   <div className="text-sm w-36">Bonus badge:</div>
                   <label className="text-sm flex items-center gap-1">
-                    <input type="radio" checked={opts.bonusDock === "left"} onChange={() => setOpts((o) => ({ ...o, bonusDock: "left" }))} /> Left
+                    <input type="radio" checked={opts.bonusDock === "left"} onChange={() => setOpts((o) => ({ ...o, bonusDock: "left" }))} />
+                    Left
                   </label>
                   <label className="text-sm flex items-center gap-1">
-                    <input type="radio" checked={opts.bonusDock === "right"} onChange={() => setOpts((o) => ({ ...o, bonusDock: "right" }))} /> Right
+                    <input type="radio" checked={opts.bonusDock === "right"} onChange={() => setOpts((o) => ({ ...o, bonusDock: "right" }))} />
+                    Right
                   </label>
                 </div>
 
                 <div className="flex items-center gap-3">
                   <div className="text-sm w-36">Total badge:</div>
                   <label className="text-sm flex items-center gap-1">
-                    <input type="radio" checked={opts.totalJustify === "left"} onChange={() => setOpts((o) => ({ ...o, totalJustify: "left" }))} /> Left
+                    <input type="radio" checked={opts.totalJustify === "left"} onChange={() => setOpts((o) => ({ ...o, totalJustify: "left" }))} />
+                    Left
                   </label>
                   <label className="text-sm flex items-center gap-1">
-                    <input type="radio" checked={opts.totalJustify === "center"} onChange={() => setOpts((o) => ({ ...o, totalJustify: "center" }))} /> Center
+                    <input type="radio" checked={opts.totalJustify === "center"} onChange={() => setOpts((o) => ({ ...o, totalJustify: "center" }))} />
+                    Center
                   </label>
                   <label className="text-sm flex items-center gap-1">
-                    <input type="radio" checked={opts.totalJustify === "right"} onChange={() => setOpts((o) => ({ ...o, totalJustify: "right" }))} /> Right
+                    <input type="radio" checked={opts.totalJustify === "right"} onChange={() => setOpts((o) => ({ ...o, totalJustify: "right" }))} />
+                    Right
                   </label>
                 </div>
               </div>
 
               {[
-                ["showThumbs","Show thumbnails"],
-                ["shine","Shine sweep"],
-                ["pulse","VS/Chips pulse"],
+                ["showThumbs", "Show thumbnails"],
+                ["shine", "Shine sweep"],
+                ["pulse", "VS/Chips pulse"],
               ].map(([k, label]) => (
                 <label key={k} className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={!!theme[k]} onChange={(e) => setTheme((t) => ({ ...t, [k]: e.target.checked }))} />
@@ -762,11 +1034,11 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
               <div className="text-xs opacity-70">Bonus Buy</div>
               <div className="flex flex-col gap-2 text-sm">
                 <label className="flex items-center gap-2">
-                  <input type="radio" name="bonuslabel" checked={opts.bonusLabelMode === "label+value"} onChange={() => setOpts((o) => ({ ...o, bonusLabelMode: "label+value" }))}/>
+                  <input type="radio" name="bonuslabel" checked={opts.bonusLabelMode === "label+value"} onChange={() => setOpts((o) => ({ ...o, bonusLabelMode: "label+value" }))} />
                   Label + Value
                 </label>
                 <label className="flex items-center gap-2">
-                  <input type="radio" name="bonuslabel" checked={opts.bonusLabelMode === "value"} onChange={() => setOpts((o) => ({ ...o, bonusLabelMode: "value" }))}/>
+                  <input type="radio" name="bonuslabel" checked={opts.bonusLabelMode === "value"} onChange={() => setOpts((o) => ({ ...o, bonusLabelMode: "value" }))} />
                   Value only
                 </label>
               </div>
@@ -778,14 +1050,28 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
 
             {/* Save */}
             <div className="flex gap-2 sticky bottom-3">
-              <Button onClick={persist} className="h-10"><Save className="h-4 w-4 mr-2" />Save</Button>
+              <Button onClick={persist} className="h-10">
+                <Save className="h-4 w-4 mr-2" />
+                Save
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setTheme({ ...DEFAULT_THEME });
+                  setLayout({ ...DEFAULT_LAYOUT, mode: layout.mode });
+                  setOpts({ ...DEFAULT_OPTS });
+                }}
+                className="h-10"
+              >
+                Restore defaults
+              </Button>
             </div>
           </div>
         </div>
 
-        {/* Live preview */}
+        {/* Live preview (canvas 1:1 com o overlay) */}
         <div className="p-6 overflow-auto">
-          <WidgetPreviewPanel theme={theme} layout={layout} setLayout={setLayout} opts={opts} bestOf={previewProps.bestOf} buyCost={previewProps.buyCost} totalPay={previewProps.totalPay} sideA={previewProps.sideA} sideB={previewProps.sideB} playerA={previewProps.playerA} playerB={previewProps.playerB} aPays={previewProps.aPays} bPays={previewProps.bPays} />
+          <WidgetPreviewPanel theme={theme} layout={layout} setLayout={setLayout} opts={opts} {...previewProps} />
         </div>
       </div>
     </div>
@@ -793,24 +1079,45 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
 }
 
 /* ───────── Widget Card ───────── */
-function WidgetCard({ battleId, sideA, sideB, playerA, playerB, bestOf, buyCost, totalPay, aPays = [], bPays = [] }) {
+function WidgetCard({
+  battleId,
+  sideA,
+  sideB,
+  playerA,
+  playerB,
+  bestOf,
+  buyCost,
+  totalPay,
+  aPays = [],
+  bPays = [],
+}) {
   const { profile } = React.useContext(AuthCtx) || {};
+
   const [theme, setTheme] = React.useState(DEFAULT_THEME);
   const [layout, setLayout] = React.useState(DEFAULT_LAYOUT);
   const [opts, setOpts] = React.useState(DEFAULT_OPTS);
   const [openDesigner, setOpenDesigner] = React.useState(false);
 
+  // URL exclusivo do overlay, por perfil
   const overlayUrl = React.useMemo(() => {
     const base = `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, "");
     const token = profile?.public_token || profile?.widget_token || profile?.id || "";
     if (!token) return "";
-    return buildOverlayUrl(base, token, opts, battleId);
-  }, [profile?.public_token, profile?.widget_token, profile?.id, opts, battleId]);
+    return buildOverlayUrl(base, token, opts);
+  }, [profile?.public_token, profile?.widget_token, profile?.id, opts]);
 
-  const openOverlay = () => { if (!overlayUrl) return; window.open(overlayUrl, "_blank", "noopener,noreferrer"); };
+  const openOverlay = () => {
+    if (!overlayUrl) return;
+    window.open(overlayUrl, "_blank", "noopener,noreferrer");
+  };
+
   const copyOverlayUrl = async () => {
     if (!overlayUrl) return;
-    try { await navigator.clipboard.writeText(overlayUrl); } catch { alert("Não consegui copiar o URL."); }
+    try {
+      await navigator.clipboard.writeText(overlayUrl);
+    } catch {
+      alert("Não consegui copiar o URL.");
+    }
   };
 
   const previewProps = { bestOf, buyCost, totalPay, sideA, sideB, playerA, playerB, aPays, bPays };
@@ -827,28 +1134,52 @@ function WidgetCard({ battleId, sideA, sideB, playerA, playerB, bestOf, buyCost,
 
   const persist = React.useCallback(async () => {
     if (!battleId) return;
-    await dbSaveWidgetSettings(battleId, theme, layout, opts);
+    await supabase.from("battle_widget_settings").upsert([
+      { battle_id: battleId, theme, layout, options: opts },
+    ]);
   }, [battleId, theme, layout, opts]);
 
   return (
     <>
       <AccentCard title="Widget">
         <div className="mb-3 grid grid-cols-3 gap-2">
-          <Button type="button" onClick={copyOverlayUrl} disabled={!overlayUrl} className="h-9 w-full justify-center"><Copy className="h-4 w-4 mr-2" />Copy URL</Button>
-          <Button type="button" variant="outline" className="h-9 w-full justify-center" disabled={!overlayUrl} onClick={openOverlay}><ExternalLink className="h-4 w-4 mr-2" />Open overlay</Button>
-          <Button type="button" variant="secondary" className="h-9 w-full justify-center" onClick={() => setOpenDesigner(true)}><SlidersHorizontal className="h-4 w-4 mr-2" />Open Designer</Button>
+          <Button type="button" onClick={copyOverlayUrl} disabled={!overlayUrl} className="h-9 w-full justify-center">
+            <Copy className="h-4 w-4 mr-2" />
+            Copy URL
+          </Button>
+          <Button type="button" variant="outline" className="h-9 w-full justify-center" disabled={!overlayUrl} onClick={openOverlay}>
+            <ExternalLink className="h-4 w-4 mr-2" />
+            Open overlay
+          </Button>
+          <Button type="button" variant="secondary" className="h-9 w-full justify-center" onClick={() => setOpenDesigner(true)}>
+            <SlidersHorizontal className="h-4 w-4 mr-2" />
+            Open Designer
+          </Button>
         </div>
 
         <WidgetPreviewPanel theme={theme} layout={layout} setLayout={setLayout} opts={opts} {...previewProps} />
 
         <div className="mt-3 flex justify-end">
-          <Button onClick={persist} className="h-9"><Save className="h-4 w-4 mr-2" />Save settings</Button>
+          <Button onClick={persist} className="h-9">
+            <Save className="h-4 w-4 mr-2" />
+            Save settings
+          </Button>
         </div>
       </AccentCard>
 
-      <WidgetDesigner open={openDesigner} onClose={() => setOpenDesigner(false)} battleId={battleId}
-        theme={theme} setTheme={setTheme} layout={layout} setLayout={setLayout}
-        opts={opts} setOpts={setOpts} previewProps={previewProps} persist={persist} />
+      <WidgetDesigner
+        open={openDesigner}
+        onClose={() => setOpenDesigner(false)}
+        battleId={battleId}
+        theme={theme}
+        setTheme={setTheme}
+        layout={layout}
+        setLayout={setLayout}
+        opts={opts}
+        setOpts={setOpts}
+        previewProps={previewProps}
+        persist={persist}
+      />
     </>
   );
 }
@@ -883,6 +1214,7 @@ export default function BattleView() {
   const [playerB, setPlayerB] = React.useState("");
 
   const [pays, setPays] = React.useState([]);
+
   const [histA, setHistA] = React.useState(null);
   const [histB, setHistB] = React.useState(null);
 
@@ -895,8 +1227,18 @@ export default function BattleView() {
   const aPays = (pays || []).filter((r) => String(r.side || "").toUpperCase() === "L");
   const bPays = (pays || []).filter((r) => String(r.side || "").toUpperCase() === "R");
 
-  const aStats = { count: aPays.length, total: aPays.reduce((s, r) => s + Number(r.amount || 0), 0), best: aPays.length ? Math.max(...aPays.map((r) => Number(r.amount || 0))) : 0, worst: aPays.length ? Math.min(...aPays.map((r) => Number(r.amount || 0))) : 0 };
-  const bStats = { count: bPays.length, total: bPays.reduce((s, r) => s + Number(r.amount || 0), 0), best: bPays.length ? Math.max(...bPays.map((r) => Number(r.amount || 0))) : 0, worst: bPays.length ? Math.min(...bPays.map((r) => Number(r.amount || 0))) : 0 };
+  const aStats = {
+    count: aPays.length,
+    total: aPays.reduce((s, r) => s + Number(r.amount || 0), 0),
+    best: aPays.length ? Math.max(...aPays.map((r) => Number(r.amount || 0))) : 0,
+    worst: aPays.length ? Math.min(...aPays.map((r) => Number(r.amount || 0))) : 0,
+  };
+  const bStats = {
+    count: bPays.length,
+    total: bPays.reduce((s, r) => s + Number(r.amount || 0), 0),
+    best: bPays.length ? Math.max(...bPays.map((r) => Number(r.amount || 0))) : 0,
+    worst: bPays.length ? Math.min(...bPays.map((r) => Number(r.amount || 0))) : 0,
+  };
 
   const load = React.useCallback(async function (id) {
     if (!id) return;
@@ -910,6 +1252,7 @@ export default function BattleView() {
       setBuyCost(Number(battle?.buy_cost) || 0);
 
       const { data: es } = await supabase.from("battle_entries").select("seed, slot_name, slot_id, player_name").eq("battle_id", id);
+
       const A = (es || []).find((e) => String(e.seed).toUpperCase() === "A");
       const B = (es || []).find((e) => String(e.seed).toUpperCase() === "B");
 
@@ -917,8 +1260,11 @@ export default function BattleView() {
       let bBase = B ? { id: B.slot_id ?? null, name: B.slot_name || "" } : null;
       if (aBase) aBase = await enrichSlotInfo(aBase);
       if (bBase) bBase = await enrichSlotInfo(bBase);
-      setSideA(aBase); setPlayerA(A?.player_name || "");
-      setSideB(bBase); setPlayerB(B?.player_name || "");
+
+      setSideA(aBase);
+      setPlayerA(A?.player_name || "");
+      setSideB(bBase);
+      setPlayerB(B?.player_name || "");
 
       const { data: ps } = await supabase.from("battle_payments").select("*").eq("battle_id", id).order("buy_idx", { ascending: true });
       setPays(ps || []);
@@ -930,23 +1276,38 @@ export default function BattleView() {
           else if (slotEntry?.slot_name) q = q.ilike("slot_name", `%${slotEntry.slot_name}%`);
           const { data: ents } = await q.limit(200);
           if (!ents?.length) return { times: 0, total: 0, best: 0, worst: 0, last: "—" };
+
           const battleIds = [...new Set(ents.map((e) => e.battle_id))];
           const { data: paysRows } = await supabase.from("battle_payments").select("*").in("battle_id", battleIds);
           const am = (paysRows || []).map((p) => Number(p.amount || 0));
           const total = am.reduce((a, b) => a + b, 0);
           const best = am.length ? Math.max(...am) : 0;
           const worst = am.length ? Math.min(...am) : 0;
-          const { data: battles } = await supabase.from("battles").select("id, created_at").in("id", battleIds).order("created_at", { ascending: false }).limit(1);
-          const last = battles?.[0]?.created_at ? new Intl.DateTimeFormat(LOCALE, { dateStyle: "medium" }).format(new Date(battles[0].created_at)) : "—";
+
+          const { data: battles } = await supabase
+            .from("battles")
+            .select("id, created_at")
+            .in("id", battleIds)
+            .order("created_at", { ascending: false })
+            .limit(1);
+          const last = battles?.[0]?.created_at
+            ? new Intl.DateTimeFormat(LOCALE, { dateStyle: "medium" }).format(new Date(battles[0].created_at))
+            : "—";
+
           return { times: am.length, total, best, worst, last };
-        } catch { return { times: 0, total: 0, best: 0, worst: 0, last: "—" }; }
+        } catch {
+          return { times: 0, total: 0, best: 0, worst: 0, last: "—" };
+        }
       }
+
       if (A?.slot_id || A?.slot_name) setHistA(await fetchSlotHistory(A)); else setHistA(null);
       if (B?.slot_id || B?.slot_name) setHistB(await fetchSlotHistory(B)); else setHistB(null);
     } catch (e) {
       setErr(e.message || "Failed to load battle");
       setRow(null); setPays([]);
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   }, []);
 
   React.useEffect(() => { if (battleId) load(battleId); }, [battleId, load]);
@@ -956,20 +1317,28 @@ export default function BattleView() {
     try {
       await supabase.from("battles").update({ best_of: Number(bestOf) || 1, buy_cost: Number(buyCost) || 0 }).eq("id", battleId);
       await load(battleId);
-    } catch (e) { alert(e.message || "Failed to save settings"); }
+    } catch (e) {
+      alert(e.message || "Failed to save settings");
+    }
   }
 
   async function saveSides() {
     if (!battleId) return;
     try {
       const rows = [];
-      if (sideA?.name) rows.push({ battle_id: battleId, seed: "A", player_name: playerA || null, slot_name: sideA.name, slot_id: sideA.id ?? null });
-      if (sideB?.name) rows.push({ battle_id: battleId, seed: "B", player_name: playerB || null, slot_name: sideB.name, slot_id: sideB.id ?? null });
+      if (sideA?.name)
+        rows.push({ battle_id: battleId, seed: "A", player_name: playerA || null, slot_name: sideA.name, slot_id: sideA.id ?? null });
+      if (sideB?.name)
+        rows.push({ battle_id: battleId, seed: "B", player_name: playerB || null, slot_name: sideB.name, slot_id: sideB.id ?? null });
       if (!rows.length) return;
+
       const { error } = await supabase.from("battle_entries").upsert(rows, { onConflict: "battle_id,seed" });
       if (error) throw error;
+
       await load(battleId);
-    } catch (e) { alert(e?.message || "Failed to save sides"); }
+    } catch (e) {
+      alert(e?.message || "Failed to save sides");
+    }
   }
 
   async function setBuy(side, idx, amount) {
@@ -979,13 +1348,16 @@ export default function BattleView() {
       await supabase.from("battle_payments").upsert([payload], { onConflict: "battle_id,round_idx,match_idx,side,buy_idx" });
       const { data: ps } = await supabase.from("battle_payments").select("*").eq("battle_id", battleId).order("buy_idx", { ascending: true });
       setPays(ps || []);
-    } catch (e) { alert(e.message || "Failed to save buy"); }
+    } catch (e) {
+      alert(e.message || "Failed to save buy");
+    }
   }
 
   function BuysEditor({ side, stats, player }) {
     const isLeft = side === "L";
     const label = isLeft ? "Side A" : "Side B";
     const buys = (pays || []).filter((p) => String(p.side || "").toUpperCase() === side);
+
     const inputs = [];
     const maxN = Math.max(plannedBuys / 2, buys.length, 3);
     for (let i = 1; i <= maxN; i++) {
@@ -993,7 +1365,13 @@ export default function BattleView() {
       inputs.push(
         <div key={`${side}-${i}`} className="flex items-center gap-2">
           <div className="w-12 text-xs opacity-70">Buy {i}</div>
-          <Input type="number" step="0.01" defaultValue={r ? r.amount : ""} onBlur={(e) => setBuy(side, i, e.target.value)} className="h-9 rounded-lg bg-zinc-900 border-white/10 text-white" />
+          <Input
+            type="number"
+            step="0.01"
+            defaultValue={r ? r.amount : ""}
+            onBlur={(e) => setBuy(side, i, e.target.value)}
+            className="h-9 rounded-lg bg-zinc-900 border-white/10 text-white"
+          />
         </div>
       );
     }
@@ -1002,12 +1380,30 @@ export default function BattleView() {
       <div className="rounded-xl border border-white/10 p-3">
         <div className="mb-2 text-xs opacity-70">{label}</div>
         <div className="grid md:grid-cols-2 gap-2">
-          <div className="rounded-lg border border-white/10 bg-white/5 p-2"><div className="text-xs opacity-70">Slot</div><div>{isLeft ? sideA?.name || "—" : sideB?.name || "—"}</div></div>
-          <div className="rounded-lg border border-white/10 bg-white/5 p-2"><div className="text-xs opacity-70">Player</div><div>{player || "—"}</div></div>
-          <div className="rounded-lg border border-white/10 bg-white/5 p-2"><div className="text-xs opacity-70">Recorded buys</div><div>{stats.count}</div></div>
-          <div className="rounded-lg border border-white/10 bg-white/5 p-2"><div className="text-xs opacity-70">Total paid</div><div>{fmtMoney(stats.total)}</div></div>
-          <div className="rounded-lg border border-white/10 bg-white/5 p-2"><div className="text-xs opacity-70">Best</div><div>{fmtMoney(stats.best)}</div></div>
-          <div className="rounded-lg border border-white/10 bg-white/5 p-2"><div className="text-xs opacity-70">Worst</div><div>{fmtMoney(stats.worst)}</div></div>
+          <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+            <div className="text-xs opacity-70">Slot</div>
+            <div>{isLeft ? sideA?.name || "—" : sideB?.name || "—"}</div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+            <div className="text-xs opacity-70">Player</div>
+            <div>{player || "—"}</div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+            <div className="text-xs opacity-70">Recorded buys</div>
+            <div>{stats.count}</div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+            <div className="text-xs opacity-70">Total paid</div>
+            <div>{fmtMoney(stats.total)}</div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+            <div className="text-xs opacity-70">Best</div>
+            <div>{fmtMoney(stats.best)}</div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+            <div className="text-xs opacity-70">Worst</div>
+            <div>{fmtMoney(stats.worst)}</div>
+          </div>
         </div>
         <div className="mt-3 grid gap-2">{inputs}</div>
       </div>
@@ -1037,7 +1433,9 @@ export default function BattleView() {
                 <div>
                   <div className="text-xs opacity-70 mb-1">Best Of</div>
                   <select value={bestOf} onChange={(e) => setBestOf(e.target.value)} className="h-11 w-full rounded-xl bg-zinc-900 border border-white/10 px-3 text-sm">
-                    {[1, 3, 5, 7, 9].map((n) => <option key={n} value={n}>{n}</option>)}
+                    {[1, 3, 5, 7, 9].map((n) => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -1048,7 +1446,9 @@ export default function BattleView() {
                   </div>
                 </div>
               </div>
-              <div className="mt-3 flex justify-end"><Button onClick={saveSettings} className="h-10">Save settings</Button></div>
+              <div className="mt-3 flex justify-end">
+                <Button onClick={saveSettings} className="h-10">Save settings</Button>
+              </div>
             </AccentCard>
 
             <AccentCard>
@@ -1059,7 +1459,18 @@ export default function BattleView() {
               </div>
             </AccentCard>
 
-            <WidgetCard battleId={battleId} sideA={sideA} sideB={sideB} playerA={playerA} playerB={playerB} bestOf={bestOf} buyCost={buyCost} totalPay={totalPay} aPays={aPays} bPays={bPays} />
+            <WidgetCard
+              battleId={battleId}
+              sideA={sideA}
+              sideB={sideB}
+              playerA={playerA}
+              playerB={playerB}
+              bestOf={bestOf}
+              buyCost={buyCost}
+              totalPay={totalPay}
+              aPays={aPays}
+              bPays={bPays}
+            />
           </div>
 
           {/* RIGHT: sides + history + buys */}
@@ -1067,7 +1478,9 @@ export default function BattleView() {
             <AccentCard title="Battle">
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <div className="text-xs opacity-70 mb-2 flex items-center gap-2"><Shield className="h-4 w-4" /> Side A</div>
+                  <div className="text-xs opacity-70 mb-2 flex items-center gap-2">
+                    <Shield className="h-4 w-4" /> Side A
+                  </div>
                   <div className="space-y-2">
                     <SlotsAutocomplete value={sideA} onSelect={(v) => setSideA(v)} placeholder="Add a Slot" />
                     <div>
@@ -1076,8 +1489,11 @@ export default function BattleView() {
                     </div>
                   </div>
                 </div>
+
                 <div>
-                  <div className="text-xs opacity-70 mb-2 flex items-center gap-2"><Users className="h-4 w-4" /> Side B</div>
+                  <div className="text-xs opacity-70 mb-2 flex items-center gap-2">
+                    <Users className="h-4 w-4" /> Side B
+                  </div>
                   <div className="space-y-2">
                     <SlotsAutocomplete value={sideB} onSelect={(v) => setSideB(v)} placeholder="Add a Slot" />
                     <div>
@@ -1087,7 +1503,10 @@ export default function BattleView() {
                   </div>
                 </div>
               </div>
-              <div className="mt-4 flex justify-end"><Button onClick={saveSides} className="h-10">Save sides</Button></div>
+
+              <div className="mt-4 flex justify-end">
+                <Button onClick={saveSides} className="h-10">Save sides</Button>
+              </div>
             </AccentCard>
 
             {/* slot history */}
@@ -1095,11 +1514,21 @@ export default function BattleView() {
               {[histA, histB].map((h, i) => (
                 <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-3">
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-lg border border-white/10 bg-white/5 p-2"><div className="text-xs opacity-70">Times</div><div>{h?.times ?? 0}</div></div>
-                    <div className="rounded-lg border border-white/10 bg-white/5 p-2"><div className="text-xs opacity-70">Total</div><div>{fmtMoney(h?.total ?? 0)}</div></div>
-                    <div className="rounded-lg border border-white/10 bg-white/5 p-2"><div className="text-xs opacity-70">Best</div><div>{fmtMoney(h?.best ?? 0)}</div></div>
-                    <div className="rounded-lg border border-white/10 bg-white/5 p-2"><div className="text-xs opacity-70">Worst</div><div>{fmtMoney(h?.worst ?? 0)}</div></div>
-                    <div className="rounded-lg border border-white/10 bg-white/5 p-2 col-span-2"><div className="text-xs opacity-70">Last</div><div>{h?.last ?? "—"}</div></div>
+                    <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+                      <div className="text-xs opacity-70">Times</div><div>{h?.times ?? 0}</div>
+                    </div>
+                    <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+                      <div className="text-xs opacity-70">Total</div><div>{fmtMoney(h?.total ?? 0)}</div>
+                    </div>
+                    <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+                      <div className="text-xs opacity-70">Best</div><div>{fmtMoney(h?.best ?? 0)}</div>
+                    </div>
+                    <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+                      <div className="text-xs opacity-70">Worst</div><div>{fmtMoney(h?.worst ?? 0)}</div>
+                    </div>
+                    <div className="rounded-lg border border-white/10 bg-white/5 p-2 col-span-2">
+                      <div className="text-xs opacity-70">Last</div><div>{h?.last ?? "—"}</div>
+                    </div>
                   </div>
                 </div>
               ))}
