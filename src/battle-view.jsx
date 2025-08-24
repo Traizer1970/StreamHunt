@@ -89,16 +89,27 @@ const DEFAULT_LAYOUT = {
 };
 
 /* Widget options (now with Bonus docking & Total alignment) */
+/* Widget options (… + OBS sizing) */
 const DEFAULT_OPTS = {
-  bonusLabelMode: "label+value", // "label+value" | "value"
+  bonusLabelMode: "label+value",
   bonusLabelText: "Bonus Buy",
-  bonusDock: "left",             // "left" | "right"
-  totalJustify: "center",        // "left" | "center" | "right"
-
-  // ⬇️ NOVO
-  totalLabelMode: "label+value", // "label+value" | "value"
+  bonusDock: "left",
+  totalJustify: "center",
+  totalLabelMode: "label+value",
   totalLabelText: "Total paid",
+
+  // ⬇️ NOVO: definições de saída para o OBS
+  overlay: {
+    mode: "auto",     // "auto" = preenche Browser Source | "fixed" = tamanho fixo
+    width: 1920,      // só usado se mode === "fixed"
+    height: 1080,     // só usado se mode === "fixed"
+    baseW: 1100,      // largura do painel interno (base para o scale)
+    baseH: 420,       // altura do painel interno (base para o scale)
+    pad: 24,          // margem interna (letterbox)
+    align: "center",  // "top" | "center" | "bottom"
+  },
 };
+
 
 
 /* Presets */
@@ -897,6 +908,116 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
               <label className="block text-sm">Font weight (strong): {theme.strongWeight}</label>
               <input type="range" min={300} max={800} step={50} value={theme.strongWeight} onChange={(e) => setTheme((t) => ({ ...t, strongWeight: Number(e.target.value) }))} className="w-full" />
 
+                {/* Canvas / OBS */}
+<div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
+  <div className="text-xs opacity-70 mb-1">Canvas / OBS</div>
+
+  <div className="flex items-center gap-3">
+    <div className="text-sm w-36">Output</div>
+    <label className="text-sm flex items-center gap-1">
+      <input
+        type="radio"
+        checked={opts.overlay.mode === "auto"}
+        onChange={() => setOpts(o => ({ ...o, overlay: { ...o.overlay, mode: "auto" } }))}
+      />
+      Auto-fit (preenche Browser Source)
+    </label>
+    <label className="text-sm flex items-center gap-1">
+      <input
+        type="radio"
+        checked={opts.overlay.mode === "fixed"}
+        onChange={() => setOpts(o => ({ ...o, overlay: { ...o.overlay, mode: "fixed" } }))}
+      />
+      Fixed (px)
+    </label>
+  </div>
+
+  {opts.overlay.mode === "fixed" && (
+    <div className="grid grid-cols-2 gap-2">
+      <div>
+        <div className="text-xs opacity-70 mb-1">Width (px)</div>
+        <Input
+          type="number"
+          value={opts.overlay.width}
+          onChange={(e) =>
+            setOpts(o => ({ ...o, overlay: { ...o.overlay, width: Number(e.target.value) || 0 } }))
+          }
+          className="h-9 bg-zinc-900 border-white/10 text-white"
+        />
+      </div>
+      <div>
+        <div className="text-xs opacity-70 mb-1">Height (px)</div>
+        <Input
+          type="number"
+          value={opts.overlay.height}
+          onChange={(e) =>
+            setOpts(o => ({ ...o, overlay: { ...o.overlay, height: Number(e.target.value) || 0 } }))
+          }
+          className="h-9 bg-zinc-900 border-white/10 text-white"
+        />
+      </div>
+    </div>
+  )}
+
+  <div className="grid grid-cols-2 gap-2">
+    <div>
+      <div className="text-xs opacity-70 mb-1">Panel base width</div>
+      <Input
+        type="number"
+        value={opts.overlay.baseW}
+        onChange={(e) =>
+          setOpts(o => ({ ...o, overlay: { ...o.overlay, baseW: Number(e.target.value) || 0 } }))
+        }
+        className="h-9 bg-zinc-900 border-white/10 text-white"
+      />
+    </div>
+    <div>
+      <div className="text-xs opacity-70 mb-1">Panel base height</div>
+      <Input
+        type="number"
+        value={opts.overlay.baseH}
+        onChange={(e) =>
+          setOpts(o => ({ ...o, overlay: { ...o.overlay, baseH: Number(e.target.value) || 0 } }))
+        }
+        className="h-9 bg-zinc-900 border-white/10 text-white"
+      />
+    </div>
+  </div>
+
+  <div className="grid grid-cols-2 gap-2">
+    <div>
+      <div className="text-xs opacity-70 mb-1">Padding (px)</div>
+      <Input
+        type="number"
+        value={opts.overlay.pad}
+        onChange={(e) =>
+          setOpts(o => ({ ...o, overlay: { ...o.overlay, pad: Number(e.target.value) || 0 } }))
+        }
+        className="h-9 bg-zinc-900 border-white/10 text-white"
+      />
+    </div>
+    <div>
+      <div className="text-xs opacity-70 mb-1">Vertical align</div>
+      <select
+        value={opts.overlay.align}
+        onChange={(e) =>
+          setOpts(o => ({ ...o, overlay: { ...o.overlay, align: e.target.value } }))
+        }
+        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+      >
+        <option value="top">Top</option>
+        <option value="center">Center</option>
+        <option value="bottom">Bottom</option>
+      </select>
+    </div>
+  </div>
+
+  <div className="text-[11px] opacity-70">
+    Em <b>Fixed</b>, usa o mesmo Width/Height no “Browser Source” do OBS. O overlay faz letterbox e nunca corta conteúdo.
+  </div>
+</div>
+
+
               {/* Auto-placement options */}
               <div className="border-t border-white/10 pt-3 mt-2 space-y-2">
                 <div className="text-xs opacity-70">Auto placement (default layout)</div>
@@ -1026,12 +1147,13 @@ function WidgetCard({
   const [openDesigner, setOpenDesigner] = React.useState(false);
 
   // URL exclusivo do overlay, por perfil
-  const overlayUrl = React.useMemo(() => {
-    const base = `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, "");
-    const token =
-      profile?.public_token || profile?.widget_token || profile?.id || "";
-    return token ? `${base}#/overlay/battle/${token}` : "";
-  }, [profile?.public_token, profile?.widget_token, profile?.id]);
+const overlayUrl = React.useMemo(() => {
+  const base = `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, "");
+  const token = profile?.public_token || profile?.widget_token || profile?.id || "";
+  if (!token) return "";
+  return buildOverlayUrl(base, token, opts);
+}, [profile?.public_token, profile?.widget_token, profile?.id, opts]);
+
 
   const openOverlay = () => {
     if (!overlayUrl) return;
@@ -1051,16 +1173,22 @@ function WidgetCard({
   const previewProps = {
     bestOf, buyCost, totalPay, sideA, sideB, playerA, playerB, aPays, bPays,
   };
+React.useEffect(() => {
+  (async () => {
+    if (!battleId) return;
+    const { theme: t, layout: l, options: o } = await dbLoadWidgetSettings(battleId);
+    if (t) setTheme({ ...DEFAULT_THEME, ...t });
+    if (l) setLayout({ ...DEFAULT_LAYOUT, ...l });
+    if (o) {
+      setOpts({
+        ...DEFAULT_OPTS,
+        ...o,
+        overlay: { ...DEFAULT_OPTS.overlay, ...(o.overlay || {}) },
+      });
+    }
+  })();
+}, [battleId]);
 
-  React.useEffect(() => {
-    (async () => {
-      if (!battleId) return;
-      const { theme: t, layout: l, options: o } = await dbLoadWidgetSettings(battleId);
-      if (t) setTheme({ ...DEFAULT_THEME, ...t });
-      if (l) setLayout({ ...DEFAULT_LAYOUT, ...l });
-      if (o) setOpts({ ...DEFAULT_OPTS, ...o });
-    })();
-  }, [battleId]);
 
   const persist = React.useCallback(async () => {
     if (!battleId) return;
@@ -1307,6 +1435,28 @@ export default function BattleView() {
     }
   }
 
+  function buildOverlayUrl(base, token, opts) {
+  const o = opts?.overlay || {};
+  const qs = new URLSearchParams();
+
+  // sempre enviamos a base do painel para o overlay escalar corretamente
+  if (o.baseW) qs.set("bw", String(o.baseW));
+  if (o.baseH) qs.set("bh", String(o.baseH));
+  if (o.pad)   qs.set("pad", String(o.pad));
+  if (o.align) qs.set("align", String(o.align));
+
+  // tamanho fixo para o OBS (Browser Source com as mesmas dimensões)
+  if (o.mode === "fixed") {
+    qs.set("pinsize", "1");
+    if (o.width)  qs.set("w", String(o.width));
+    if (o.height) qs.set("h", String(o.height));
+  }
+
+  const q = qs.toString();
+  return `${base}#/overlay/battle/${token}${q ? `?${q}` : ""}`;
+}
+
+
   function BuysEditor({ side, stats, player }) {
     const isLeft = side === "L";
     const label = isLeft ? "Side A" : "Side B";
@@ -1412,6 +1562,7 @@ export default function BattleView() {
                 <Kpi icon={<TrendingUp className="h-5 w-5" />} label="Profit" value={fmtMoney(profit)} tone={profitTone} />
               </div>
             </AccentCard>
+            
 
             <WidgetCard
               battleId={battleId}
