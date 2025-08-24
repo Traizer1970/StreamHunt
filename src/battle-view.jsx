@@ -17,7 +17,6 @@ import {
   Palette,
   X,
   Save,
-  RotateCcw,
 } from "lucide-react";
 
 /* ───────────────────────── utils / style helpers ───────────────────────── */
@@ -121,6 +120,28 @@ const PRESETS = [
   { name: "Carbon", t: { bgStart: "#0b0b0b", bgEnd: "#171717", accent: "#93c5fd", pos: "#86efac", neg: "#fca5a5", vsBg: "rgba(147,197,253,0.25)" } },
   { name: "Twilight", t: { bgStart: "#0b1b3a", bgEnd: "#112a46", accent: "#7dd3fc", pos: "#22c55e", neg: "#fb7185", vsBg: "rgba(125,211,252,0.30)" } },
 ];
+
+// ---- URL builder para o overlay (VISÍVEL a todos os componentes) ----
+function buildOverlayUrl(base, token, opts) {
+  const o = (opts && opts.overlay) || {};
+  const qs = new URLSearchParams();
+
+  // base do painel para scaling no overlay
+  if (o.baseW) qs.set("bw", String(o.baseW));
+  if (o.baseH) qs.set("bh", String(o.baseH));
+  if (o.pad)   qs.set("pad", String(o.pad));
+  if (o.align) qs.set("align", String(o.align));
+
+  // tamanho fixo (para usar no Browser Source com as mesmas dimensões)
+  if (o.mode === "fixed") {
+    qs.set("pinsize", "1");
+    if (o.width)  qs.set("w", String(o.width));
+    if (o.height) qs.set("h", String(o.height));
+  }
+
+  const q = qs.toString();
+  return `${base}#/overlay/battle/${token}${q ? `?${q}` : ""}`;
+}
 
 /* ----------------------------- DB helpers ----------------------------- */
 async function dbLoadWidgetSettings(battleId) {
@@ -1266,7 +1287,6 @@ React.useEffect(() => {
 
 /* ───────────────────────── Page ───────────────────────── */
 export default function BattleView() {
-  const { isDark } = useTheme();
 
   const [battleId, setBattleId] = React.useState(null);
   React.useEffect(function () {
@@ -1281,7 +1301,7 @@ export default function BattleView() {
     return function () { window.removeEventListener("hashchange", read); };
   }, []);
 
-  const [busy, setBusy] = React.useState(true);
+  const [, setBusy] = React.useState(true);
   const [row, setRow] = React.useState(null);
   const [err, setErr] = React.useState("");
 
@@ -1434,28 +1454,6 @@ export default function BattleView() {
       alert(e.message || "Failed to save buy");
     }
   }
-
-  function buildOverlayUrl(base, token, opts) {
-  const o = opts?.overlay || {};
-  const qs = new URLSearchParams();
-
-  // sempre enviamos a base do painel para o overlay escalar corretamente
-  if (o.baseW) qs.set("bw", String(o.baseW));
-  if (o.baseH) qs.set("bh", String(o.baseH));
-  if (o.pad)   qs.set("pad", String(o.pad));
-  if (o.align) qs.set("align", String(o.align));
-
-  // tamanho fixo para o OBS (Browser Source com as mesmas dimensões)
-  if (o.mode === "fixed") {
-    qs.set("pinsize", "1");
-    if (o.width)  qs.set("w", String(o.width));
-    if (o.height) qs.set("h", String(o.height));
-  }
-
-  const q = qs.toString();
-  return `${base}#/overlay/battle/${token}${q ? `?${q}` : ""}`;
-}
-
 
   function BuysEditor({ side, stats, player }) {
     const isLeft = side === "L";
