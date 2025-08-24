@@ -6,7 +6,12 @@ import { supabase } from "@/lib/supabase";
 const LOCALE = "pt-PT";
 const fmtMoney = (n) =>
   Number.isFinite(Number(n))
-    ? new Intl.NumberFormat(LOCALE, { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n))
+    ? new Intl.NumberFormat(LOCALE, {
+        style: "currency",
+        currency: "EUR",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(Number(n))
     : "—";
 
 const isUUID =
@@ -31,31 +36,35 @@ function parseHash() {
   const size = (name, def) => {
     const v = (qs.get(name) || "").trim();
     if (!v) return def;
-    if (/^\d+$/.test(v)) return `${v}px`;
-    return v;
+    if (/^\d+$/.test(v)) return `${v}px`; // "1080" -> "1080px"
+    return v; // "100%", "90vh", etc
   };
   const int = (name, def) => {
     const v = Number(qs.get(name));
     return Number.isFinite(v) && v > 0 ? v : def;
   };
 
+  // anim: null = herdar; "1" força on; "0" força off
+  const animParam = qs.get("anim");
+  const enableAnim = animParam === null ? null : animParam === "1";
+
   return {
     token: seg0 === "overlay" && seg1 === "battle" ? (seg2 || "").trim() : "",
     battleId: (qs.get("id") || "").trim(),
-
+    // Tamanho do stage
     w: size("w", "100vw"),
     h: size("h", "100vh"),
-    pinSize: (qs.get("pinsize") || "0") === "1",
-
+    pinSize: (qs.get("pinsize") || "0") === "1", // se 1, respeita w/h fixos
+    // Proporção/base do painel interno (escala para caber)
     bw: int("bw", 1100),
     bh: int("bh", 420),
     pad: int("pad", 24),
-    align: (qs.get("align") || "center").toLowerCase(),
-    enableAnim: (qs.get("anim") || "0") === "1",
+    align: (qs.get("align") || "center").toLowerCase(), // top | center | bottom
+    enableAnim,
   };
 }
 
-/* ───────── defaults (iguais ao app) ───────── */
+/* ───────── tema/layout/opções (mesmo do battle-view) ───────── */
 const DEFAULT_THEME = {
   bgStart: "#0b1020",
   bgEnd: "#111827",
@@ -88,6 +97,7 @@ const DEFAULT_THEME = {
   shine: true,
   pulse: true,
 };
+
 const DEFAULT_LAYOUT = {
   mode: "default",
   positions: {
@@ -99,6 +109,7 @@ const DEFAULT_LAYOUT = {
     total: { x: 360, y: 330 },
   },
 };
+
 const DEFAULT_OPTS = {
   bonusLabelMode: "label+value",
   bonusLabelText: "Bonus Buy",
@@ -106,18 +117,9 @@ const DEFAULT_OPTS = {
   totalJustify: "center",
   totalLabelMode: "label+value",
   totalLabelText: "Total paid",
-  overlay: {
-    mode: "auto",
-    width: 1920,
-    height: 1080,
-    baseW: 1100,
-    baseH: 420,
-    pad: 24,
-    align: "center",
-  },
 };
 
-/* Escala para caber */
+/* Escala para caber (letterbox): calcula scale a partir do espaço disponível */
 function useFitScale(containerRef, baseW, baseH, pad = 24, min = 0.3, max = 3) {
   const [scale, setScale] = React.useState(1);
   React.useEffect(() => {
@@ -137,7 +139,7 @@ function useFitScale(containerRef, baseW, baseH, pad = 24, min = 0.3, max = 3) {
   return scale;
 }
 
-/* Enriquecer slot */
+/* Enriquecer slot com thumbnail/provider */
 async function enrichSlotInfo(slot) {
   if (!slot) return slot;
   if (slot.thumbnail && slot.provider) return slot;
@@ -160,7 +162,7 @@ async function enrichSlotInfo(slot) {
   return slot;
 }
 
-/* ───────── UI ───────── */
+/* ───────── UI do widget (default layout; sem flicker) ───────── */
 function WidgetPanel({
   theme,
   layout,
@@ -173,7 +175,7 @@ function WidgetPanel({
   playerB,
   aPays,
   bPays,
-  animations = false,
+  animations = true, // master switch (herdado por defeito)
 }) {
   const aTotal = aPays.reduce((s, r) => s + Number(r?.amount || 0), 0);
   const bTotal = bPays.reduce((s, r) => s + Number(r?.amount || 0), 0);
@@ -189,7 +191,9 @@ function WidgetPanel({
         color: ok ? theme.pos : theme.neg,
         boxShadow:
           "0 0 0 1px rgba(0,0,0,0.25) inset, 0 6px 18px rgba(0,0,0,.36)",
-        animation: animations ? `pop .16s ease-out both` : "none",
+        // anima só se master switch + flag do tema estiverem ON
+        animation:
+          animations && theme.pulse ? `pop .16s ease-out both` : "none",
         animationDelay: `${i * 45}ms`,
         fontSize: `calc(12px * ${theme.fontScale / 100})`,
         fontFamily: theme.fontFamily,
@@ -221,7 +225,9 @@ function WidgetPanel({
       }}
     >
       <span>Best of</span>
-      <span style={{ marginLeft: 6, fontWeight: theme.strongWeight }}>{bestOf}</span>
+      <span style={{ marginLeft: 6, fontWeight: theme.strongWeight }}>
+        {bestOf}
+      </span>
     </div>
   );
 
@@ -252,7 +258,9 @@ function WidgetPanel({
         }}
       >
         <span>{opts?.bonusLabelText || "Bonus Buy"}</span>
-        <span style={{ marginLeft: 8, color: theme.accent, fontWeight: theme.strongWeight }}>
+        <span
+          style={{ marginLeft: 8, color: theme.accent, fontWeight: theme.strongWeight }}
+        >
           {badgeBonusValue}
         </span>
       </div>
@@ -278,25 +286,34 @@ function WidgetPanel({
         @keyframes pop { 0% { transform: scale(.96); opacity: 0;} 100% { transform: scale(1); opacity: 1;} }
       `}</style>
 
-      {(animations && theme.shine) && (
+      {animations && theme.shine && (
         <div
           className="pointer-events-none"
           style={{
             position: "absolute",
-            inset: 0,
+            inset: "0 0 0 0",
             width: "33%",
-            background: "linear-gradient(to right, transparent, rgba(255,255,255,.10), transparent)",
+            background:
+              "linear-gradient(to right, transparent, rgba(255,255,255,.10), transparent)",
             animation: "sweep 4.8s linear infinite",
             mixBlendMode: "screen",
           }}
         />
       )}
 
-      {/* default layout */}
+      {/* Default layout (sem drag) */}
       {layout?.mode !== "free" && (
         <>
+          {/* badges */}
           {opts?.bonusDock === "right" ? (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 8,
+              }}
+            >
               <div style={{ display: "flex", gap: 8 }}>{BadgeBest}</div>
               <div>{BadgeBonus}</div>
             </div>
@@ -307,6 +324,7 @@ function WidgetPanel({
             </div>
           )}
 
+          {/* players */}
           <div
             style={{
               marginTop: 20,
@@ -317,24 +335,51 @@ function WidgetPanel({
             }}
           >
             {/* A */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12, minWidth: 0 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                gap: 12,
+                minWidth: 0,
+              }}
+            >
               <div style={{ minWidth: 0, textAlign: "right" }}>
-                <div className="truncate" style={{ fontSize: 22, color: theme.text, fontWeight: theme.strongWeight }}>
+                <div
+                  className="truncate"
+                  style={{
+                    fontSize: "22px",
+                    color: theme.text,
+                    fontWeight: theme.strongWeight,
+                  }}
+                >
                   {playerA || "—"}
                 </div>
-                <div className="truncate" style={{ fontSize: 12, color: theme.subtext }}>
+                <div
+                  className="truncate"
+                  style={{ fontSize: 12, color: theme.subtext }}
+                >
                   {sideA?.name || "—"}
                 </div>
               </div>
               {theme.showThumbs && (
                 <div
                   style={{
-                    height: 56, width: 56, overflow: "hidden", borderRadius: theme.radius,
-                    background: "rgba(255,255,255,.05)", border: `1px solid ${theme.panelBorder}`, flexShrink: 0,
+                    height: 56,
+                    width: 56,
+                    overflow: "hidden",
+                    borderRadius: theme.radius,
+                    background: "rgba(255,255,255,.05)",
+                    border: `1px solid ${theme.panelBorder}`,
+                    flexShrink: 0,
                   }}
                 >
                   {sideA?.thumbnail ? (
-                    <img src={sideA.thumbnail} alt="" style={{ height: "100%", width: "100%", objectFit: "cover" }} />
+                    <img
+                      src={sideA.thumbnail}
+                      alt=""
+                      style={{ height: "100%", width: "100%", objectFit: "cover" }}
+                    />
                   ) : null}
                 </div>
               )}
@@ -344,8 +389,11 @@ function WidgetPanel({
             <div style={{ display: "flex", justifyContent: "center" }}>
               <div
                 style={{
-                  padding: "4px 10px", fontSize: 12, background: theme.vsBg,
-                  border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`, borderRadius: 10,
+                  padding: "4px 10px",
+                  fontSize: 12,
+                  background: theme.vsBg,
+                  border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
+                  borderRadius: 10,
                   fontWeight: theme.strongWeight,
                 }}
               >
@@ -354,24 +402,50 @@ function WidgetPanel({
             </div>
 
             {/* B */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                minWidth: 0,
+              }}
+            >
               {theme.showThumbs && (
                 <div
                   style={{
-                    height: 56, width: 56, overflow: "hidden", borderRadius: theme.radius,
-                    background: "rgba(255,255,255,.05)", border: `1px solid ${theme.panelBorder}`, flexShrink: 0,
+                    height: 56,
+                    width: 56,
+                    overflow: "hidden",
+                    borderRadius: theme.radius,
+                    background: "rgba(255,255,255,.05)",
+                    border: `1px solid ${theme.panelBorder}`,
+                    flexShrink: 0,
                   }}
                 >
                   {sideB?.thumbnail ? (
-                    <img src={sideB.thumbnail} alt="" style={{ height: "100%", width: "100%", objectFit: "cover" }} />
+                    <img
+                      src={sideB.thumbnail}
+                      alt=""
+                      style={{ height: "100%", width: "100%", objectFit: "cover" }}
+                    />
                   ) : null}
                 </div>
               )}
               <div style={{ minWidth: 0, textAlign: "left" }}>
-                <div className="truncate" style={{ fontSize: 22, color: theme.text, fontWeight: theme.strongWeight }}>
+                <div
+                  className="truncate"
+                  style={{
+                    fontSize: "22px",
+                    color: theme.text,
+                    fontWeight: theme.strongWeight,
+                  }}
+                >
                   {playerB || "—"}
                 </div>
-                <div className="truncate" style={{ fontSize: 12, color: theme.subtext }}>
+                <div
+                  className="truncate"
+                  style={{ fontSize: 12, color: theme.subtext }}
+                >
                   {sideB?.name || "—"}
                 </div>
               </div>
@@ -379,40 +453,79 @@ function WidgetPanel({
           </div>
 
           {/* chips + subtotais */}
-          <div style={{ marginTop: 24, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+          <div
+            style={{
+              marginTop: 24,
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 24,
+            }}
+          >
             <div>
               <div style={{ display: "flex", flexWrap: "wrap" }}>
                 {aPays.map((p, i) => (
-                  <Chip key={`a-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
+                  <Chip
+                    key={`a-${i}`}
+                    amount={p.amount}
+                    ok={Number(p.amount || 0) >= Number(buyCost || 0)}
+                    i={i}
+                  />
                 ))}
               </div>
               <div
                 style={{
-                  display: "inline-flex", marginTop: 10, alignItems: "center", gap: 8, padding: "6px 12px",
-                  fontSize: 12, background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
-                  borderRadius: theme.radius, color: theme.subtext,
+                  display: "inline-flex",
+                  marginTop: 10,
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "6px 12px",
+                  fontSize: 12,
+                  background: theme.chipBg,
+                  border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
+                  borderRadius: theme.radius,
+                  color: theme.subtext,
                 }}
               >
                 <span>Subtotal</span>
-                <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(aPays.reduce((s, r) => s + Number(r?.amount || 0), 0))}</span>
+                <span
+                  style={{ color: theme.text, fontWeight: theme.strongWeight }}
+                >
+                  {fmtMoney(aTotal)}
+                </span>
               </div>
             </div>
 
             <div>
               <div style={{ display: "flex", flexWrap: "wrap" }}>
                 {bPays.map((p, i) => (
-                  <Chip key={`b-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
+                  <Chip
+                    key={`b-${i}`}
+                    amount={p.amount}
+                    ok={Number(p.amount || 0) >= Number(buyCost || 0)}
+                    i={i}
+                  />
                 ))}
               </div>
               <div
                 style={{
-                  display: "inline-flex", marginTop: 10, alignItems: "center", gap: 8, padding: "6px 12px",
-                  fontSize: 12, background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
-                  borderRadius: theme.radius, color: theme.subtext,
+                  display: "inline-flex",
+                  marginTop: 10,
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "6px 12px",
+                  fontSize: 12,
+                  background: theme.chipBg,
+                  border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
+                  borderRadius: theme.radius,
+                  color: theme.subtext,
                 }}
               >
                 <span>Subtotal</span>
-                <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(bPays.reduce((s, r) => s + Number(r?.amount || 0), 0))}</span>
+                <span
+                  style={{ color: theme.text, fontWeight: theme.strongWeight }}
+                >
+                  {fmtMoney(bTotal)}
+                </span>
               </div>
             </div>
           </div>
@@ -423,8 +536,11 @@ function WidgetPanel({
               marginTop: 24,
               display: "flex",
               justifyContent:
-                opts?.totalJustify === "left" ? "flex-start" :
-                opts?.totalJustify === "right" ? "flex-end" : "center",
+                opts?.totalJustify === "left"
+                  ? "flex-start"
+                  : opts?.totalJustify === "right"
+                  ? "flex-end"
+                  : "center",
             }}
           >
             <div
@@ -456,18 +572,21 @@ export default function WidgetOverlay() {
     setLoc,
   ] = React.useState(parseHash());
 
-  // fundo transparente
+  // CSS global: fundo transparente e sem margens/scroll (bom para OBS)
   React.useEffect(() => {
     const style = document.createElement("style");
-    style.innerHTML = `html,body,#root,#__next{height:100%;width:100%;margin:0;padding:0;background:transparent;overflow:hidden}`;
+    style.innerHTML = `
+      html,body,#root,#__next{height:100%;width:100%;margin:0;padding:0;background:transparent;overflow:hidden}
+    `;
     document.head.appendChild(style);
     return () => style.remove();
   }, []);
 
-  // estado
+  // Estado de carregamento/erros
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState("");
 
+  // Dados da battle
   const [bestOf, setBestOf] = React.useState(1);
   const [buyCost, setBuyCost] = React.useState(0);
   const [sideA, setSideA] = React.useState(null);
@@ -477,67 +596,33 @@ export default function WidgetOverlay() {
   const [aPays, setAPays] = React.useState([]);
   const [bPays, setBPays] = React.useState([]);
 
+  // tema/layout/opções
   const [theme, setTheme] = React.useState(DEFAULT_THEME);
   const [layout, setLayout] = React.useState(DEFAULT_LAYOUT);
   const [opts, setOpts] = React.useState(DEFAULT_OPTS);
 
-  const effTheme = React.useMemo(() => {
-    const t = { ...theme };
-    if (!enableAnim) { t.pulse = false; t.shine = false; }
-    return t;
-  }, [theme, enableAnim]);
+  // herdamos o tema tal e qual (não mexemos em pulse/shine aqui)
+  const effTheme = React.useMemo(() => theme, [theme]);
 
+  // ouvir alterações do hash (para mudar id/w/h/etc ao vivo)
   React.useEffect(() => {
     const onHash = () => setLoc(parseHash());
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  // Overlay efetivo (URL só fixa W/H quando pinsize=1; caso contrário usa BD)
-  const effOverlay = React.useMemo(() => {
-    const o = (opts && opts.overlay) || {};
-    const pin = pinSize || o.mode === "fixed";
-    const effW = pin ? (pinSize ? w : `${o.width || 1920}px`) : "100vw";
-    const effH = pin ? (pinSize ? h : `${o.height || 1080}px`) : "100vh";
-    return {
-      pin,
-      w: effW,
-      h: effH,
-      baseW: o.baseW || bw || DEFAULT_OPTS.overlay.baseW,
-      baseH: o.baseH || bh || DEFAULT_OPTS.overlay.baseH,
-      pad: o.pad ?? pad ?? DEFAULT_OPTS.overlay.pad,
-      align: (o.align || align || DEFAULT_OPTS.overlay.align).toLowerCase(),
-    };
-  }, [opts, w, h, bw, bh, pad, align, pinSize]);
-
+  // Stage + escala para caber
   const stageRef = React.useRef(null);
-  const scale = useFitScale(stageRef, effOverlay.baseW, effOverlay.baseH, effOverlay.pad, 0.3, 3);
+  const scale = useFitScale(stageRef, bw, bh, pad, 0.3, 3);
 
   // realtime + polling
   const channelRef = React.useRef(null);
   const pollRef = React.useRef(null);
   const debounceRef = React.useRef(null);
-  const scheduleLoad = (fn) => { clearTimeout(debounceRef.current); debounceRef.current = setTimeout(fn, 120); };
-
-  // resolve ownerId SEM public_token
-  async function resolveOwnerIdByToken(tk) {
-    if (!tk) return null;
-
-    // 1) tentar por widget_token (se a coluna não existir, ignoramos o erro)
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("widget_token", tk)
-        .maybeSingle();
-      if (!error && data?.id) return data.id;
-    } catch (_) {}
-
-    // 2) se token for UUID, tratar como id direto
-    if (isUUID(tk)) return tk;
-
-    return null;
-  }
+  const scheduleLoad = (fn) => {
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(fn, 120);
+  };
 
   async function loadAll({ ownerId, bId }) {
     // battle basics
@@ -547,8 +632,10 @@ export default function WidgetOverlay() {
       .eq("id", bId)
       .maybeSingle();
     if (bRow) {
-      setBestOf(Number(bRow.best_of || 1));
-      setBuyCost(Number(bRow.buy_cost || 0));
+      const nb = Number(bRow.best_of || 1);
+      const bc = Number(bRow.buy_cost || 0);
+      setBestOf((v) => (v !== nb ? nb : v));
+      setBuyCost((v) => (v !== bc ? bc : v));
     }
 
     // settings
@@ -557,9 +644,12 @@ export default function WidgetOverlay() {
       .select("theme, layout, options")
       .eq("battle_id", bId)
       .maybeSingle();
-    if (ws?.theme && !shallowEq(ws.theme, theme)) setTheme({ ...DEFAULT_THEME, ...ws.theme });
-    if (ws?.layout && !shallowEq(ws.layout, layout)) setLayout({ ...DEFAULT_LAYOUT, ...ws.layout });
-    if (ws?.options && !shallowEq(ws.options, opts)) setOpts({ ...DEFAULT_OPTS, ...ws.options });
+    if (ws?.theme && !shallowEq(ws.theme, theme))
+      setTheme({ ...DEFAULT_THEME, ...ws.theme });
+    if (ws?.layout && !shallowEq(ws.layout, layout))
+      setLayout({ ...DEFAULT_LAYOUT, ...ws.layout });
+    if (ws?.options && !shallowEq(ws.options, opts))
+      setOpts({ ...DEFAULT_OPTS, ...ws.options });
 
     // entries
     const { data: entries } = await supabase
@@ -575,14 +665,22 @@ export default function WidgetOverlay() {
     if (A) {
       let aBase = { id: A.slot_id ?? null, name: A.slot_name || "" };
       aBase = await enrichSlotInfo(aBase);
-      setSideA(aBase); setPlayerA(A.player_name || "");
-    } else { setSideA(null); setPlayerA(""); }
+      setSideA((v) => (JSON.stringify(v) !== JSON.stringify(aBase) ? aBase : v));
+      setPlayerA((v) => (v !== (A.player_name || "") ? (A.player_name || "") : v));
+    } else {
+      setSideA(null);
+      setPlayerA("");
+    }
 
     if (B) {
       let bBase = { id: B.slot_id ?? null, name: B.slot_name || "" };
       bBase = await enrichSlotInfo(bBase);
-      setSideB(bBase); setPlayerB(B.player_name || "");
-    } else { setSideB(null); setPlayerB(""); }
+      setSideB((v) => (JSON.stringify(v) !== JSON.stringify(bBase) ? bBase : v));
+      setPlayerB((v) => (v !== (B.player_name || "") ? (B.player_name || "") : v));
+    } else {
+      setSideB(null);
+      setPlayerB("");
+    }
 
     // payments
     const { data: pays } = await supabase
@@ -591,27 +689,56 @@ export default function WidgetOverlay() {
       .eq("battle_id", bId)
       .order("buy_idx", { ascending: true });
 
-    setAPays((pays || [])
+    const as = (pays || [])
       .filter((p) => String(p.side || "").toUpperCase() === "L")
-      .map((p) => ({ amount: Number(p.amount) || 0 })));
-
-    setBPays((pays || [])
+      .map((p) => ({ amount: Number(p.amount) || 0 }));
+    const bs = (pays || [])
       .filter((p) => String(p.side || "").toUpperCase() === "R")
-      .map((p) => ({ amount: Number(p.amount) || 0 })));
+      .map((p) => ({ amount: Number(p.amount) || 0 }));
+
+    setAPays((v) => (JSON.stringify(v) !== JSON.stringify(as) ? as : v));
+    setBPays((v) => (JSON.stringify(v) !== JSON.stringify(bs) ? bs : v));
   }
 
   React.useEffect(() => {
     (async () => {
       try {
-        setLoading(true); setErr("");
+        setLoading(true);
+        setErr("");
 
-        // 1) battle alvo
-        let bId = battleId || null;
-
-        // 2) se não vier o id, resolver pelo token (widget_token ou UUID de profile)
-        if (!bId) {
-          const ownerId = await resolveOwnerIdByToken(token);
+        // descobrir o owner pela token (widget_token -> public_token -> id)
+        let ownerId = null;
+        if (token) {
+          if (!ownerId) {
+            const { data } = await supabase
+              .from("profiles")
+              .select("id")
+              .eq("widget_token", token)
+              .maybeSingle();
+            if (data?.id) ownerId = data.id;
+          }
+          if (!ownerId) {
+            const { data } = await supabase
+              .from("profiles")
+              .select("id")
+              .eq("public_token", token)
+              .maybeSingle();
+            if (data?.id) ownerId = data.id;
+          }
+          if (!ownerId && isUUID(token)) {
+            const { data } = await supabase
+              .from("profiles")
+              .select("id")
+              .eq("id", token)
+              .maybeSingle();
+            if (data?.id) ownerId = data.id;
+          }
           if (!ownerId) throw new Error("Token inválida ou conta não encontrada.");
+        }
+
+        // battle alvo
+        let bId = battleId || null;
+        if (!bId) {
           const { data: b } = await supabase
             .from("battles")
             .select("id")
@@ -623,30 +750,38 @@ export default function WidgetOverlay() {
           bId = b.id;
         }
 
-        await loadAll({ bId });
+        await loadAll({ ownerId, bId });
 
         // realtime
         if (channelRef.current) supabase.removeChannel(channelRef.current);
         const ch = supabase
           .channel(`overlay-${bId}`)
-          .on("postgres_changes",
+          .on(
+            "postgres_changes",
             { event: "*", schema: "public", table: "battle_payments", filter: `battle_id=eq.${bId}` },
-            () => { clearTimeout(debounceRef.current); debounceRef.current = setTimeout(() => loadAll({ bId }), 120); })
-          .on("postgres_changes",
+            () => scheduleLoad(() => loadAll({ ownerId, bId }))
+          )
+          .on(
+            "postgres_changes",
             { event: "*", schema: "public", table: "battle_entries", filter: `battle_id=eq.${bId}` },
-            () => { clearTimeout(debounceRef.current); debounceRef.current = setTimeout(() => loadAll({ bId }), 120); })
-          .on("postgres_changes",
+            () => scheduleLoad(() => loadAll({ ownerId, bId }))
+          )
+          .on(
+            "postgres_changes",
             { event: "*", schema: "public", table: "battle_widget_settings", filter: `battle_id=eq.${bId}` },
-            () => { clearTimeout(debounceRef.current); debounceRef.current = setTimeout(() => loadAll({ bId }), 120); })
-          .on("postgres_changes",
+            () => scheduleLoad(() => loadAll({ ownerId, bId }))
+          )
+          .on(
+            "postgres_changes",
             { event: "*", schema: "public", table: "battles", filter: `id=eq.${bId}` },
-            () => { clearTimeout(debounceRef.current); debounceRef.current = setTimeout(() => loadAll({ bId }), 120); })
+            () => scheduleLoad(() => loadAll({ ownerId, bId }))
+          )
           .subscribe();
         channelRef.current = ch;
 
         // polling de segurança
         if (pollRef.current) clearInterval(pollRef.current);
-        pollRef.current = setInterval(() => loadAll({ bId }), 7000);
+        pollRef.current = setInterval(() => loadAll({ ownerId, bId }), 7000);
       } catch (e) {
         setErr(e?.message || "Falha a carregar overlay.");
       } finally {
@@ -664,9 +799,13 @@ export default function WidgetOverlay() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, battleId]);
 
+  // alinhamento vertical
   const alignItems =
-    effOverlay.align === "top" ? "flex-start" :
-    effOverlay.align === "bottom" ? "flex-end" : "center";
+    align === "top" ? "flex-start" : align === "bottom" ? "flex-end" : "center";
+
+  // Master switch de animações:
+  //   null -> herdar (permitir); true -> permitir; false -> bloquear
+  const allowAnim = enableAnim === null ? true : enableAnim;
 
   return (
     <div
@@ -674,8 +813,8 @@ export default function WidgetOverlay() {
       style={{
         position: "fixed",
         inset: 0,
-        width: effOverlay.pin ? effOverlay.w : "100vw",
-        height: effOverlay.pin ? effOverlay.h : "100vh",
+        width: pinSize ? w : "100vw",
+        height: pinSize ? h : "100vh",
         margin: 0,
         padding: 0,
         background: "transparent",
@@ -684,22 +823,55 @@ export default function WidgetOverlay() {
     >
       <div
         style={{
-          width: "100%", height: "100%",
-          display: "flex", justifyContent: "center", alignItems,
-          padding: effOverlay.pad, boxSizing: "border-box",
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          justifyContent: "center",
+          alignItems,
+          padding: pad,
+          boxSizing: "border-box",
         }}
       >
         {loading ? (
-          <div style={{ padding: "8px 12px", borderRadius: 8, fontSize: 12, opacity: 0.8, background: "rgba(0,0,0,.35)", color: "white" }}>
+          <div
+            style={{
+              padding: "8px 12px",
+              borderRadius: 8,
+              fontSize: 12,
+              opacity: 0.8,
+              background: "rgba(0,0,0,.35)",
+              color: "white",
+            }}
+          >
             Loading overlay…
           </div>
         ) : err ? (
-          <div style={{ padding: "8px 12px", borderRadius: 8, fontSize: 12, background: "rgba(239,68,68,.15)", color: "rgb(252,165,165)", border: "1px solid rgba(239,68,68,.35)" }}>
+          <div
+            style={{
+              padding: "8px 12px",
+              borderRadius: 8,
+              fontSize: 12,
+              background: "rgba(239,68,68,.15)",
+              color: "rgb(252,165,165)",
+              border: "1px solid rgba(239,68,68,.35)",
+            }}
+          >
             {err}
           </div>
         ) : (
-          <div style={{ position: "relative", width: effOverlay.baseW * scale, height: effOverlay.baseH * scale }}>
-            <div style={{ position: "absolute", left: 0, top: 0, width: effOverlay.baseW, height: effOverlay.baseH, transform: `scale(${scale})`, transformOrigin: "top left" }}>
+          // Wrapper com scale (nada é cortado; cabe sempre)
+          <div style={{ position: "relative", width: bw * scale, height: bh * scale }}>
+            <div
+              style={{
+                position: "absolute",
+                left: 0,
+                top: 0,
+                width: bw,
+                height: bh,
+                transform: `scale(${scale})`,
+                transformOrigin: "top left",
+              }}
+            >
               <WidgetPanel
                 theme={effTheme}
                 layout={layout}
@@ -712,7 +884,7 @@ export default function WidgetOverlay() {
                 playerB={playerB}
                 aPays={aPays}
                 bPays={bPays}
-                animations={enableAnim}
+                animations={allowAnim}
               />
             </div>
           </div>
