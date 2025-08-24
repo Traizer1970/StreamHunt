@@ -24,7 +24,6 @@ const shallowEq = (a, b) => {
   return true;
 };
 
-/** Lê "#/overlay/battle/<token>?id=<battleId>&w=1920&h=1080&anim=0" */
 function parseHash() {
   const hash = typeof window !== "undefined" ? window.location.hash : "";
   const clean = hash.replace(/^#\/?/, "");
@@ -35,7 +34,7 @@ function parseHash() {
     const v = (qs.get(name) || "").trim();
     if (!v) return def;
     if (/^\d+$/.test(v)) return `${v}px`; // "1080" -> "1080px"
-    return v; // "100%", "90vh", "1920px", …
+    return v; // "100%", "90vh", "1920px"…
   };
 
   return {
@@ -43,11 +42,13 @@ function parseHash() {
     battleId: (qs.get("id") || "").trim(),
     w: size("w", "100vw"),
     h: size("h", "100vh"),
+    pad: Number(qs.get("pad") || 24), // padding dentro do painel
+    align: (qs.get("align") || "center").toLowerCase(), // center|top|bottom
     enableAnim: (qs.get("anim") || "0") === "1",
   };
 }
 
-/* ───────── tema/layout/opções (mesmo shape do battle-view) ───────── */
+/* ───────── tema/layout/opções ───────── */
 const DEFAULT_THEME = {
   bgStart: "#0b1020",
   bgEnd: "#111827",
@@ -100,28 +101,29 @@ const DEFAULT_OPTS = {
   totalLabelText: "Total paid",
 };
 
-/* Escala automática com ResizeObserver (adapta a qualquer w × h) */
-function useContainerScale(ref, base = 960, min = 0.75, max = 1.35) {
+/* Escala 2D: adapta à largura **e** à altura do container */
+function useContainerScale2D(ref, baseW = 960, baseH = 420, min = 0.6, max = 2) {
   const [scale, setScale] = React.useState(1);
   React.useEffect(() => {
     if (!ref.current) return;
     const ro = new ResizeObserver((entries) => {
-      const rect = entries[0].contentRect;
-      const w = Math.max(320, rect.width);
-      const s = Math.max(min, Math.min(max, w / base));
+      const r = entries[0].contentRect;
+      const sx = r.width / baseW;
+      const sy = r.height / baseH;
+      const s = Math.max(min, Math.min(max, Math.min(sx, sy)));
       setScale(s);
     });
     ro.observe(ref.current);
     return () => ro.disconnect();
-  }, [ref, base, min, max]);
+  }, [ref, baseW, baseH, min, max]);
   return scale;
 }
 
-/* ───────── UI do widget ───────── */
 function cn(...c) {
   return c.filter(Boolean).join(" ");
 }
 
+/* ───────── UI do widget ───────── */
 function WidgetPanel({
   theme,
   layout,
@@ -134,6 +136,8 @@ function WidgetPanel({
   playerB,
   aPays,
   bPays,
+  pad = 24,
+  vAlign = "center",
   enableAnim = false,
 }) {
   const aTotal = aPays.reduce((s, r) => s + Number(r?.amount || 0), 0);
@@ -226,6 +230,9 @@ function WidgetPanel({
       </div>
     );
 
+  const justify =
+    vAlign === "top" ? "justify-start" : vAlign === "bottom" ? "justify-end" : "justify-center";
+
   return (
     <>
       <style>{`
@@ -235,7 +242,7 @@ function WidgetPanel({
       <div
         className="relative overflow-hidden w-full h-full"
         style={{
-          padding: "clamp(12px,2vw,24px)",
+          padding: pad,
           background: `linear-gradient(135deg, ${theme.bgStart}, ${theme.bgEnd})`,
           border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
           borderRadius: theme.radius,
@@ -244,23 +251,18 @@ function WidgetPanel({
           fontSize: `${theme.fontScale}%`,
         }}
       >
-        {/* badges */}
-        {layout?.mode !== "free" && (
-          <>
-            {opts?.bonusDock === "right" ? (
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">{BadgeBest}</div>
-                <div>{BadgeBonus}</div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                {BadgeBest}
-                {BadgeBonus}
-              </div>
-            )}
+        {/* CONTENT WRAPPER – centra verticalmente o bloco todo */}
+        <div className={cn("relative z-10 h-full flex flex-col", justify)}>
+          <div className="space-y-5">
+            {/* badges */}
+            <div className={opts?.bonusDock === "right" ? "flex items-center justify-between gap-2" : "flex items-center gap-2"}>
+              <div className="flex items-center gap-2">{BadgeBest}</div>
+              {opts?.bonusDock === "right" && <div>{BadgeBonus}</div>}
+              {opts?.bonusDock !== "right" && <>{BadgeBest && BadgeBonus}</>}
+            </div>
 
             {/* players */}
-            <div className="mt-5 grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-5">
               <div className="flex items-center justify-end gap-3 min-w-0">
                 <div className="min-w-0 text-right">
                   <div
@@ -273,27 +275,17 @@ function WidgetPanel({
                   >
                     {playerA || "—"}
                   </div>
-                  <div
-                    className="text-[12px] truncate"
-                    style={{ color: theme.subtext }}
-                  >
+                  <div className="text-[12px] truncate" style={{ color: theme.subtext }}>
                     {sideA?.name || "—"}
                   </div>
                 </div>
                 {theme.showThumbs && (
                   <div
                     className="h-14 w-14 overflow-hidden ring-1 bg-white/5 shrink-0"
-                    style={{
-                      borderColor: theme.panelBorder,
-                      borderRadius: theme.radius,
-                    }}
+                    style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}
                   >
                     {sideA?.thumbnail ? (
-                      <img
-                        src={sideA.thumbnail}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
+                      <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" />
                     ) : (
                       <div className="h-full w-full" />
                     )}
@@ -319,17 +311,10 @@ function WidgetPanel({
                 {theme.showThumbs && (
                   <div
                     className="h-14 w-14 overflow-hidden ring-1 bg-white/5 shrink-0"
-                    style={{
-                      borderColor: theme.panelBorder,
-                      borderRadius: theme.radius,
-                    }}
+                    style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}
                   >
                     {sideB?.thumbnail ? (
-                      <img
-                        src={sideB.thumbnail}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
+                      <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" />
                     ) : (
                       <div className="h-full w-full" />
                     )}
@@ -346,10 +331,7 @@ function WidgetPanel({
                   >
                     {playerB || "—"}
                   </div>
-                  <div
-                    className="text-[12px] truncate"
-                    style={{ color: theme.subtext }}
-                  >
+                  <div className="text-[12px] truncate" style={{ color: theme.subtext }}>
                     {sideB?.name || "—"}
                   </div>
                 </div>
@@ -357,7 +339,7 @@ function WidgetPanel({
             </div>
 
             {/* chips + subtotais */}
-            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
                 <div className="flex flex-wrap">
                   {aPays.map((p, i) => (
@@ -379,9 +361,7 @@ function WidgetPanel({
                   }}
                 >
                   <span>Subtotal</span>
-                  <span
-                    style={{ color: theme.text, fontWeight: theme.strongWeight }}
-                  >
+                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>
                     {fmtMoney(aTotal)}
                   </span>
                 </div>
@@ -408,9 +388,7 @@ function WidgetPanel({
                   }}
                 >
                   <span>Subtotal</span>
-                  <span
-                    style={{ color: theme.text, fontWeight: theme.strongWeight }}
-                  >
+                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>
                     {fmtMoney(bTotal)}
                   </span>
                 </div>
@@ -420,7 +398,7 @@ function WidgetPanel({
             {/* total */}
             <div
               className={cn(
-                "mt-6 flex",
+                "flex",
                 opts?.totalJustify === "left"
                   ? "justify-start"
                   : opts?.totalJustify === "right"
@@ -444,8 +422,8 @@ function WidgetPanel({
                   : `Total paid: ${fmtMoney(aTotal + bTotal)}`}
               </div>
             </div>
-          </>
-        )}
+          </div>
+        </div>
       </div>
     </>
   );
@@ -453,17 +431,17 @@ function WidgetPanel({
 
 /* ───────── página ───────── */
 export default function WidgetOverlay() {
-  const [{ token, battleId, w, h, enableAnim }, setLoc] =
+  const [{ token, battleId, w, h, pad, align, enableAnim }, setLoc] =
     React.useState(parseHash());
 
   React.useEffect(() => {
-    // ocupar a janela toda sem margens no OBS
     document.documentElement.style.margin = "0";
     document.body.style.margin = "0";
   }, []);
 
   const stageRef = React.useRef(null);
-  const scale = useContainerScale(stageRef, 960, 0.75, 1.35);
+  // baseW/baseH são o "tamanho natural" do widget
+  const scale = useContainerScale2D(stageRef, 960, 420, 0.6, 2);
 
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState("");
@@ -490,14 +468,13 @@ export default function WidgetOverlay() {
     return t;
   }, [theme, scale, enableAnim]);
 
-  // Atualiza hash live (OBS)
   React.useEffect(() => {
     const onHash = () => setLoc(parseHash());
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  // realtime + polling
+  // realtime + polling com RPC
   const channelRef = React.useRef(null);
   const pollRef = React.useRef(null);
   const debounceRef = React.useRef(null);
@@ -507,7 +484,6 @@ export default function WidgetOverlay() {
   };
 
   async function loadFromSnapshot(tok, bIdMaybe) {
-    // timeout de segurança para nunca ficar infinito
     const withTimeout = (p, ms = 10000) =>
       Promise.race([
         p,
@@ -522,25 +498,18 @@ export default function WidgetOverlay() {
         p_battle_id: bIdMaybe ? Number(bIdMaybe) : null,
       })
     );
-
     if (error) throw error;
     if (!snap) throw new Error("Snapshot vazio.");
 
-    // battle
     const b = snap.battle || {};
     setBestOf((v) => (v !== Number(b.best_of || 1) ? Number(b.best_of || 1) : v));
     setBuyCost((v) => (v !== Number(b.buy_cost || 0) ? Number(b.buy_cost || 0) : v));
 
-    // settings (evita flicker)
     const ws = snap.settings || {};
-    if (ws.theme && !shallowEq(ws.theme, theme))
-      setTheme({ ...DEFAULT_THEME, ...ws.theme });
-    if (ws.layout && !shallowEq(ws.layout, layout))
-      setLayout({ ...DEFAULT_LAYOUT, ...ws.layout });
-    if (ws.options && !shallowEq(ws.options, opts))
-      setOpts({ ...DEFAULT_OPTS, ...ws.options });
+    if (ws.theme && !shallowEq(ws.theme, theme)) setTheme({ ...DEFAULT_THEME, ...ws.theme });
+    if (ws.layout && !shallowEq(ws.layout, layout)) setLayout({ ...DEFAULT_LAYOUT, ...ws.layout });
+    if (ws.options && !shallowEq(ws.options, opts)) setOpts({ ...DEFAULT_OPTS, ...ws.options });
 
-    // entries
     const es = Array.isArray(snap.entries) ? snap.entries : [];
     const bySeed = new Map();
     for (const e of es) if (e?.seed) bySeed.set(String(e.seed).toUpperCase(), e);
@@ -555,18 +524,13 @@ export default function WidgetOverlay() {
     setPlayerA((v) => (v !== (A?.player_name || "") ? (A?.player_name || "") : v));
     setPlayerB((v) => (v !== (B?.player_name || "") ? (B?.player_name || "") : v));
 
-    // payments
     const pays = Array.isArray(snap.pays) ? snap.pays : [];
-    const as = pays
-      .filter((p) => String(p.side || "").toUpperCase() === "L")
-      .map((p) => ({ amount: Number(p.amount) || 0 }));
-    const bs = pays
-      .filter((p) => String(p.side || "").toUpperCase() === "R")
-      .map((p) => ({ amount: Number(p.amount) || 0 }));
+    const as = pays.filter((p) => String(p.side || "").toUpperCase() === "L").map((p) => ({ amount: Number(p.amount) || 0 }));
+    const bs = pays.filter((p) => String(p.side || "").toUpperCase() === "R").map((p) => ({ amount: Number(p.amount) || 0 }));
     setAPays((v) => (JSON.stringify(v) !== JSON.stringify(as) ? as : v));
     setBPays((v) => (JSON.stringify(v) !== JSON.stringify(bs) ? bs : v));
 
-    return b.id; // battle_id efetivo
+    return b.id;
   }
 
   React.useEffect(() => {
@@ -577,7 +541,6 @@ export default function WidgetOverlay() {
 
         const bId = await loadFromSnapshot(token, battleId);
 
-        // realtime (limpa anterior)
         if (channelRef.current) supabase.removeChannel(channelRef.current);
         const ch = supabase
           .channel(`overlay-${bId}`)
@@ -604,7 +567,6 @@ export default function WidgetOverlay() {
           .subscribe();
         channelRef.current = ch;
 
-        // polling de segurança
         if (pollRef.current) clearInterval(pollRef.current);
         pollRef.current = setInterval(() => loadFromSnapshot(token, bId), 8000);
       } catch (e) {
@@ -652,6 +614,8 @@ export default function WidgetOverlay() {
             playerB={playerB}
             aPays={aPays}
             bPays={bPays}
+            pad={pad}
+            vAlign={align}
             enableAnim={enableAnim}
           />
         )}
