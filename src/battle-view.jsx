@@ -1025,6 +1025,29 @@ function WidgetCard({
   const [opts, setOpts] = React.useState(DEFAULT_OPTS);
   const [openDesigner, setOpenDesigner] = React.useState(false);
 
+  // URL exclusivo do overlay, por perfil
+  const overlayUrl = React.useMemo(() => {
+    const base = `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, "");
+    const token =
+      profile?.public_token || profile?.widget_token || profile?.id || "";
+    return token ? `${base}#/overlay/battle/${token}` : "";
+  }, [profile?.public_token, profile?.widget_token, profile?.id]);
+
+  const openOverlay = () => {
+    if (!overlayUrl) return;
+    window.open(overlayUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const copyOverlayUrl = async () => {
+    if (!overlayUrl) return;
+    try {
+      await navigator.clipboard.writeText(overlayUrl);
+    } catch {
+      alert("Não consegui copiar o URL.");
+    }
+  };
+
+
   const previewProps = {
     bestOf, buyCost, totalPay, sideA, sideB, playerA, playerB, aPays, bPays,
   };
@@ -1116,22 +1139,6 @@ function WidgetCard({
 /* ───────────────────────── Page ───────────────────────── */
 export default function BattleView() {
   const { isDark } = useTheme();
-
-const openOverlay = () => {
-  if (!overlayUrl) return;
-  window.open(overlayUrl, "_blank", "noopener,noreferrer");
-};
-
-const copyOverlayUrl = async () => {
-  if (!overlayUrl) return;
-  try {
-    await navigator.clipboard.writeText(overlayUrl);
-    // opcional: mostra um toast
-  } catch (e) {
-    alert("Não consegui copiar o URL.");
-  }
-};
-
 
   const [battleId, setBattleId] = React.useState(null);
   React.useEffect(function () {
