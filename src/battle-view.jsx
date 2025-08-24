@@ -92,12 +92,17 @@ const DEFAULT_OPTS = {
   bonusLabelMode: "label+value",
   bonusLabelText: "Bonus Buy",
   bonusDock: "left",
-  totalJustify: "center",
-  totalLabelMode: "label+value",
+
+  // alinhamento do total
+  totalJustify: "center",             // left | center | right
+  // NOVO: controlo de label do total
+  totalLabelMode: "label+value",      // "label+value" | "value"
   totalLabelText: "Total paid",
-  // NOVO
+
+  // orientação e estilo
   layoutKind: "horizontal", // 'horizontal' | 'vertical'
   vsStyle: "badge",         // 'badge' | 'big'
+
   overlay: {
     mode: "auto",     // "auto" = preenche Browser Source | "fixed" = tamanho fixo
     width: 1920,
@@ -119,17 +124,17 @@ const PRESETS = [
   { name: "Twilight",t: { bgStart: "#0b1b3a", bgEnd: "#112a46", accent: "#7dd3fc", pos: "#22c55e", neg: "#fb7185", vsBg: "rgba(125,211,252,0.30)" } },
 ];
 
-/* Presets de tamanho — incluem verticais */
+/* Presets de tamanho — horizontais + **VERTICAIS MAIS COMPACTOS** */
 const SIZE_PRESETS = [
   // horizontais
   { name: "Small",       dir: "h", o: { baseW: 880,  baseH: 360, pad: 20, align: "center" }, theme: { fontScale: 95 } },
   { name: "Default",     dir: "h", o: { baseW: 1100, baseH: 420, pad: 24, align: "center" }, theme: { fontScale: 100 } },
   { name: "Wide Bar",    dir: "h", o: { baseW: 1400, baseH: 360, pad: 20, align: "center" }, theme: { fontScale: 98, pillRadius: 14 } },
   { name: "XL Showmatch",dir: "h", o: { baseW: 1500, baseH: 520, pad: 28, align: "center" }, theme: { fontScale: 108 } },
-  // verticais
-  { name: "Vertical • Compact", dir: "v", o: { baseW: 560, baseH: 760, pad: 20, align: "center" }, theme: { fontScale: 98 } },
-  { name: "Vertical • Sidebar", dir: "v", o: { baseW: 520, baseH: 900, pad: 22, align: "center" }, theme: { fontScale: 96 } },
-  { name: "Vertical • Tall",    dir: "v", o: { baseW: 680, baseH: 1020, pad: 24, align: "center" }, theme: { fontScale: 102 } },
+  // verticais (reduzidos)
+  { name: "Vertical • Compact", dir: "v", o: { baseW: 440, baseH: 640, pad: 16, align: "center" }, theme: { fontScale: 96 } },
+  { name: "Vertical • Sidebar", dir: "v", o: { baseW: 480, baseH: 720, pad: 18, align: "center" }, theme: { fontScale: 96 } },
+  { name: "Vertical • Tall",    dir: "v", o: { baseW: 560, baseH: 860, pad: 20, align: "center" }, theme: { fontScale: 98 } },
 ];
 
 /* Presets de organização/layout */
@@ -154,7 +159,7 @@ function buildOverlayUrl(base, token, opts) {
     if (o.width)  qs.set("w", String(o.width));
     if (o.height) qs.set("h", String(o.height));
   }
-  // NOVO: orientação e estilo do VS
+  // orientação e estilo do VS
   qs.set("dir", opts?.layoutKind === "vertical" ? "v" : "h");
   if (opts?.vsStyle) qs.set("vs", opts.vsStyle);
 
@@ -510,6 +515,26 @@ function WidgetPreviewPanel({
       </div>
     );
 
+  // helper do TOTAL com label configurável
+  const TotalBadge = ({ value }) => {
+    const showOnlyValue = opts?.totalLabelMode === "value";
+    const label = (opts?.totalLabelText ?? "").trim();
+    return (
+      <div
+        className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
+        style={{
+          background: theme.totalBg,
+          border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`,
+          borderRadius: theme.pillRadius,
+          color: theme.accent,
+          fontWeight: theme.strongWeight,
+        }}
+      >
+        {showOnlyValue ? fmtMoney(value) : (label ? `${label}: ${fmtMoney(value)}` : fmtMoney(value))}
+      </div>
+    );
+  };
+
   return (
     <>
       <style>{`
@@ -524,7 +549,7 @@ function WidgetPreviewPanel({
         style={{
           width: baseW,
           height: baseH,
-          padding: 24,
+          padding: isVertical ? 18 : 24,
           background: `linear-gradient(135deg, ${theme.bgStart}, ${theme.bgEnd})`,
           border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
           borderRadius: theme.radius,
@@ -638,26 +663,21 @@ function WidgetPreviewPanel({
               </div>
             </div>
 
-            {/* total */}
+            {/* total — **alinhamento a funcionar** */}
             <div
               className={cn(
                 "mt-6 flex",
                 opts?.totalJustify === "left" ? "justify-start" : opts?.totalJustify === "right" ? "justify-end" : "justify-center"
               )}
             >
-              <div
-                className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
-                style={{ background: theme.totalBg, border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`, borderRadius: theme.pillRadius, color: theme.accent, fontWeight: theme.strongWeight }}
-              >
-                {opts?.totalLabelMode === "value" ? fmtMoney(totalPay) : `Total paid: ${fmtMoney(totalPay)}`}
-              </div>
+              <TotalBadge value={aTotal + bTotal} />
             </div>
           </>
         )}
 
-        {/* VERTICAL */}
+        {/* VERTICAL (compacto) */}
         {opts?.layoutKind === "vertical" && (
-          <div className="h-full flex flex-col gap-4">
+          <div className="h-full flex flex-col gap-3">
             {/* badges */}
             {opts?.bonusDock === "right" ? (
               <div className="flex items-center justify-between">{BadgeBest}{BadgeBonus}</div>
@@ -668,12 +688,12 @@ function WidgetPreviewPanel({
             {/* player A */}
             <div className="flex items-center gap-3">
               {theme.showThumbs && (
-                <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
+                <div className="h-12 w-12 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
                   {sideA?.thumbnail ? <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
                 </div>
               )}
               <div className="min-w-0">
-                <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>{playerA || "—"}</div>
+                <div className="truncate" style={{ fontSize: "20px", color: theme.text, fontWeight: theme.strongWeight }}>{playerA || "—"}</div>
                 <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>{sideA?.name || "—"}</div>
               </div>
             </div>
@@ -702,12 +722,12 @@ function WidgetPreviewPanel({
             {/* player B */}
             <div className="flex items-center gap-3">
               {theme.showThumbs && (
-                <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
+                <div className="h-12 w-12 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
                   {sideB?.thumbnail ? <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
                 </div>
               )}
               <div className="min-w-0">
-                <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>{playerB || "—"}</div>
+                <div className="truncate" style={{ fontSize: "20px", color: theme.text, fontWeight: theme.strongWeight }}>{playerB || "—"}</div>
                 <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>{sideB?.name || "—"}</div>
               </div>
             </div>
@@ -719,13 +739,14 @@ function WidgetPreviewPanel({
               <span>Subtotal</span><span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(bTotal)}</span>
             </div>
 
-            {/* total */}
-            <div className="mt-auto flex justify-center pt-1">
-              <div className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
-                   style={{ background: theme.totalBg, border:`${theme.totalBorderWidth}px solid ${theme.totalBorder}`,
-                            borderRadius: theme.pillRadius, color: theme.accent, fontWeight: theme.strongWeight }}>
-                {opts?.totalLabelMode === "value" ? fmtMoney(aTotal+bTotal) : `Total paid: ${fmtMoney(aTotal+bTotal)}`}
-              </div>
+            {/* total — **alinhamento também no vertical** */}
+            <div
+              className={cn(
+                "mt-auto flex pt-1",
+                opts?.totalJustify === "left" ? "justify-start" : opts?.totalJustify === "right" ? "justify-end" : "justify-center"
+              )}
+            >
+              <TotalBadge value={aTotal + bTotal} />
             </div>
           </div>
         )}
@@ -813,12 +834,7 @@ function WidgetPreviewPanel({
             </DragBox>
 
             <DragBox id="total">
-              <div
-                className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
-                style={{ background: theme.totalBg, border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`, borderRadius: theme.pillRadius, color: theme.accent, fontWeight: theme.strongWeight }}
-              >
-                {opts?.totalLabelMode === "value" ? fmtMoney(aTotal + bTotal) : `Total paid: ${fmtMoney(aTotal + bTotal)}`}
-              </div>
+              <TotalBadge value={aTotal + bTotal} />
             </DragBox>
           </>
         )}
@@ -931,7 +947,6 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
   };
   const applyLayoutPreset = (preset) => {
     const r = preset.apply(opts, theme);
-    // r.o tem apenas as mudanças, preserva o resto do objeto opts
     setOpts((o)=>({ ...o, ...(r.o||{}) }));
     setTheme((t)=>({ ...t, ...(r.t||{}) }));
   };
@@ -1152,7 +1167,7 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
                 </div>
               </div>
 
-              {/* Auto-placement options */}
+              {/* Auto placement (default layout) */}
               <div className="border-t border-white/10 pt-3 mt-2 space-y-2">
                 <div className="text-xs opacity-70">Auto placement (default layout)</div>
 
@@ -1213,6 +1228,26 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
               <div>
                 <div className="text-xs opacity-70 mb-1">Label text</div>
                 <Input value={opts.bonusLabelText} onChange={(e) => setOpts((o) => ({ ...o, bonusLabelText: e.target.value }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
+              </div>
+            </div>
+
+            {/* NOVO: Total label */}
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
+              <div className="text-xs opacity-70">Total</div>
+              <div className="flex flex-col gap-2 text-sm">
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="totallabel" checked={opts.totalLabelMode === "label+value"} onChange={() => setOpts((o) => ({ ...o, totalLabelMode: "label+value" }))} />
+                  Label + Value
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="radio" name="totallabel" checked={opts.totalLabelMode === "value"} onChange={() => setOpts((o) => ({ ...o, totalLabelMode: "value" }))} />
+                  Value only
+                </label>
+              </div>
+              <div>
+                <div className="text-xs opacity-70 mb-1">Label text</div>
+                <Input value={opts.totalLabelText} onChange={(e) => setOpts((o) => ({ ...o, totalLabelText: e.target.value }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
+                <div className="text-[11px] opacity-60 mt-1">Deixa vazio para mostrar só o valor quando estiver em “Label + Value”.</div>
               </div>
             </div>
 
