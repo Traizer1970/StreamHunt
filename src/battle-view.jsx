@@ -95,6 +95,9 @@ const DEFAULT_OPTS = {
   totalJustify: "center",
   totalLabelMode: "label+value",
   totalLabelText: "Total paid",
+  // NOVO
+  layoutKind: "horizontal", // 'horizontal' | 'vertical'
+  vsStyle: "badge",         // 'badge' | 'big'
   overlay: {
     mode: "auto",     // "auto" = preenche Browser Source | "fixed" = tamanho fixo
     width: 1920,
@@ -108,30 +111,34 @@ const DEFAULT_OPTS = {
 
 /* Presets de cores */
 const PRESETS = [
-  { name: "Neon", t: { bgStart: "#0f0c29", bgEnd: "#302b63", accent: "#22d3ee", pos: "#10b981", neg: "#ef4444", vsBg: "rgba(34,211,238,0.35)" } },
-  { name: "Sunset", t: { bgStart: "#1f0a26", bgEnd: "#3a0b2e", accent: "#fb7185", pos: "#f59e0b", neg: "#ef4444", vsBg: "rgba(251,113,133,0.35)" } },
+  { name: "Neon",    t: { bgStart: "#0f0c29", bgEnd: "#302b63", accent: "#22d3ee", pos: "#10b981", neg: "#ef4444", vsBg: "rgba(34,211,238,0.35)" } },
+  { name: "Sunset",  t: { bgStart: "#1f0a26", bgEnd: "#3a0b2e", accent: "#fb7185", pos: "#f59e0b", neg: "#ef4444", vsBg: "rgba(251,113,133,0.35)" } },
   { name: "Emerald", t: { bgStart: "#06251f", bgEnd: "#0b3830", accent: "#34d399", pos: "#22c55e", neg: "#e11d48", vsBg: "rgba(52,211,153,0.28)" } },
   { name: "Magenta", t: { bgStart: "#1e0031", bgEnd: "#2b0b3f", accent: "#c084fc", pos: "#a7f3d0", neg: "#fb7185", vsBg: "rgba(192,132,252,0.35)" } },
-  { name: "Carbon", t: { bgStart: "#0b0b0b", bgEnd: "#171717", accent: "#93c5fd", pos: "#86efac", neg: "#fca5a5", vsBg: "rgba(147,197,253,0.25)" } },
-  { name: "Twilight", t: { bgStart: "#0b1b3a", bgEnd: "#112a46", accent: "#7dd3fc", pos: "#22c55e", neg: "#fb7185", vsBg: "rgba(125,211,252,0.30)" } },
+  { name: "Carbon",  t: { bgStart: "#0b0b0b", bgEnd: "#171717", accent: "#93c5fd", pos: "#86efac", neg: "#fca5a5", vsBg: "rgba(147,197,253,0.25)" } },
+  { name: "Twilight",t: { bgStart: "#0b1b3a", bgEnd: "#112a46", accent: "#7dd3fc", pos: "#22c55e", neg: "#fb7185", vsBg: "rgba(125,211,252,0.30)" } },
 ];
 
-/* ───────── NOVO: Presets de tamanhos (canvas + tipografia) ───────── */
+/* Presets de tamanho — incluem verticais */
 const SIZE_PRESETS = [
-  { name: "Small",   o: { baseW: 880,  baseH: 360, pad: 20, align: "center" }, theme: { fontScale: 95 } },
-  { name: "Default", o: { baseW: 1100, baseH: 420, pad: 24, align: "center" }, theme: { fontScale: 100 } },
-  { name: "Wide Bar",o: { baseW: 1400, baseH: 360, pad: 20, align: "center" }, theme: { fontScale: 98, pillRadius: 14 } },
-  { name: "Tall Card",o:{ baseW: 900,  baseH: 520, pad: 26, align: "center" }, theme: { fontScale: 104 } },
-  { name: "XL (Showmatch)", o:{ baseW: 1500, baseH: 520, pad: 28, align: "center" }, theme: { fontScale: 108 } },
+  // horizontais
+  { name: "Small",       dir: "h", o: { baseW: 880,  baseH: 360, pad: 20, align: "center" }, theme: { fontScale: 95 } },
+  { name: "Default",     dir: "h", o: { baseW: 1100, baseH: 420, pad: 24, align: "center" }, theme: { fontScale: 100 } },
+  { name: "Wide Bar",    dir: "h", o: { baseW: 1400, baseH: 360, pad: 20, align: "center" }, theme: { fontScale: 98, pillRadius: 14 } },
+  { name: "XL Showmatch",dir: "h", o: { baseW: 1500, baseH: 520, pad: 28, align: "center" }, theme: { fontScale: 108 } },
+  // verticais
+  { name: "Vertical • Compact", dir: "v", o: { baseW: 560, baseH: 760, pad: 20, align: "center" }, theme: { fontScale: 98 } },
+  { name: "Vertical • Sidebar", dir: "v", o: { baseW: 520, baseH: 900, pad: 22, align: "center" }, theme: { fontScale: 96 } },
+  { name: "Vertical • Tall",    dir: "v", o: { baseW: 680, baseH: 1020, pad: 24, align: "center" }, theme: { fontScale: 102 } },
 ];
 
-/* ───────── NOVO: Presets de organização/layout ───────── */
+/* Presets de organização/layout */
 const LAYOUT_PRESETS = [
-  { name: "Default", apply: (o,t) => ({ o: { ...o, bonusDock: "left", totalJustify: "center" }, t: { ...t, showThumbs: true } }) },
-  { name: "Compact", apply: (o,t) => ({ o: { ...o, bonusDock: "left", totalJustify: "center" }, t: { ...t, fontScale: Math.max(90, (t.fontScale||100)-6), chipRadius: 10 } }) },
-  { name: "Bar",     apply: (o,t) => ({ o: { ...o, bonusDock: "right", totalJustify: "right" }, t: { ...t, showThumbs: true } }) },
-  { name: "Minimal", apply: (o,t) => ({ o: { ...o, bonusDock: "left", totalJustify: "center" }, t: { ...t, showThumbs: false } }) },
-  { name: "Big Thumbs", apply: (o,t) => ({ o: { ...o }, t: { ...t, showThumbs: true, radius: 20, fontScale: (t.fontScale||100)+4 } }) },
+  { name: "Default",    apply: (o,t) => ({ o: { bonusDock: "left",  totalJustify: "center" }, t: { showThumbs: true } }) },
+  { name: "Compact",    apply: (o,t) => ({ o: { bonusDock: "left",  totalJustify: "center" }, t: { fontScale: Math.max(90,(t.fontScale||100)-6), chipRadius: 10 } }) },
+  { name: "Bar",        apply: (o,t) => ({ o: { bonusDock: "right", totalJustify: "right"  }, t: { showThumbs: true } }) },
+  { name: "Minimal",    apply: (o,t) => ({ o: { bonusDock: "left",  totalJustify: "center" }, t: { showThumbs: false } }) },
+  { name: "Big Thumbs", apply: (o,t) => ({ o: {}, t: { showThumbs: true, radius: 20, fontScale: (t.fontScale||100)+4 } }) },
 ];
 
 // ---- URL builder para o overlay ----
@@ -147,6 +154,10 @@ function buildOverlayUrl(base, token, opts) {
     if (o.width)  qs.set("w", String(o.width));
     if (o.height) qs.set("h", String(o.height));
   }
+  // NOVO: orientação e estilo do VS
+  qs.set("dir", opts?.layoutKind === "vertical" ? "v" : "h");
+  if (opts?.vsStyle) qs.set("vs", opts.vsStyle);
+
   const q = qs.toString();
   return `${base}#/overlay/battle/${token}${q ? `?${q}` : ""}`;
 }
@@ -408,9 +419,11 @@ function WidgetPreviewPanel({
   const bTotal = bPays.reduce((s, r) => s + Number(r?.amount || 0), 0);
   const containerRef = React.useRef(null);
 
-  // usar o canvas base do overlay
   const baseW = Number(opts?.overlay?.baseW) || 1100;
   const baseH = Number(opts?.overlay?.baseH) || 420;
+
+  const isVertical = opts?.layoutKind === "vertical";
+  const vsBig = opts?.vsStyle === "big";
 
   const Chip = ({ amount, ok, i }) => (
     <span
@@ -527,10 +540,9 @@ function WidgetPreviewPanel({
           />
         )}
 
-        {/* default layout (no drag) */}
-        {layout?.mode !== "free" && (
+        {/* HORIZONTAL */}
+        {opts?.layoutKind !== "vertical" && (
           <>
-            {/* badges row */}
             {opts?.bonusDock === "right" ? (
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">{BadgeBest}</div>
@@ -563,11 +575,11 @@ function WidgetPreviewPanel({
 
               <div className="flex justify-center">
                 <div
-                  className="px-3 py-1 text-xs"
+                  className={vsBig ? "px-4 py-3 text-sm" : "px-3 py-1 text-xs"}
                   style={{
                     background: theme.vsBg,
                     border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
-                    borderRadius: 10,
+                    borderRadius: vsBig ? 999 : 10,
                     fontWeight: theme.strongWeight,
                     animation: theme.pulse ? "vsPulse 1.8s ease-in-out infinite" : "none",
                   }}
@@ -593,7 +605,7 @@ function WidgetPreviewPanel({
               </div>
             </div>
 
-            {/* chips + subtotals */}
+            {/* chips */}
             <div className="mt-6 grid grid-cols-2 gap-6">
               <div>
                 <div className="flex flex-wrap">
@@ -643,7 +655,82 @@ function WidgetPreviewPanel({
           </>
         )}
 
-        {/* free layout (drag & drop) */}
+        {/* VERTICAL */}
+        {opts?.layoutKind === "vertical" && (
+          <div className="h-full flex flex-col gap-4">
+            {/* badges */}
+            {opts?.bonusDock === "right" ? (
+              <div className="flex items-center justify-between">{BadgeBest}{BadgeBonus}</div>
+            ) : (
+              <div className="flex items-center gap-2">{BadgeBest}{BadgeBonus}</div>
+            )}
+
+            {/* player A */}
+            <div className="flex items-center gap-3">
+              {theme.showThumbs && (
+                <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
+                  {sideA?.thumbnail ? <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
+                </div>
+              )}
+              <div className="min-w-0">
+                <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>{playerA || "—"}</div>
+                <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>{sideA?.name || "—"}</div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap">{aPays.map((p,i)=>(<Chip key={`va-${i}`} amount={p.amount} ok={Number(p.amount||0)>=Number(buyCost||0)} i={i}/>))}</div>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 self-start text-[12px]"
+                 style={{ background: theme.chipBg, border:`${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
+                         borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}>
+              <span>Subtotal</span><span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(aTotal)}</span>
+            </div>
+
+            {/* VS */}
+            <div className="w-full flex justify-center py-1">
+              <div
+                className={vsBig ? "px-5 py-3 text-sm" : "px-3 py-1 text-xs"}
+                style={{
+                  background: theme.vsBg, border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
+                  borderRadius: vsBig ? 999 : 10, fontWeight: theme.strongWeight,
+                  animation: theme.pulse ? "vsPulse 1.8s ease-in-out infinite" : "none",
+                }}
+              >
+                VS
+              </div>
+            </div>
+
+            {/* player B */}
+            <div className="flex items-center gap-3">
+              {theme.showThumbs && (
+                <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
+                  {sideB?.thumbnail ? <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
+                </div>
+              )}
+              <div className="min-w-0">
+                <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>{playerB || "—"}</div>
+                <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>{sideB?.name || "—"}</div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap">{bPays.map((p,i)=>(<Chip key={`vb-${i}`} amount={p.amount} ok={Number(p.amount||0)>=Number(buyCost||0)} i={i}/>))}</div>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 self-start text-[12px]"
+                 style={{ background: theme.chipBg, border:`${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
+                         borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}>
+              <span>Subtotal</span><span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(bTotal)}</span>
+            </div>
+
+            {/* total */}
+            <div className="mt-auto flex justify-center pt-1">
+              <div className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
+                   style={{ background: theme.totalBg, border:`${theme.totalBorderWidth}px solid ${theme.totalBorder}`,
+                            borderRadius: theme.pillRadius, color: theme.accent, fontWeight: theme.strongWeight }}>
+                {opts?.totalLabelMode === "value" ? fmtMoney(aTotal+bTotal) : `Total paid: ${fmtMoney(aTotal+bTotal)}`}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* FREE LAYOUT (drag & drop) */}
         {layout?.mode === "free" && (
           <>
             <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: "linear-gradient(transparent 95%, rgba(255,255,255,.05) 95%)", backgroundSize: "100% 40px" }} />
@@ -839,13 +926,14 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
   if (!open) return null;
 
   const applySizePreset = (p) => {
-    setOpts((o)=>({ ...o, overlay: { ...o.overlay, ...p.o } }));
+    setOpts((o)=>({ ...o, layoutKind: p.dir==="v" ? "vertical" : "horizontal", overlay: { ...o.overlay, ...p.o } }));
     if (p.theme) setTheme((t)=>({ ...t, ...p.theme }));
   };
   const applyLayoutPreset = (preset) => {
-    const { o, t } = preset.apply({ ...opts }, { ...theme });
-    setOpts((_)=>({ ...o }));
-    setTheme((_)=>({ ...t }));
+    const r = preset.apply(opts, theme);
+    // r.o tem apenas as mudanças, preserva o resto do objeto opts
+    setOpts((o)=>({ ...o, ...(r.o||{}) }));
+    setTheme((t)=>({ ...t, ...(r.t||{}) }));
   };
 
   return (
@@ -872,7 +960,37 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
         {/* Controls */}
         <div className="border-r border-white/10 bg-zinc-950/70 overflow-auto">
           <div className="p-4 space-y-4">
-            {/* ── NOVO: Size presets ── */}
+            {/* Orientação e VS */}
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <div className="text-xs opacity-70 mb-2">Orientation</div>
+              <div className="flex items-center gap-4 text-sm">
+                <label className="flex items-center gap-2">
+                  <input type="radio" checked={opts.layoutKind === "horizontal"}
+                         onChange={() => setOpts(o => ({...o, layoutKind: "horizontal"}))} />
+                  Horizontal
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="radio" checked={opts.layoutKind === "vertical"}
+                         onChange={() => setOpts(o => ({...o, layoutKind: "vertical"}))} />
+                  Vertical
+                </label>
+              </div>
+              <div className="mt-3 text-xs opacity-70">VS style</div>
+              <div className="flex items-center gap-4 text-sm">
+                <label className="flex items-center gap-2">
+                  <input type="radio" checked={opts.vsStyle === "badge"}
+                         onChange={() => setOpts(o => ({...o, vsStyle: "badge"}))} />
+                  Badge
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="radio" checked={opts.vsStyle === "big"}
+                         onChange={() => setOpts(o => ({...o, vsStyle: "big"}))} />
+                  Big
+                </label>
+              </div>
+            </div>
+
+            {/* Size presets */}
             <div className="rounded-xl border border-white/10 bg-white/5 p-3">
               <div className="text-xs opacity-70 mb-2">Size presets</div>
               <div className="grid grid-cols-2 gap-2">
@@ -887,7 +1005,7 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
               </div>
             </div>
 
-            {/* ── NOVO: Layout presets ── */}
+            {/* Layout presets */}
             <div className="rounded-xl border border-white/10 bg-white/5 p-3">
               <div className="text-xs opacity-70 mb-2">Layout presets</div>
               <div className="grid grid-cols-2 gap-2">
