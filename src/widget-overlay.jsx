@@ -51,15 +51,18 @@ function parseHash() {
   return {
     token: seg0 === "overlay" && seg1 === "battle" ? (seg2 || "").trim() : "",
     battleId: (qs.get("id") || "").trim(),
-    // Tamanho do stage
+
+    // Tamanho do stage (Browser Source externo)
     w: size("w", "100vw"),
     h: size("h", "100vh"),
     pinSize: (qs.get("pinsize") || "0") === "1", // se 1, respeita w/h fixos
-    // Proporção/base do painel interno (escala para caber)
+
+    // Base/escala do painel interno
     bw: int("bw", 1100),
     bh: int("bh", 420),
     pad: int("pad", 24),
     align: (qs.get("align") || "center").toLowerCase(), // top | center | bottom
+
     enableAnim,
   };
 }
@@ -162,7 +165,7 @@ async function enrichSlotInfo(slot) {
   return slot;
 }
 
-/* ───────── UI do widget (default layout; sem flicker) ───────── */
+/* ───────── UI do widget ───────── */
 function WidgetPanel({
   theme,
   layout,
@@ -175,7 +178,7 @@ function WidgetPanel({
   playerB,
   aPays,
   bPays,
-  animations = true, // master switch (herdado por defeito)
+  animations = true, // master switch
 }) {
   const aTotal = aPays.reduce((s, r) => s + Number(r?.amount || 0), 0);
   const bTotal = bPays.reduce((s, r) => s + Number(r?.amount || 0), 0);
@@ -191,7 +194,6 @@ function WidgetPanel({
         color: ok ? theme.pos : theme.neg,
         boxShadow:
           "0 0 0 1px rgba(0,0,0,0.25) inset, 0 6px 18px rgba(0,0,0,.36)",
-        // anima só se master switch + flag do tema estiverem ON
         animation:
           animations && theme.pulse ? `pop .16s ease-out both` : "none",
         animationDelay: `${i * 45}ms`,
@@ -259,7 +261,11 @@ function WidgetPanel({
       >
         <span>{opts?.bonusLabelText || "Bonus Buy"}</span>
         <span
-          style={{ marginLeft: 8, color: theme.accent, fontWeight: theme.strongWeight }}
+          style={{
+            marginLeft: 8,
+            color: theme.accent,
+            fontWeight: theme.strongWeight,
+          }}
         >
           {badgeBonusValue}
         </span>
@@ -284,6 +290,7 @@ function WidgetPanel({
       <style>{`
         @keyframes sweep { 0% { transform: translateX(-120%);} 100% { transform: translateX(120%);} }
         @keyframes pop { 0% { transform: scale(.96); opacity: 0;} 100% { transform: scale(1); opacity: 1;} }
+        @keyframes vsPulse { 0%,100% { transform: scale(1); opacity:.92;} 50% { transform: scale(1.06); opacity:1; } }
       `}</style>
 
       {animations && theme.shine && (
@@ -301,7 +308,7 @@ function WidgetPanel({
         />
       )}
 
-      {/* Default layout (sem drag) */}
+      {/* Default layout */}
       {layout?.mode !== "free" && (
         <>
           {/* badges */}
@@ -378,14 +385,18 @@ function WidgetPanel({
                     <img
                       src={sideA.thumbnail}
                       alt=""
-                      style={{ height: "100%", width: "100%", objectFit: "cover" }}
+                      style={{
+                        height: "100%",
+                        width: "100%",
+                        objectFit: "cover",
+                      }}
                     />
                   ) : null}
                 </div>
               )}
             </div>
 
-            {/* VS */}
+            {/* VS (agora com animação própria) */}
             <div style={{ display: "flex", justifyContent: "center" }}>
               <div
                 style={{
@@ -395,6 +406,10 @@ function WidgetPanel({
                   border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
                   borderRadius: 10,
                   fontWeight: theme.strongWeight,
+                  animation:
+                    animations && theme.pulse
+                      ? "vsPulse 1.25s ease-in-out infinite"
+                      : "none",
                 }}
               >
                 VS
@@ -426,7 +441,11 @@ function WidgetPanel({
                     <img
                       src={sideB.thumbnail}
                       alt=""
-                      style={{ height: "100%", width: "100%", objectFit: "cover" }}
+                      style={{
+                        height: "100%",
+                        width: "100%",
+                        objectFit: "cover",
+                      }}
                     />
                   ) : null}
                 </div>
@@ -567,10 +586,8 @@ function WidgetPanel({
 
 /* ───────────────────────── Página Overlay ───────────────────────── */
 export default function WidgetOverlay() {
-  const [
-    { token, battleId, w, h, bw, bh, pad, align, enableAnim, pinSize },
-    setLoc,
-  ] = React.useState(parseHash());
+  const [loc, setLoc] = React.useState(parseHash());
+  const { token, battleId, w, h, bw, bh, pad, align, enableAnim, pinSize } = loc;
 
   // CSS global: fundo transparente e sem margens/scroll (bom para OBS)
   React.useEffect(() => {
@@ -601,8 +618,8 @@ export default function WidgetOverlay() {
   const [layout, setLayout] = React.useState(DEFAULT_LAYOUT);
   const [opts, setOpts] = React.useState(DEFAULT_OPTS);
 
-  // herdamos o tema tal e qual (não mexemos em pulse/shine aqui)
-  const effTheme = React.useMemo(() => theme, [theme]);
+  // herdar animação do tema, salvo override via ?anim=…
+  const animations = enableAnim === null ? true : enableAnim;
 
   // ouvir alterações do hash (para mudar id/w/h/etc ao vivo)
   React.useEffect(() => {
@@ -624,6 +641,27 @@ export default function WidgetOverlay() {
     debounceRef.current = setTimeout(fn, 120);
   };
 
+  // aplica opções de overlay vindas do DB *só* quando o URL não fixa o tamanho
+  function mergeOverlayIntoLoc(cur, overlay) {
+    if (!overlay) return cur;
+    const next = { ...cur };
+
+    // se URL não fixou pinsize, herda base/align/pad
+    if (!cur.pinSize) {
+      if (Number.isFinite(overlay.baseW)) next.bw = overlay.baseW;
+      if (Number.isFinite(overlay.baseH)) next.bh = overlay.baseH;
+      if (Number.isFinite(overlay.pad)) next.pad = overlay.pad;
+      if (overlay.align) next.align = String(overlay.align).toLowerCase();
+
+      if (overlay.mode === "fixed") {
+        next.pinSize = true;
+        if (overlay.width) next.w = /^\d+$/.test(String(overlay.width)) ? `${overlay.width}px` : String(overlay.width);
+        if (overlay.height) next.h = /^\d+$/.test(String(overlay.height)) ? `${overlay.height}px` : String(overlay.height);
+      }
+    }
+    return next;
+  }
+
   async function loadAll({ ownerId, bId }) {
     // battle basics
     const { data: bRow } = await supabase
@@ -644,12 +682,21 @@ export default function WidgetOverlay() {
       .select("theme, layout, options")
       .eq("battle_id", bId)
       .maybeSingle();
+
     if (ws?.theme && !shallowEq(ws.theme, theme))
       setTheme({ ...DEFAULT_THEME, ...ws.theme });
     if (ws?.layout && !shallowEq(ws.layout, layout))
       setLayout({ ...DEFAULT_LAYOUT, ...ws.layout });
     if (ws?.options && !shallowEq(ws.options, opts))
       setOpts({ ...DEFAULT_OPTS, ...ws.options });
+
+    // aplica overlay do DB ao stage (se o URL não estiver a forçar)
+    if (ws?.options?.overlay) {
+      setLoc((cur) => {
+        const merged = mergeOverlayIntoLoc(cur, ws.options.overlay);
+        return shallowEq(cur, merged) ? cur : merged;
+      });
+    }
 
     // entries
     const { data: entries } = await supabase
@@ -658,7 +705,8 @@ export default function WidgetOverlay() {
       .eq("battle_id", bId);
 
     const map = new Map();
-    for (const e of entries || []) if (e?.seed) map.set(String(e.seed).toUpperCase(), e);
+    for (const e of entries || [])
+      if (e?.seed) map.set(String(e.seed).toUpperCase(), e);
     const A = map.get("A") || (entries && entries[0]) || null;
     const B = map.get("B") || (entries && entries[1]) || null;
 
@@ -666,7 +714,9 @@ export default function WidgetOverlay() {
       let aBase = { id: A.slot_id ?? null, name: A.slot_name || "" };
       aBase = await enrichSlotInfo(aBase);
       setSideA((v) => (JSON.stringify(v) !== JSON.stringify(aBase) ? aBase : v));
-      setPlayerA((v) => (v !== (A.player_name || "") ? (A.player_name || "") : v));
+      setPlayerA((v) =>
+        v !== (A.player_name || "") ? A.player_name || "" : v
+      );
     } else {
       setSideA(null);
       setPlayerA("");
@@ -676,7 +726,9 @@ export default function WidgetOverlay() {
       let bBase = { id: B.slot_id ?? null, name: B.slot_name || "" };
       bBase = await enrichSlotInfo(bBase);
       setSideB((v) => (JSON.stringify(v) !== JSON.stringify(bBase) ? bBase : v));
-      setPlayerB((v) => (v !== (B.player_name || "") ? (B.player_name || "") : v));
+      setPlayerB((v) =>
+        v !== (B.player_name || "") ? B.player_name || "" : v
+      );
     } else {
       setSideB(null);
       setPlayerB("");
@@ -758,17 +810,32 @@ export default function WidgetOverlay() {
           .channel(`overlay-${bId}`)
           .on(
             "postgres_changes",
-            { event: "*", schema: "public", table: "battle_payments", filter: `battle_id=eq.${bId}` },
+            {
+              event: "*",
+              schema: "public",
+              table: "battle_payments",
+              filter: `battle_id=eq.${bId}`,
+            },
             () => scheduleLoad(() => loadAll({ ownerId, bId }))
           )
           .on(
             "postgres_changes",
-            { event: "*", schema: "public", table: "battle_entries", filter: `battle_id=eq.${bId}` },
+            {
+              event: "*",
+              schema: "public",
+              table: "battle_entries",
+              filter: `battle_id=eq.${bId}`,
+            },
             () => scheduleLoad(() => loadAll({ ownerId, bId }))
           )
           .on(
             "postgres_changes",
-            { event: "*", schema: "public", table: "battle_widget_settings", filter: `battle_id=eq.${bId}` },
+            {
+              event: "*",
+              schema: "public",
+              table: "battle_widget_settings",
+              filter: `battle_id=eq.${bId}`,
+            },
             () => scheduleLoad(() => loadAll({ ownerId, bId }))
           )
           .on(
@@ -802,10 +869,6 @@ export default function WidgetOverlay() {
   // alinhamento vertical
   const alignItems =
     align === "top" ? "flex-start" : align === "bottom" ? "flex-end" : "center";
-
-  // Master switch de animações:
-  //   null -> herdar (permitir); true -> permitir; false -> bloquear
-  const allowAnim = enableAnim === null ? true : enableAnim;
 
   return (
     <div
@@ -873,7 +936,7 @@ export default function WidgetOverlay() {
               }}
             >
               <WidgetPanel
-                theme={effTheme}
+                theme={theme}
                 layout={layout}
                 opts={opts}
                 bestOf={bestOf}
@@ -884,7 +947,7 @@ export default function WidgetOverlay() {
                 playerB={playerB}
                 aPays={aPays}
                 bPays={bPays}
-                animations={allowAnim}
+                animations={animations}
               />
             </div>
           </div>
