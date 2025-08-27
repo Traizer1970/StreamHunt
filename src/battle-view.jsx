@@ -181,9 +181,14 @@ const LAYOUT_PRESETS = [
 ];
 
 // ---- URL builder para o overlay ----
-function buildOverlayUrl(base, token, opts) {
+// ---- URL builder para o overlay ----
+function buildOverlayUrl(base, token, opts, battleId) {
   const o = (opts && opts.overlay) || {};
   const qs = new URLSearchParams();
+
+  // amarra o overlay a ESTA battle
+  if (battleId) qs.set("id", String(battleId));
+
   if (typeof o.baseW === "number") qs.set("bw", String(o.baseW));
   if (typeof o.baseH === "number") qs.set("bh", String(o.baseH));
   if (typeof o.pad === "number")   qs.set("pad", String(o.pad));
@@ -193,12 +198,15 @@ function buildOverlayUrl(base, token, opts) {
     if (o.width)  qs.set("w", String(o.width));
     if (o.height) qs.set("h", String(o.height));
   }
+
+  // orientação e estilo do VS (opcional)
   qs.set("dir", opts?.layoutKind === "vertical" ? "v" : "h");
   if (opts?.vsStyle) qs.set("vs", opts.vsStyle);
 
   const q = qs.toString();
   return `${base}#/overlay/battle/${token}${q ? `?${q}` : ""}`;
 }
+
 
 /* ----------------------------- DB helpers ----------------------------- */
 async function dbLoadWidgetSettings(battleId) {
@@ -1495,12 +1503,13 @@ function WidgetCard({
   const [opts, setOpts] = React.useState(DEFAULT_OPTS);
   const [openDesigner, setOpenDesigner] = React.useState(false);
 
-  const overlayUrl = React.useMemo(() => {
-    const base = `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, "");
-    const token = profile?.public_token || profile?.widget_token || profile?.id || "";
-    if (!token) return "";
-    return buildOverlayUrl(base, token, opts);
-  }, [profile?.public_token, profile?.widget_token, profile?.id, opts]);
+const overlayUrl = React.useMemo(() => {
+  const base = `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, "");
+  const token = profile?.public_token || profile?.widget_token || profile?.id || "";
+  if (!token || !battleId) return "";
+  return buildOverlayUrl(base, token, opts, battleId); // <— agora com battleId
+}, [profile?.public_token, profile?.widget_token, profile?.id, opts, battleId]);
+
 
   const openOverlay = () => {
     if (!overlayUrl) return;
