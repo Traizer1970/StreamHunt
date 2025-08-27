@@ -89,34 +89,41 @@ const DEFAULT_LAYOUT = {
 
 /* Widget options (+ OBS sizing) */
 const DEFAULT_OPTS = {
+  // badges
   bonusLabelMode: "label+value",
   bonusLabelText: "Bonus Buy",
   bonusDock: "left",
 
-  // total
-  totalJustify: "center",             // left | center | right
-  totalLabelMode: "label+value",      // "label+value" | "value"
+  // VS
+  vsStyle: "badge",                 // 'badge' | 'big'
+  vsPlacement: "center",            // 'left' | 'center' | 'right' | 'overlay'
+
+  // Subtotal
+  subtotalLabelMode: "label+value", // 'label+value' | 'value'
+  subtotalLabelText: "Subtotal",
+  subtotalAlign: "left",            // 'left' | 'center' | 'right' | 'split'
+
+  // Total
+  totalJustify: "center",           // left | center | right
+  totalLabelMode: "label+value",    // 'label+value' | 'value'
   totalLabelText: "Total paid",
 
-  // subtotal
-  subtotalLabelMode: "label+value",   // "label+value" | "value"
-  subtotalLabelText: "Subtotal",
-  subtotalJustify: "left",            // NEW: left | center | right
+  // Buys
+  buyStyle: "pill",                 // 'pill' | 'soft' | 'flat' | 'tag'
+  buyLayout: "wrap",                // 'wrap' | 'column'
 
-  // orientação, VS e chips
-  layoutKind: "horizontal",           // 'horizontal' | 'vertical'
-  vsStyle: "badge",                   // 'badge' | 'big'
-  vsAlign: "center",                  // NEW: 'left' | 'center' | 'right'
-  buyStyle: "pill",                   // NEW: 'pill' | 'outline' | 'solid' | 'glass' | 'neon'
+  // orientação
+  layoutKind: "horizontal",         // 'horizontal' | 'vertical'
 
+  // OBS overlay
   overlay: {
-    mode: "auto",     // "auto" = preenche Browser Source | "fixed" = tamanho fixo
+    mode: "auto",
     width: 1920,
     height: 1080,
     baseW: 1100,
     baseH: 420,
     pad: 24,
-    align: "center",  // "top" | "center" | "bottom"
+    align: "center",
   },
 };
 
@@ -130,7 +137,7 @@ const PRESETS = [
   { name: "Twilight",t: { bgStart: "#0b1b3a", bgEnd: "#112a46", accent: "#7dd3fc", pos: "#22c55e", neg: "#fb7185", vsBg: "rgba(125,211,252,0.30)" } },
 ];
 
-/* Presets de tamanho — horizontais + verticais compactos */
+/* Presets de tamanho — horizontais + verticais */
 const SIZE_PRESETS = [
   { name: "Small",       dir: "h", o: { baseW: 880,  baseH: 360, pad: 20, align: "center" }, theme: { fontScale: 95 } },
   { name: "Default",     dir: "h", o: { baseW: 1100, baseH: 420, pad: 24, align: "center" }, theme: { fontScale: 100 } },
@@ -143,11 +150,34 @@ const SIZE_PRESETS = [
 
 /* Presets de organização/layout */
 const LAYOUT_PRESETS = [
-  { name: "Default",    apply: (o,t) => ({ o: { bonusDock: "left",  totalJustify: "center" }, t: { showThumbs: true } }) },
-  { name: "Compact",    apply: (o,t) => ({ o: { bonusDock: "left",  totalJustify: "center" }, t: { fontScale: Math.max(90,(t.fontScale||100)-6), chipRadius: 10 } }) },
-  { name: "Bar",        apply: (o,t) => ({ o: { bonusDock: "right", totalJustify: "right"  }, t: { showThumbs: true } }) },
-  { name: "Minimal",    apply: (o,t) => ({ o: { bonusDock: "left",  totalJustify: "center" }, t: { showThumbs: false } }) },
-  { name: "Big Thumbs", apply: (o,t) => ({ o: {}, t: { showThumbs: true, radius: 20, fontScale: (t.fontScale||100)+4 } }) },
+  {
+    name: "Default",
+    apply: (o,t) => ({
+      o: { bonusDock: "left", totalJustify: "center", vsPlacement: "center", subtotalAlign: "left", buyLayout: "wrap" },
+      t: { showThumbs: true }
+    })
+  },
+  {
+    // igual ao do print: chips em coluna, VS sobreposto, subtotais split
+    name: "Compact (columns)",
+    apply: (o,t) => ({
+      o: { bonusDock: "left", vsPlacement: "overlay", subtotalAlign: "split", totalJustify: "right", buyLayout: "column" },
+      t: { fontScale: Math.max(90,(t.fontScale||100)-6) }
+    })
+  },
+  {
+    name: "Bar",
+    apply: (o,t) => ({ o: { bonusDock: "right", totalJustify: "right", vsPlacement: "right", buyLayout: "wrap" }, t: { showThumbs: true } })
+  },
+  {
+    name: "Minimal",
+    apply: (o,t) => ({ o: { bonusDock: "left", totalJustify: "center", vsPlacement: "center", subtotalAlign: "center", buyLayout: "wrap" }, t: { showThumbs: false } })
+  },
+  {
+    // preset pedido: VS grande sobreposto
+    name: "Head-to-Head (overlay VS)",
+    apply: (o,t) => ({ o: { vsPlacement: "overlay", vsStyle: "big", subtotalAlign: "split", buyLayout: "wrap" }, t: {} })
+  },
 ];
 
 // ---- URL builder para o overlay ----
@@ -165,6 +195,7 @@ function buildOverlayUrl(base, token, opts) {
   }
   qs.set("dir", opts?.layoutKind === "vertical" ? "v" : "h");
   if (opts?.vsStyle) qs.set("vs", opts.vsStyle);
+
   const q = qs.toString();
   return `${base}#/overlay/battle/${token}${q ? `?${q}` : ""}`;
 }
@@ -432,83 +463,92 @@ function WidgetPreviewPanel({
   const isVertical = opts?.layoutKind === "vertical";
   const vsBig = opts?.vsStyle === "big";
 
-  const alignFlex = (a) => (a === "left" ? "justify-start" : a === "right" ? "justify-end" : "justify-center");
-
-  // --------------- Buy Chip (vários estilos) ---------------
-  const Chip = ({ amount, ok, i, tight = false }) => {
-    const color = ok ? theme.pos : theme.neg;
-    const basePad = tight ? "px-2.5 py-1" : "px-3 py-1";
+  // ── Buy chip renderer (multi-design)
+  const Chip = ({ amount, ok, i, stacked }) => {
     const common = {
       borderRadius: theme.chipRadius,
-      fontSize: `calc(${tight ? 11 : 12}px * ${theme.fontScale / 100})`,
+      color: ok ? theme.pos : theme.neg,
+      fontSize: `calc(12px * ${theme.fontScale / 100})`,
       fontFamily: theme.fontFamily,
       fontWeight: theme.strongWeight,
       animation: theme.pulse ? `pop .16s ease-out both` : "none",
       animationDelay: `${i * 45}ms`,
     };
+    const space = stacked ? "mb-2" : "mr-2 mb-2";
 
-    let styles = {};
-    let className = "";
-
-    switch (opts?.buyStyle) {
-      case "outline":
-        styles = {
-          ...common,
-          background: "transparent",
-          border: `${theme.chipBorderWidth}px solid ${color}`,
-          color,
-          boxShadow: "0 6px 18px rgba(0,0,0,.36)",
-        };
-        className = `inline-flex items-center gap-1.5 ${basePad} mr-2 mb-2`;
-        break;
-      case "solid":
-        styles = {
-          ...common,
-          background: color,
-          border: `${theme.chipBorderWidth}px solid ${color}`,
-          color: "#0b0b0b",
-          boxShadow: "0 6px 18px rgba(0,0,0,.36)",
-        };
-        className = `inline-flex items-center gap-1.5 ${basePad} mr-2 mb-2`;
-        break;
-      case "glass":
-        styles = {
-          ...common,
-          background: "rgba(255,255,255,0.08)",
-          border: `${theme.chipBorderWidth}px solid rgba(255,255,255,0.18)`,
-          color: theme.text,
-          boxShadow: "0 6px 18px rgba(0,0,0,.36), inset 0 0 0 1px rgba(0,0,0,0.25)",
-          backdropFilter: "blur(2px)",
-        };
-        className = `inline-flex items-center gap-1.5 ${basePad} mr-2 mb-2`;
-        break;
-      case "neon":
-        styles = {
-          ...common,
-          background: "transparent",
-          border: `${theme.chipBorderWidth}px solid ${color}`,
-          color,
-          textShadow: `0 0 10px ${color}90`,
-          boxShadow: `0 0 18px ${color}50, inset 0 0 0 1px rgba(0,0,0,0.25)`,
-        };
-        className = `inline-flex items-center gap-1.5 ${basePad} mr-2 mb-2`;
-        break;
-      default: // pill
-        styles = {
-          ...common,
-          background: `${color}1F`,
-          border: `${theme.chipBorderWidth}px solid ${color}`,
-          color,
-          boxShadow: "0 0 0 1px rgba(0,0,0,0.25) inset, 0 6px 18px rgba(0,0,0,.36)",
-        };
-        className = `inline-flex items-center gap-1.5 ${basePad} mr-2 mb-2`;
+    if (opts.buyStyle === "flat") {
+      return (
+        <span
+          className={`inline-flex items-center gap-2 px-2.5 py-1 ${space}`}
+          style={{
+            ...common,
+            background: "transparent",
+            border: `1px solid ${ok ? theme.pos : theme.neg}55`,
+            boxShadow: "none",
+          }}
+          title={ok ? "Covers buy" : "Below buy"}
+        >
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: ok ? theme.pos : theme.neg }} />
+          {fmtMoney(Number(amount || 0))}
+        </span>
+      );
     }
 
+    if (opts.buyStyle === "soft") {
+      return (
+        <span
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 ${space}`}
+          style={{
+            ...common,
+            background: ok ? `${theme.pos}18` : `${theme.neg}18`,
+            border: `1px solid ${ok ? theme.pos : theme.neg}66`,
+            boxShadow: `0 8px 22px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06)`,
+            backdropFilter: "blur(2px)",
+          }}
+          title={ok ? "Covers buy" : "Below buy"}
+        >
+          <span className="h-1.5 w-1.5 rounded-full" style={{ background: ok ? theme.pos : theme.neg }} />
+          {fmtMoney(Number(amount || 0))}
+        </span>
+      );
+    }
+
+    if (opts.buyStyle === "tag") {
+      return (
+        <span
+          className={`inline-flex items-center gap-2 px-3 py-1 ${space}`}
+          style={{
+            ...common,
+            background: "rgba(0,0,0,.25)",
+            border: `1px solid ${theme.chipBorder}`,
+            boxShadow: "0 6px 18px rgba(0,0,0,.36)",
+            position: "relative",
+          }}
+          title={ok ? "Covers buy" : "Below buy"}
+        >
+          <span
+            className="h-2 w-2 rounded-full"
+            style={{ background: ok ? theme.pos : theme.neg, boxShadow: `0 0 0 2px ${ok ? theme.pos : theme.neg}33` }}
+          />
+          {fmtMoney(Number(amount || 0))}
+        </span>
+      );
+    }
+
+    // default: pill
     return (
-      <span className={className} style={styles} title={ok ? "Covers buy" : "Below buy"}>
+      <span
+        className={`inline-flex items-center gap-1.5 px-3 py-1 ${space} shadow-[0_0_0_1px_rgba(0,0,0,0.25)_inset,0_6px_18px_rgba(0,0,0,.36)]`}
+        style={{
+          ...common,
+          background: ok ? `${theme.pos}1F` : `${theme.neg}1F`,
+          border: `${theme.chipBorderWidth}px solid ${ok ? theme.pos : theme.neg}`,
+        }}
+        title={ok ? "Covers buy" : "Below buy"}
+      >
         <span
           className="h-1.5 w-1.5 rounded-full"
-          style={{ background: color, boxShadow: `0 0 0 2px ${color}26` }}
+          style={{ background: ok ? theme.pos : theme.neg, boxShadow: `0 0 0 2px ${ok ? theme.pos : theme.neg}26` }}
         />
         {fmtMoney(Number(amount || 0))}
       </span>
@@ -575,34 +615,7 @@ function WidgetPreviewPanel({
       </div>
     );
 
-  // Subtotal com label configurável + alinhamento
-  const SubtotalBadge = ({ value }) => {
-    const showOnlyValue = opts?.subtotalLabelMode === "value";
-    const label = (opts?.subtotalLabelText ?? "").trim();
-    return (
-      <div
-        className="inline-flex items-center gap-2 px-3 py-1.5 text-[12px]"
-        style={{
-          background: theme.chipBg,
-          border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
-          borderRadius: theme.radius,
-          color: theme.subtext,
-          fontWeight: theme.fontWeight,
-        }}
-      >
-        {showOnlyValue || !label ? (
-          <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(value)}</span>
-        ) : (
-          <>
-            <span>{label}</span>
-            <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(value)}</span>
-          </>
-        )}
-      </div>
-    );
-  };
-
-  // TOTAL com label configurável
+  // TOTAL badge helper
   const TotalBadge = ({ value }) => {
     const showOnlyValue = opts?.totalLabelMode === "value";
     const label = (opts?.totalLabelText ?? "").trim();
@@ -621,6 +634,33 @@ function WidgetPreviewPanel({
       </div>
     );
   };
+
+  // SUBTOTAL helper
+  const Subtotal = ({ value, align = "left" }) => {
+    const showOnlyValue = opts?.subtotalLabelMode === "value";
+    const label = (opts?.subtotalLabelText ?? "Subtotal").trim();
+    const txt = showOnlyValue ? fmtMoney(value) : `${label} ${fmtMoney(value)}`;
+    const jc =
+      align === "center" ? "justify-center" : align === "right" ? "justify-end" : "justify-start";
+    return (
+      <div className={cn("mt-3 flex", jc)}>
+        <div
+          className="inline-flex items-center gap-2 px-3 py-1.5 text-[12px]"
+          style={{
+            background: theme.chipBg,
+            border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
+            borderRadius: theme.radius,
+            color: theme.subtext,
+            fontWeight: theme.fontWeight,
+          }}
+        >
+          <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{txt}</span>
+        </div>
+      </div>
+    );
+  };
+
+  const stacked = opts.buyLayout === "column";
 
   return (
     <>
@@ -643,6 +683,8 @@ function WidgetPreviewPanel({
           color: theme.text,
           fontFamily: theme.fontFamily,
           fontSize: `${theme.fontScale}%`,
+          isolation: "isolate",
+          contain: "paint",
         }}
       >
         {theme.shine && (
@@ -655,94 +697,118 @@ function WidgetPreviewPanel({
         {/* HORIZONTAL */}
         {opts?.layoutKind !== "vertical" && (
           <>
-            {/* Top badges */}
+            {/* badges topo */}
             {opts?.bonusDock === "right" ? (
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">{BadgeBest}</div>
                 <div>{BadgeBonus}</div>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                {BadgeBest}
-                {BadgeBonus}
-              </div>
+              <div className="flex items-center gap-2">{BadgeBest}{BadgeBonus}</div>
             )}
 
-            {/* players + VS overlay com alinhamento */}
-            <div className="mt-5 relative">
-              <div className="grid grid-cols-2 items-center gap-5">
-                <div className="flex items-center justify-end gap-3">
-                  <div className="min-w-0 text-right">
-                    <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
-                      {playerA || "—"}
-                    </div>
-                    <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>
-                      {sideA?.name || "—"}
-                    </div>
+            {/* players */}
+            <div className="mt-5 grid grid-cols-[1fr_auto_1fr] items-center gap-5 relative">
+              {/* A */}
+              <div className="flex items-center justify-end gap-3">
+                <div className="min-w-0 text-right">
+                  <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
+                    {playerA || "—"}
                   </div>
-                  {theme.showThumbs && (
-                    <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
-                      {sideA?.thumbnail ? <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
-                    </div>
-                  )}
+                  <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>
+                    {sideA?.name || "—"}
+                  </div>
                 </div>
+                {theme.showThumbs && (
+                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
+                    {sideA?.thumbnail ? <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
+                  </div>
+                )}
+              </div>
 
-                <div className="flex items-center gap-3">
-                  {theme.showThumbs && (
-                    <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
-                      {sideB?.thumbnail ? <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
-                    </div>
-                  )}
-                  <div className="min-w-0 text-left">
-                    <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
-                      {playerB || "—"}
-                    </div>
-                    <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>
-                      {sideB?.name || "—"}
-                    </div>
+              {/* VS (normal) */}
+              {opts.vsPlacement !== "overlay" && (
+                <div className={cn(
+                  "flex",
+                  opts.vsPlacement === "left" ? "justify-start" : opts.vsPlacement === "right" ? "justify-end" : "justify-center"
+                )}>
+                  <div
+                    className={vsBig ? "px-4 py-3 text-sm" : "px-3 py-1 text-xs"}
+                    style={{
+                      background: theme.vsBg,
+                      border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
+                      borderRadius: vsBig ? 999 : 10,
+                      fontWeight: theme.strongWeight,
+                      animation: theme.pulse ? "vsPulse 1.8s ease-in-out infinite" : "none",
+                    }}
+                  >
+                    VS
+                  </div>
+                </div>
+              )}
+
+              {/* B */}
+              <div className="flex items-center gap-3">
+                {theme.showThumbs && (
+                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
+                    {sideB?.thumbnail ? <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
+                  </div>
+                )}
+                <div className="min-w-0 text-left">
+                  <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
+                    {playerB || "—"}
+                  </div>
+                  <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>
+                    {sideB?.name || "—"}
                   </div>
                 </div>
               </div>
 
-              {/* VS alinhável */}
-              <div className={cn("absolute inset-x-0 top-1/2 -translate-y-1/2 flex", alignFlex(opts?.vsAlign))}>
-                <div
-                  className={vsBig ? "px-4 py-3 text-sm" : "px-3 py-1 text-xs"}
-                  style={{
-                    background: theme.vsBg,
-                    border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
-                    borderRadius: vsBig ? 999 : 10,
-                    fontWeight: theme.strongWeight,
-                    animation: theme.pulse ? "vsPulse 1.8s ease-in-out infinite" : "none",
-                  }}
-                >
-                  VS
+              {/* VS overlay */}
+              {opts.vsPlacement === "overlay" && (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  <div
+                    className={vsBig ? "px-4 py-3 text-sm" : "px-3 py-1 text-xs"}
+                    style={{
+                      background: theme.vsBg,
+                      border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
+                      borderRadius: vsBig ? 999 : 10,
+                      fontWeight: theme.strongWeight,
+                      animation: theme.pulse ? "vsPulse 1.8s ease-in-out infinite" : "none",
+                    }}
+                  >
+                    VS
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
-            {/* chips */}
+            {/* chips & subtotais */}
             <div className="mt-6 grid grid-cols-2 gap-6">
+              {/* A */}
               <div>
-                <div className="flex flex-wrap">
+                <div className={stacked ? "flex flex-col items-start" : "flex flex-wrap"}>
                   {aPays.map((p, i) => (
-                    <Chip key={`a-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
+                    <Chip key={`a-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} stacked={stacked} />
                   ))}
                 </div>
-                <div className={cn("mt-3 flex", alignFlex(opts?.subtotalJustify))}>
-                  <SubtotalBadge value={aTotal} />
-                </div>
+                <Subtotal
+                  value={aTotal}
+                  align={opts.subtotalAlign === "split" ? "left" : opts.subtotalAlign}
+                />
               </div>
 
+              {/* B */}
               <div>
-                <div className="flex flex-wrap">
+                <div className={stacked ? "flex flex-col items-start" : "flex flex-wrap"}>
                   {bPays.map((p, i) => (
-                    <Chip key={`b-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
+                    <Chip key={`b-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} stacked={stacked} />
                   ))}
                 </div>
-                <div className={cn("mt-3 flex", alignFlex(opts?.subtotalJustify))}>
-                  <SubtotalBadge value={bTotal} />
-                </div>
+                <Subtotal
+                  value={bTotal}
+                  align={opts.subtotalAlign === "split" ? "right" : opts.subtotalAlign}
+                />
               </div>
             </div>
 
@@ -750,7 +816,7 @@ function WidgetPreviewPanel({
             <div
               className={cn(
                 "mt-6 flex",
-                alignFlex(opts?.totalJustify)
+                opts?.totalJustify === "left" ? "justify-start" : opts?.totalJustify === "right" ? "justify-end" : "justify-center"
               )}
             >
               <TotalBadge value={aTotal + bTotal} />
@@ -758,17 +824,15 @@ function WidgetPreviewPanel({
           </>
         )}
 
-        {/* VERTICAL */}
+        {/* VERTICAL (inalterado) */}
         {opts?.layoutKind === "vertical" && (
           <div className="h-full flex flex-col gap-3">
-            {/* badges */}
             {opts?.bonusDock === "right" ? (
               <div className="flex items-center justify-between">{BadgeBest}{BadgeBonus}</div>
             ) : (
               <div className="flex items-center gap-2">{BadgeBest}{BadgeBonus}</div>
             )}
 
-            {/* player A */}
             <div className="flex items-center gap-3">
               {theme.showThumbs && (
                 <div className="h-12 w-12 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
@@ -781,15 +845,12 @@ function WidgetPreviewPanel({
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px,1fr))", gap: 8 }}>
-              {aPays.map((p,i)=>(<Chip key={`va-${i}`} amount={p.amount} ok={Number(p.amount||0)>=Number(buyCost||0)} i={i} tight />))}
+            <div className={stacked ? "flex flex-col items-start" : "flex flex-wrap"}>
+              {aPays.map((p,i)=>(<Chip key={`va-${i}`} amount={p.amount} ok={Number(p.amount||0)>=Number(buyCost||0)} i={i} stacked={stacked}/>))}
             </div>
-            <div className={cn("flex", alignFlex(opts?.subtotalJustify))}>
-              <SubtotalBadge value={aTotal} />
-            </div>
+            <Subtotal value={aTotal} align="left" />
 
-            {/* VS alinhável */}
-            <div className={cn("w-full flex py-1", alignFlex(opts?.vsAlign))}>
+            <div className="w-full flex justify-center py-1">
               <div
                 className={vsBig ? "px-5 py-3 text-sm" : "px-3 py-1 text-xs"}
                 style={{
@@ -802,7 +863,6 @@ function WidgetPreviewPanel({
               </div>
             </div>
 
-            {/* player B */}
             <div className="flex items-center gap-3">
               {theme.showThumbs && (
                 <div className="h-12 w-12 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
@@ -815,21 +875,23 @@ function WidgetPreviewPanel({
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px,1fr))", gap: 8 }}>
-              {bPays.map((p,i)=>(<Chip key={`vb-${i}`} amount={p.amount} ok={Number(p.amount||0)>=Number(buyCost||0)} i={i} tight />))}
+            <div className={stacked ? "flex flex-col items-start" : "flex flex-wrap"}>
+              {bPays.map((p,i)=>(<Chip key={`vb-${i}`} amount={p.amount} ok={Number(p.amount||0)>=Number(buyCost||0)} i={i} stacked={stacked}/>))}
             </div>
-            <div className={cn("flex", alignFlex(opts?.subtotalJustify))}>
-              <SubtotalBadge value={bTotal} />
-            </div>
+            <Subtotal value={bTotal} align="left" />
 
-            {/* total */}
-            <div className={cn("mt-auto flex pt-1", alignFlex(opts?.totalJustify))}>
+            <div
+              className={cn(
+                "mt-auto flex pt-1",
+                opts?.totalJustify === "left" ? "justify-start" : opts?.totalJustify === "right" ? "justify-end" : "justify-center"
+              )}
+            >
               <TotalBadge value={aTotal + bTotal} />
             </div>
           </div>
         )}
 
-        {/* FREE LAYOUT */}
+        {/* FREE LAYOUT (drag & drop) */}
         {layout?.mode === "free" && (
           <>
             <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: "linear-gradient(transparent 95%, rgba(255,255,255,.05) 95%)", backgroundSize: "100% 40px" }} />
@@ -879,26 +941,34 @@ function WidgetPreviewPanel({
 
             <DragBox id="chipsA">
               <div>
-                <div className="flex flex-wrap">
+                <div className={stacked ? "flex flex-col items-start" : "flex flex-wrap"}>
                   {aPays.map((p, i) => (
-                    <Chip key={`fa-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
+                    <Chip key={`fa-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} stacked={stacked} />
                   ))}
                 </div>
-                <div className="mt-2">
-                  <SubtotalBadge value={aTotal} />
+                <div
+                  className="inline-flex mt-2 items-center gap-2 px-3 py-1.5 text-[12px]"
+                  style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}
+                >
+                  <span>Subtotal</span>
+                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(aTotal)}</span>
                 </div>
               </div>
             </DragBox>
 
             <DragBox id="chipsB">
               <div>
-                <div className="flex flex-wrap">
+                <div className={stacked ? "flex flex-col items-start" : "flex flex-wrap"}>
                   {bPays.map((p, i) => (
-                    <Chip key={`fb-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
+                    <Chip key={`fb-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} stacked={stacked} />
                   ))}
                 </div>
-                <div className="mt-2">
-                  <SubtotalBadge value={bTotal} />
+                <div
+                  className="inline-flex mt-2 items-center gap-2 px-3 py-1.5 text-[12px]"
+                  style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}
+                >
+                  <span>Subtotal</span>
+                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(bTotal)}</span>
                 </div>
               </div>
             </DragBox>
@@ -1021,14 +1091,6 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
     setTheme((t)=>({ ...t, ...(r.t||{}) }));
   };
 
-  const BUY_STYLES = [
-    ["pill","Pill"],
-    ["outline","Outline"],
-    ["solid","Solid"],
-    ["glass","Glass"],
-    ["neon","Neon"],
-  ];
-
   return (
     <div className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm">
       <div className="absolute inset-x-0 top-0 h-14 px-4 flex items-center justify-between border-b border-white/10 bg-zinc-950/60">
@@ -1053,64 +1115,43 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
         {/* Controls */}
         <div className="border-r border-white/10 bg-zinc-950/70 overflow-auto">
           <div className="p-4 space-y-4">
-            {/* Orientação, VS e chips */}
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
-              <div>
-                <div className="text-xs opacity-70 mb-2">Orientation</div>
-                <div className="flex items-center gap-4 text-sm">
-                  <label className="flex items-center gap-2">
-                    <input type="radio" checked={opts.layoutKind === "horizontal"}
-                           onChange={() => setOpts(o => ({...o, layoutKind: "horizontal"}))} />
-                    Horizontal
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input type="radio" checked={opts.layoutKind === "vertical"}
-                           onChange={() => setOpts(o => ({...o, layoutKind: "vertical"}))} />
-                    Vertical
-                  </label>
-                </div>
+            {/* Orientação / VS */}
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <div className="text-xs opacity-70 mb-2">Orientation</div>
+              <div className="flex items-center gap-4 text-sm">
+                <label className="flex items-center gap-2">
+                  <input type="radio" checked={opts.layoutKind === "horizontal"}
+                         onChange={() => setOpts(o => ({...o, layoutKind: "horizontal"}))} />
+                  Horizontal
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="radio" checked={opts.layoutKind === "vertical"}
+                         onChange={() => setOpts(o => ({...o, layoutKind: "vertical"}))} />
+                  Vertical
+                </label>
               </div>
-
-              <div>
-                <div className="text-xs opacity-70 mb-1">VS style</div>
-                <div className="flex items-center gap-4 text-sm">
-                  <label className="flex items-center gap-2">
-                    <input type="radio" checked={opts.vsStyle === "badge"}
-                           onChange={() => setOpts(o => ({...o, vsStyle: "badge"}))} />
-                    Badge
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input type="radio" checked={opts.vsStyle === "big"}
-                           onChange={() => setOpts(o => ({...o, vsStyle: "big"}))} />
-                    Big
-                  </label>
-                </div>
+              <div className="mt-3 text-xs opacity-70">VS style</div>
+              <div className="flex items-center gap-4 text-sm">
+                <label className="flex items-center gap-2">
+                  <input type="radio" checked={opts.vsStyle === "badge"}
+                         onChange={() => setOpts(o => ({...o, vsStyle: "badge"}))} />
+                  Badge
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="radio" checked={opts.vsStyle === "big"}
+                         onChange={() => setOpts(o => ({...o, vsStyle: "big"}))} />
+                  Big
+                </label>
               </div>
-
-              <div>
-                <div className="text-xs opacity-70 mb-1">VS alignment</div>
-                <div className="flex items-center gap-4 text-sm">
-                  {["left","center","right"].map(a=>(
-                    <label key={a} className="flex items-center gap-2">
-                      <input type="radio" checked={opts.vsAlign===a} onChange={()=>setOpts(o=>({...o,vsAlign:a}))}/>
-                      {a[0].toUpperCase()+a.slice(1)}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-xs opacity-70 mb-1">Buy chip design</div>
-                <div className="grid grid-cols-2 gap-2">
-                  {BUY_STYLES.map(([k, label])=>(
-                    <button key={k} onClick={()=>setOpts(o=>({...o, buyStyle:k}))}
-                            className={cn("rounded-lg border px-3 py-2 text-sm",
-                              "border-white/10 hover:ring-2 hover:ring-sky-400",
-                              opts.buyStyle===k && "ring-2 ring-sky-400")}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
+              <div className="mt-3 text-xs opacity-70">VS placement</div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                {["left","center","right","overlay"].map(v=>(
+                  <label key={v} className="flex items-center gap-2">
+                    <input type="radio" checked={opts.vsPlacement===v}
+                      onChange={()=>setOpts(o=>({...o, vsPlacement:v}))} />
+                    {v[0].toUpperCase()+v.slice(1)}
+                  </label>
+                ))}
               </div>
             </div>
 
@@ -1215,179 +1256,212 @@ function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setL
 
               <label className="block text-sm">Font family</label>
               <Input value={theme.fontFamily} onChange={(e) => setTheme((t) => ({ ...t, fontFamily: e.target.value }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
-            </div>
 
-            {/* Canvas / OBS */}
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
-              <div className="text-xs opacity-70 mb-1">Canvas / OBS</div>
+              {/* Canvas / OBS */}
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3 mt-3">
+                <div className="text-xs opacity-70 mb-1">Canvas / OBS</div>
 
-              <div className="flex items-center gap-3">
-                <div className="text-sm w-36">Output</div>
-                <label className="text-sm flex items-center gap-1">
-                  <input type="radio" checked={opts.overlay.mode === "auto"} onChange={() => setOpts(o => ({ ...o, overlay: { ...o.overlay, mode: "auto" } }))} />
-                  Auto-fit
-                </label>
-                <label className="text-sm flex items-center gap-1">
-                  <input type="radio" checked={opts.overlay.mode === "fixed"} onChange={() => setOpts(o => ({ ...o, overlay: { ...o.overlay, mode: "fixed" } }))} />
-                  Fixed (px)
-                </label>
-              </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-sm w-36">Output</div>
+                  <label className="text-sm flex items-center gap-1">
+                    <input type="radio" checked={opts.overlay.mode === "auto"} onChange={() => setOpts(o => ({ ...o, overlay: { ...o.overlay, mode: "auto" } }))} />
+                    Auto-fit (preenche Browser Source)
+                  </label>
+                  <label className="text-sm flex items-center gap-1">
+                    <input type="radio" checked={opts.overlay.mode === "fixed"} onChange={() => setOpts(o => ({ ...o, overlay: { ...o.overlay, mode: "fixed" } }))} />
+                    Fixed (px)
+                  </label>
+                </div>
 
-              {opts.overlay.mode === "fixed" && (
+                {opts.overlay.mode === "fixed" && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <div className="text-xs opacity-70 mb-1">Width (px)</div>
+                      <Input type="number" value={opts.overlay.width} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, width: Number(e.target.value) || 0 } }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
+                    </div>
+                    <div>
+                      <div className="text-xs opacity-70 mb-1">Height (px)</div>
+                      <Input type="number" value={opts.overlay.height} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, height: Number(e.target.value) || 0 } }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <div className="text-xs opacity-70 mb-1">Width (px)</div>
-                    <Input type="number" value={opts.overlay.width} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, width: Number(e.target.value) || 0 } }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
+                    <div className="text-xs opacity-70 mb-1">Panel base width</div>
+                    <Input type="number" value={opts.overlay.baseW} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, baseW: Number(e.target.value) || 0 } }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
                   </div>
                   <div>
-                    <div className="text-xs opacity-70 mb-1">Height (px)</div>
-                    <Input type="number" value={opts.overlay.height} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, height: Number(e.target.value) || 0 } }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
+                    <div className="text-xs opacity-70 mb-1">Panel base height</div>
+                    <Input type="number" value={opts.overlay.baseH} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, baseH: Number(e.target.value) || 0 } }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
                   </div>
                 </div>
-              )}
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <div className="text-xs opacity-70 mb-1">Panel base width</div>
-                  <Input type="number" value={opts.overlay.baseW} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, baseW: Number(e.target.value) || 0 } }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <div className="text-xs opacity-70 mb-1">Padding (px)</div>
+                    <Input type="number" value={opts.overlay.pad} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, pad: Number(e.target.value) || 0 } }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
+                  </div>
+                  <div>
+                    <div className="text-xs opacity-70 mb-1">Vertical align</div>
+                    <select value={opts.overlay.align} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, align: e.target.value } }))} className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white px-3">
+                      <option value="top">Top</option>
+                      <option value="center">Center</option>
+                      <option value="bottom">Bottom</option>
+                    </select>
+                  </div>
                 </div>
-                <div>
-                  <div className="text-xs opacity-70 mb-1">Panel base height</div>
-                  <Input type="number" value={opts.overlay.baseH} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, baseH: Number(e.target.value) || 0 } }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
-                </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <div className="text-xs opacity-70 mb-1">Padding (px)</div>
-                  <Input type="number" value={opts.overlay.pad} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, pad: Number(e.target.value) || 0 } }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
-                </div>
-                <div>
-                  <div className="text-xs opacity-70 mb-1">Vertical align</div>
-                  <select value={opts.overlay.align} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, align: e.target.value } }))} className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white px-3">
-                    <option value="top">Top</option>
-                    <option value="center">Center</option>
-                    <option value="bottom">Bottom</option>
-                  </select>
+                <div className="text-[11px] opacity-70">
+                  Em <b>Fixed</b>, usa o mesmo Width/Height no “Browser Source” do OBS. O overlay faz letterbox e nunca corta conteúdo.
                 </div>
               </div>
 
-              <div className="text-[11px] opacity-70">
-                Em <b>Fixed</b>, usa o mesmo Width/Height no “Browser Source” do OBS. O overlay faz letterbox e nunca corta conteúdo.
-              </div>
-            </div>
+              {/* Auto placement */}
+              <div className="border-t border-white/10 pt-3 mt-2 space-y-2">
+                <div className="text-xs opacity-70">Auto placement (default layout)</div>
 
-            {/* Auto placement */}
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
-              <div className="text-xs opacity-70 mb-1">Auto placement</div>
-              <div className="flex items-center gap-3">
-                <div className="text-sm w-36">Bonus badge:</div>
-                <label className="text-sm flex items-center gap-1">
-                  <input type="radio" checked={opts.bonusDock === "left"} onChange={() => setOpts((o) => ({ ...o, bonusDock: "left" }))} />
-                  Left
-                </label>
-                <label className="text-sm flex items-center gap-1">
-                  <input type="radio" checked={opts.bonusDock === "right"} onChange={() => setOpts((o) => ({ ...o, bonusDock: "right" }))} />
-                  Right
-                </label>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="text-sm w-36">Subtotal:</div>
-                {["left","center","right"].map(a=>(
-                  <label key={a} className="text-sm flex items-center gap-1">
-                    <input type="radio" checked={opts.subtotalJustify===a} onChange={()=>setOpts(o=>({...o, subtotalJustify:a}))}/>
-                    {a[0].toUpperCase()+a.slice(1)}
+                <div className="flex items-center gap-3">
+                  <div className="text-sm w-36">Bonus badge:</div>
+                  <label className="text-sm flex items-center gap-1">
+                    <input type="radio" checked={opts.bonusDock === "left"} onChange={() => setOpts((o) => ({ ...o, bonusDock: "left" }))} />
+                    Left
                   </label>
-                ))}
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="text-sm w-36">Total badge:</div>
-                {["left","center","right"].map(a=>(
-                  <label key={a} className="text-sm flex items-center gap-1">
-                    <input type="radio" checked={opts.totalJustify===a} onChange={()=>setOpts(o=>({...o, totalJustify:a}))}/>
-                    {a[0].toUpperCase()+a.slice(1)}
+                  <label className="text-sm flex items-center gap-1">
+                    <input type="radio" checked={opts.bonusDock === "right"} onChange={() => setOpts((o) => ({ ...o, bonusDock: "right" }))} />
+                    Right
                   </label>
-                ))}
-              </div>
-            </div>
+                </div>
 
-            {/* Bônus */}
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
-              <div className="text-xs opacity-70">Bonus Buy</div>
-              <div className="flex flex-col gap-2 text-sm">
-                <label className="flex items-center gap-2">
-                  <input type="radio" name="bonuslabel" checked={opts.bonusLabelMode === "label+value"} onChange={() => setOpts((o) => ({ ...o, bonusLabelMode: "label+value" }))} />
-                  Label + Value
-                </label>
-                <label className="flex items-center gap-2">
-                  <input type="radio" name="bonuslabel" checked={opts.bonusLabelMode === "value"} onChange={() => setOpts((o) => ({ ...o, bonusLabelMode: "value" }))} />
-                  Value only
-                </label>
+                <div className="flex items-center gap-3">
+                  <div className="text-sm w-36">Total badge:</div>
+                  <label className="text-sm flex items-center gap-1">
+                    <input type="radio" checked={opts.totalJustify === "left"} onChange={() => setOpts((o) => ({ ...o, totalJustify: "left" }))} />
+                    Left
+                  </label>
+                  <label className="text-sm flex items-center gap-1">
+                    <input type="radio" checked={opts.totalJustify === "center"} onChange={() => setOpts((o) => ({ ...o, totalJustify: "center" }))} />
+                    Center
+                  </label>
+                  <label className="text-sm flex items-center gap-1">
+                    <input type="radio" checked={opts.totalJustify === "right"} onChange={() => setOpts((o) => ({ ...o, totalJustify: "right" }))} />
+                    Right
+                  </label>
+                </div>
               </div>
-              <div>
-                <div className="text-xs opacity-70 mb-1">Label text</div>
-                <Input value={opts.bonusLabelText} onChange={(e) => setOpts((o) => ({ ...o, bonusLabelText: e.target.value }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
-              </div>
-            </div>
 
-            {/* Subtotal */}
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
-              <div className="text-xs opacity-70">Subtotal</div>
-              <div className="flex flex-col gap-2 text-sm">
-                <label className="flex items-center gap-2">
-                  <input type="radio" name="subtotallabel" checked={opts.subtotalLabelMode === "label+value"} onChange={() => setOpts((o) => ({ ...o, subtotalLabelMode: "label+value" }))} />
-                  Label + Value
-                </label>
-                <label className="flex items-center gap-2">
-                  <input type="radio" name="subtotallabel" checked={opts.subtotalLabelMode === "value"} onChange={() => setOpts((o) => ({ ...o, subtotalLabelMode: "value" }))} />
-                  Value only
-                </label>
+              {/* Buys design + layout */}
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
+                <div className="text-xs opacity-70">Buy style</div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  {["pill","soft","flat","tag"].map(v=>(
+                    <label key={v} className="flex items-center gap-2">
+                      <input type="radio" checked={opts.buyStyle===v} onChange={()=>setOpts(o=>({...o, buyStyle:v}))}/>
+                      {v}
+                    </label>
+                  ))}
+                </div>
+                <div className="text-xs opacity-70 mt-2">Buy layout</div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  {[
+                    ["wrap","Rows/Wrap"],
+                    ["column","Column (stack)"],
+                  ].map(([v,lab])=>(
+                    <label key={v} className="flex items-center gap-2">
+                      <input type="radio" checked={opts.buyLayout===v} onChange={()=>setOpts(o=>({...o, buyLayout:v}))}/>
+                      {lab}
+                    </label>
+                  ))}
+                </div>
               </div>
-              <div>
-                <div className="text-xs opacity-70 mb-1">Label text</div>
-                <Input value={opts.subtotalLabelText} onChange={(e) => setOpts((o) => ({ ...o, subtotalLabelText: e.target.value }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
-                <div className="text-[11px] opacity-60 mt-1">Em “Label + Value”, vazio também mostra só o valor.</div>
-              </div>
-            </div>
 
-            {/* Total */}
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
-              <div className="text-xs opacity-70">Total</div>
-              <div className="flex flex-col gap-2 text-sm">
-                <label className="flex items-center gap-2">
-                  <input type="radio" name="totallabel" checked={opts.totalLabelMode === "label+value"} onChange={() => setOpts((o) => ({ ...o, totalLabelMode: "label+value" }))} />
-                  Label + Value
-                </label>
-                <label className="flex items-center gap-2">
-                  <input type="radio" name="totallabel" checked={opts.totalLabelMode === "value"} onChange={() => setOpts((o) => ({ ...o, totalLabelMode: "value" }))} />
-                  Value only
-                </label>
+              {/* Bonus Buy label */}
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
+                <div className="text-xs opacity-70">Bonus Buy</div>
+                <div className="flex flex-col gap-2 text-sm">
+                  <label className="flex items-center gap-2">
+                    <input type="radio" name="bonuslabel" checked={opts.bonusLabelMode === "label+value"} onChange={() => setOpts((o) => ({ ...o, bonusLabelMode: "label+value" }))} />
+                    Label + Value
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input type="radio" name="bonuslabel" checked={opts.bonusLabelMode === "value"} onChange={() => setOpts((o) => ({ ...o, bonusLabelMode: "value" }))} />
+                    Value only
+                  </label>
+                </div>
+                <div>
+                  <div className="text-xs opacity-70 mb-1">Label text</div>
+                  <Input value={opts.bonusLabelText} onChange={(e) => setOpts((o) => ({ ...o, bonusLabelText: e.target.value }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
+                </div>
               </div>
-              <div>
-                <div className="text-xs opacity-70 mb-1">Label text</div>
-                <Input value={opts.totalLabelText} onChange={(e) => setOpts((o) => ({ ...o, totalLabelText: e.target.value }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
-              </div>
-            </div>
 
-            {/* Save */}
-            <div className="flex gap-2 sticky bottom-3">
-              <Button onClick={persist} className="h-10">
-                <Save className="h-4 w-4 mr-2" />
-                Save
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setTheme({ ...DEFAULT_THEME });
-                  setLayout({ ...DEFAULT_LAYOUT, mode: layout.mode });
-                  setOpts({ ...DEFAULT_OPTS });
-                }}
-                className="h-10"
-              >
-                Restore defaults
-              </Button>
+              {/* Subtotal options */}
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
+                <div className="text-xs opacity-70">Subtotal</div>
+                <div className="flex flex-col gap-2 text-sm">
+                  <label className="flex items-center gap-2">
+                    <input type="radio" name="sublabel" checked={opts.subtotalLabelMode === "label+value"} onChange={() => setOpts((o) => ({ ...o, subtotalLabelMode: "label+value" }))} />
+                    Label + Value
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input type="radio" name="sublabel" checked={opts.subtotalLabelMode === "value"} onChange={() => setOpts((o) => ({ ...o, subtotalLabelMode: "value" }))} />
+                    Value only
+                  </label>
+                </div>
+                <div>
+                  <div className="text-xs opacity-70 mb-1">Label text</div>
+                  <Input value={opts.subtotalLabelText} onChange={(e) => setOpts((o) => ({ ...o, subtotalLabelText: e.target.value }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
+                </div>
+                <div className="mt-2 text-xs opacity-70">Alignment</div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  {[
+                    ["left","Left"],["center","Center"],["right","Right"],["split","Split (A left / B right)"]
+                  ].map(([v,lab])=>(
+                    <label key={v} className="flex items-center gap-2">
+                      <input type="radio" checked={opts.subtotalAlign===v} onChange={()=>setOpts(o=>({...o, subtotalAlign:v}))}/>
+                      {lab}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Total label */}
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
+                <div className="text-xs opacity-70">Total</div>
+                <div className="flex flex-col gap-2 text-sm">
+                  <label className="flex items-center gap-2">
+                    <input type="radio" name="totallabel" checked={opts.totalLabelMode === "label+value"} onChange={() => setOpts((o) => ({ ...o, totalLabelMode: "label+value" }))} />
+                    Label + Value
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input type="radio" name="totallabel" checked={opts.totalLabelMode === "value"} onChange={() => setOpts((o) => ({ ...o, totalLabelMode: "value" }))} />
+                    Value only
+                  </label>
+                </div>
+                <div>
+                  <div className="text-xs opacity-70 mb-1">Label text</div>
+                  <Input value={opts.totalLabelText} onChange={(e) => setOpts((o) => ({ ...o, totalLabelText: e.target.value }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
+                  <div className="text-[11px] opacity-60 mt-1">Deixa vazio para mostrar só o valor quando estiver em “Label + Value”.</div>
+                </div>
+              </div>
+
+              {/* Save */}
+              <div className="flex gap-2 sticky bottom-3">
+                <Button onClick={persist} className="h-10">
+                  <Save className="h-4 w-4 mr-2" />
+                  Save
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setTheme({ ...DEFAULT_THEME });
+                    setLayout({ ...DEFAULT_LAYOUT, mode: layout.mode });
+                    setOpts({ ...DEFAULT_OPTS });
+                  }}
+                  className="h-10"
+                >
+                  Restore defaults
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -1421,7 +1495,6 @@ function WidgetCard({
   const [opts, setOpts] = React.useState(DEFAULT_OPTS);
   const [openDesigner, setOpenDesigner] = React.useState(false);
 
-  // URL exclusivo do overlay, por perfil
   const overlayUrl = React.useMemo(() => {
     const base = `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, "");
     const token = profile?.public_token || profile?.widget_token || profile?.id || "";
@@ -1429,10 +1502,18 @@ function WidgetCard({
     return buildOverlayUrl(base, token, opts);
   }, [profile?.public_token, profile?.widget_token, profile?.id, opts]);
 
-  const openOverlay = () => { if (overlayUrl) window.open(overlayUrl, "_blank", "noopener,noreferrer"); };
+  const openOverlay = () => {
+    if (!overlayUrl) return;
+    window.open(overlayUrl, "_blank", "noopener,noreferrer");
+  };
+
   const copyOverlayUrl = async () => {
     if (!overlayUrl) return;
-    try { await navigator.clipboard.writeText(overlayUrl); } catch { alert("Não consegui copiar o URL."); }
+    try {
+      await navigator.clipboard.writeText(overlayUrl);
+    } catch {
+      alert("Não consegui copiar o URL.");
+    }
   };
 
   const previewProps = { bestOf, buyCost, totalPay, sideA, sideB, playerA, playerB, aPays, bPays };
@@ -1472,7 +1553,9 @@ function WidgetCard({
           </Button>
         </div>
 
-        <WidgetPreviewPanel theme={theme} layout={layout} setLayout={setLayout} opts={opts} {...previewProps} />
+        <div className="overflow-auto">
+          <WidgetPreviewPanel theme={theme} layout={layout} setLayout={setLayout} opts={opts} {...previewProps} />
+        </div>
 
         <div className="mt-3 flex justify-end">
           <Button onClick={persist} className="h-9">
