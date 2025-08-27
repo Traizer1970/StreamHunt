@@ -37,7 +37,7 @@ function parseHash() {
   const size = (name, def) => {
     const v = (qs.get(name) || "").trim();
     if (!v) return def;
-    if (/^\d+$/.test(v)) return `${v}px`; // "1080" -> "1080px"
+    if (/^\d+$/.test(v)) return `${v}px`;
     return v;
   };
   const int = (name, def) => {
@@ -61,40 +61,48 @@ function parseHash() {
     hasBh: has("bh"),
     hasPad: has("pad"),
     hasAlign: has("align"),
-    // animações: por defeito não forçamos nada; "0" desliga tudo
+    // animações
     anim: (qs.get("anim") || "auto").toLowerCase(), // "auto" | "0" | "off"
   };
 }
 
-/* ───────── tema/layout/opções ───────── */
+/* ───────── tema/layout/opções (iguais ao preview) ───────── */
 const DEFAULT_THEME = {
   bgStart: "#0b1020",
   bgEnd: "#111827",
+
   panelBorder: "rgba(255,255,255,0.12)",
   panelBorderWidth: 1,
+
   text: "#e5e7eb",
   subtext: "#9ca3af",
   accent: "#7dd3fc",
+
   chipBg: "rgba(255,255,255,0.08)",
   chipBorder: "rgba(255,255,255,0.18)",
   chipBorderWidth: 1,
   chipRadius: 12,
+
   badgeBg: "rgba(255,255,255,0.08)",
   badgeBorder: "rgba(255,255,255,0.18)",
   badgeBorderWidth: 1,
+
   totalBg: "rgba(255,255,255,0.10)",
   totalBorder: "rgba(255,255,255,0.18)",
   totalBorderWidth: 1,
+
   pos: "#22c55e",
   neg: "#ef4444",
   vsBg: "rgba(99,102,241,0.35)",
-  radius: 18,
-  pillRadius: 16,
+
+  radius: 18,      // boxes
+  pillRadius: 16,  // badges/total
   fontFamily:
     "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji','Segoe UI Emoji'",
   fontScale: 100,
   fontWeight: 400,
   strongWeight: 500,
+
   showThumbs: true,
   shine: true,
   pulse: true,
@@ -113,12 +121,33 @@ const DEFAULT_LAYOUT = {
 };
 
 const DEFAULT_OPTS = {
+  // badges
   bonusLabelMode: "label+value",
   bonusLabelText: "Bonus Buy",
   bonusDock: "left",
-  totalJustify: "center",
-  totalLabelMode: "label+value",
+
+  // VS
+  vsStyle: "badge",              // 'badge' | 'big'
+  vsPlacement: "center",         // 'left' | 'center' | 'right' | 'overlay'
+
+  // Subtotal
+  subtotalLabelMode: "label+value", // 'label+value' | 'value'
+  subtotalLabelText: "Subtotal",
+  subtotalAlign: "left",            // 'left' | 'center' | 'right' | 'split'
+
+  // Total
+  totalJustify: "center",           // 'left' | 'center' | 'right'
+  totalLabelMode: "label+value",    // 'label+value' | 'value'
   totalLabelText: "Total paid",
+
+  // Buys
+  buyStyle: "pill",                 // 'pill' | 'soft' | 'flat' | 'tag'
+  buyLayout: "wrap",                // 'wrap' | 'column'
+
+  // orientação
+  layoutKind: "horizontal",         // 'horizontal' | 'vertical'
+
+  // OBS overlay
   overlay: {
     baseW: 1100,
     baseH: 420,
@@ -173,10 +202,131 @@ async function enrichSlotInfo(slot) {
   return slot;
 }
 
+/* ───────── Chip designs (iguais ao preview) ───────── */
+function Chip({ amount, ok, i, theme, opts, stacked }) {
+  const common = {
+    borderRadius: theme.chipRadius,
+    color: ok ? theme.pos : theme.neg,
+    fontSize: `calc(12px * ${theme.fontScale / 100})`,
+    fontFamily: theme.fontFamily,
+    fontWeight: theme.strongWeight,
+    animation: theme.pulse ? `pop .16s ease-out both` : "none",
+    animationDelay: `${i * 45}ms`,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
+    padding: "4px 12px",
+    marginRight: stacked ? 0 : "8px",
+    marginBottom: "8px",
+  };
+
+  if (opts.buyStyle === "flat") {
+    return (
+      <span
+        style={{
+          ...common,
+          background: "transparent",
+          border: `1px solid ${ok ? theme.pos : theme.neg}55`,
+          boxShadow: "none",
+        }}
+        title={ok ? "Covers buy" : "Below buy"}
+      >
+        <span
+          style={{
+            display: "inline-block",
+            height: 6,
+            width: 6,
+            borderRadius: 999,
+            background: ok ? theme.pos : theme.neg,
+          }}
+        />
+        {fmtMoney(Number(amount || 0))}
+      </span>
+    );
+  }
+
+  if (opts.buyStyle === "soft") {
+    return (
+      <span
+        style={{
+          ...common,
+          background: ok ? `${theme.pos}18` : `${theme.neg}18`,
+          border: `1px solid ${ok ? theme.pos : theme.neg}66`,
+          boxShadow: `0 8px 22px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06)`,
+          backdropFilter: "blur(2px)",
+        }}
+        title={ok ? "Covers buy" : "Below buy"}
+      >
+        <span
+          style={{
+            display: "inline-block",
+            height: 6,
+            width: 6,
+            borderRadius: 999,
+            background: ok ? theme.pos : theme.neg,
+          }}
+        />
+        {fmtMoney(Number(amount || 0))}
+      </span>
+    );
+  }
+
+  if (opts.buyStyle === "tag") {
+    return (
+      <span
+        style={{
+          ...common,
+          background: "rgba(0,0,0,.25)",
+          border: `1px solid ${theme.chipBorder}`,
+          boxShadow: "0 6px 18px rgba(0,0,0,.36)",
+        }}
+        title={ok ? "Covers buy" : "Below buy"}
+      >
+        <span
+          style={{
+            display: "inline-block",
+            height: 8,
+            width: 8,
+            borderRadius: 999,
+            background: ok ? theme.pos : theme.neg,
+            boxShadow: `0 0 0 2px ${ok ? theme.pos : theme.neg}33`,
+          }}
+        />
+        {fmtMoney(Number(amount || 0))}
+      </span>
+    );
+  }
+
+  // default: pill
+  return (
+    <span
+      style={{
+        ...common,
+        background: ok ? `${theme.pos}1F` : `${theme.neg}1F`,
+        border: `${theme.chipBorderWidth}px solid ${ok ? theme.pos : theme.neg}`,
+        boxShadow:
+          "0 0 0 1px rgba(0,0,0,0.25) inset, 0 6px 18px rgba(0,0,0,.36)",
+      }}
+      title={ok ? "Covers buy" : "Below buy"}
+    >
+      <span
+        style={{
+          display: "inline-block",
+          height: 6,
+          width: 6,
+          borderRadius: 999,
+          background: ok ? theme.pos : theme.neg,
+          boxShadow: `0 0 0 2px ${ok ? theme.pos : theme.neg}26`,
+        }}
+      />
+      {fmtMoney(Number(amount || 0))}
+    </span>
+  );
+}
+
 /* ───────── UI do widget ───────── */
 function WidgetPanel({
   theme,
-  layout,
   opts,
   bestOf,
   buyCost,
@@ -189,41 +339,13 @@ function WidgetPanel({
 }) {
   const aTotal = aPays.reduce((s, r) => s + Number(r?.amount || 0), 0);
   const bTotal = bPays.reduce((s, r) => s + Number(r?.amount || 0), 0);
-
-  const Chip = ({ amount, ok, i }) => (
-    <span
-      key={i}
-      className="inline-flex items-center gap-1.5 px-3 py-1 mr-2 mb-2"
-      style={{
-        borderRadius: theme.chipRadius,
-        background: ok ? `${theme.pos}1F` : `${theme.neg}1F`,
-        border: `${theme.chipBorderWidth}px solid ${ok ? theme.pos : theme.neg}`,
-        color: ok ? theme.pos : theme.neg,
-        boxShadow: "0 0 0 1px rgba(0,0,0,0.25) inset, 0 6px 18px rgba(0,0,0,.36)",
-        animation: theme.pulse ? `pop .16s ease-out both` : "none",
-        animationDelay: `${i * 45}ms`,
-        fontSize: `calc(12px * ${theme.fontScale / 100})`,
-        fontFamily: theme.fontFamily,
-        fontWeight: theme.strongWeight,
-      }}
-      title={ok ? "Covers buy" : "Below buy"}
-    >
-      <span
-        className="h-1.5 w-1.5 rounded-full"
-        style={{
-          display: "inline-block",
-          background: ok ? theme.pos : theme.neg,
-          boxShadow: `0 0 0 2px ${ok ? theme.pos : theme.neg}26`,
-        }}
-      />
-      {fmtMoney(Number(amount || 0))}
-    </span>
-  );
+  const stacked = opts.buyLayout === "column";
+  const vsBig = opts.vsStyle === "big";
 
   const BadgeBest = (
     <div
-      className="px-3 py-1.5"
       style={{
+        padding: "6px 12px",
         background: theme.badgeBg,
         border: `${theme.badgeBorderWidth}px solid ${theme.badgeBorder}`,
         borderRadius: theme.pillRadius,
@@ -232,7 +354,9 @@ function WidgetPanel({
       }}
     >
       <span>Best of</span>
-      <span style={{ marginLeft: 6, fontWeight: theme.strongWeight }}>{bestOf}</span>
+      <span style={{ marginLeft: 6, fontWeight: theme.strongWeight }}>
+        {bestOf}
+      </span>
     </div>
   );
 
@@ -240,8 +364,8 @@ function WidgetPanel({
   const BadgeBonus =
     opts?.bonusLabelMode === "value" ? (
       <div
-        className="px-3 py-1.5"
         style={{
+          padding: "6px 12px",
           background: theme.badgeBg,
           border: `${theme.badgeBorderWidth}px solid ${theme.badgeBorder}`,
           borderRadius: theme.pillRadius,
@@ -253,8 +377,8 @@ function WidgetPanel({
       </div>
     ) : (
       <div
-        className="px-3 py-1.5"
         style={{
+          padding: "6px 12px",
           background: theme.badgeBg,
           border: `${theme.badgeBorderWidth}px solid ${theme.badgeBorder}`,
           borderRadius: theme.pillRadius,
@@ -271,13 +395,67 @@ function WidgetPanel({
       </div>
     );
 
+  const SubtotalBadge = ({ value, align = "left" }) => {
+    const showOnlyValue = opts?.subtotalLabelMode === "value";
+    const label = (opts?.subtotalLabelText ?? "Subtotal").trim();
+    const txt = showOnlyValue ? fmtMoney(value) : `${label} ${fmtMoney(value)}`;
+    const jc =
+      align === "center"
+        ? "center"
+        : align === "right"
+        ? "flex-end"
+        : "flex-start";
+    return (
+      <div style={{ marginTop: 12, display: "flex", justifyContent: jc }}>
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "6px 12px",
+            fontSize: 12,
+            background: theme.chipBg,
+            border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
+            borderRadius: theme.radius,
+            color: theme.subtext,
+            fontWeight: theme.fontWeight,
+          }}
+        >
+          <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>
+            {txt}
+          </span>
+        </div>
+      </div>
+    );
+  };
+
+  const TotalBadge = ({ value }) => {
+    const showOnlyValue = opts?.totalLabelMode === "value";
+    const label = (opts?.totalLabelText ?? "").trim();
+    return (
+      <div
+        style={{
+          padding: "8px 16px",
+          background: theme.totalBg,
+          border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`,
+          borderRadius: theme.pillRadius,
+          color: theme.accent,
+          fontWeight: theme.strongWeight,
+          boxShadow: "0 10px 30px rgba(0,0,0,.35)",
+        }}
+      >
+        {showOnlyValue ? fmtMoney(value) : (label ? `${label}: ${fmtMoney(value)}` : fmtMoney(value))}
+      </div>
+    );
+  };
+
   return (
     <div
       className="relative overflow-hidden"
       style={{
         width: "100%",
         height: "100%",
-        padding: 24, // igual ao preview
+        padding: 24,
         background: `linear-gradient(135deg, ${theme.bgStart}, ${theme.bgEnd})`,
         border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
         borderRadius: theme.radius,
@@ -289,7 +467,6 @@ function WidgetPanel({
       <style>{`
         @keyframes sweep { 0% { transform: translateX(-120%);} 100% { transform: translateX(120%);} }
         @keyframes pop { 0% { transform: scale(.96); opacity: 0;} 100% { transform: scale(1); opacity: 1;} }
-        /* mesmo efeito do preview */
         @keyframes vsPulse { 0%{ transform:scale(1); opacity:1 } 50%{ transform:scale(1.04); opacity:.92 } 100%{ transform:scale(1); opacity:1 } }
       `}</style>
 
@@ -298,86 +475,174 @@ function WidgetPanel({
           className="pointer-events-none"
           style={{
             position: "absolute",
-            inset: "0 0 0 0",
+            inset: 0,
             width: "33%",
-            background: "linear-gradient(to right, transparent, rgba(255,255,255,.10), transparent)",
+            background:
+              "linear-gradient(to right, transparent, rgba(255,255,255,.10), transparent)",
             animation: "sweep 4.8s linear infinite",
             mixBlendMode: "screen",
           }}
         />
       )}
 
-      {/* Default layout */}
-      {layout?.mode !== "free" && (
+      {/* ───────── Horizontal layout (default) ───────── */}
+      {opts?.layoutKind !== "vertical" && (
         <>
-          {/* badges */}
+          {/* badges topo */}
           {opts?.bonusDock === "right" ? (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 8,
+              }}
+            >
               <div style={{ display: "flex", gap: 8 }}>{BadgeBest}</div>
               <div>{BadgeBonus}</div>
             </div>
           ) : (
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <div
+              style={{ display: "flex", alignItems: "center", gap: 8 }}
+            >
               {BadgeBest}
               {BadgeBonus}
             </div>
           )}
 
-          {/* players */}
-          <div style={{ marginTop: 20, display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 20 }}>
+          {/* players row */}
+          <div
+            style={{
+              marginTop: 20,
+              display: "grid",
+              gridTemplateColumns: "1fr auto 1fr",
+              alignItems: "center",
+              gap: 20,
+              position: "relative",
+            }}
+          >
             {/* A */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12, minWidth: 0 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                gap: 12,
+                minWidth: 0,
+              }}
+            >
               <div style={{ minWidth: 0, textAlign: "right" }}>
-                <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
+                <div
+                  className="truncate"
+                  style={{
+                    fontSize: "22px",
+                    color: theme.text,
+                    fontWeight: theme.strongWeight,
+                  }}
+                >
                   {playerA || "—"}
                 </div>
-                <div className="truncate" style={{ fontSize: 12, color: theme.subtext }}>
+                <div
+                  className="truncate"
+                  style={{ fontSize: 12, color: theme.subtext }}
+                >
                   {sideA?.name || "—"}
                 </div>
               </div>
               {theme.showThumbs && (
                 <div
                   style={{
-                    height: 56, width: 56, overflow: "hidden", borderRadius: theme.radius,
-                    background: "rgba(255,255,255,.05)", border: `1px solid ${theme.panelBorder}`, flexShrink: 0,
+                    height: 56,
+                    width: 56,
+                    overflow: "hidden",
+                    borderRadius: theme.radius,
+                    background: "rgba(255,255,255,.05)",
+                    border: `1px solid ${theme.panelBorder}`,
+                    flexShrink: 0,
                   }}
                 >
-                  {sideA?.thumbnail ? <img src={sideA.thumbnail} alt="" style={{ height: "100%", width: "100%", objectFit: "cover" }} /> : null}
+                  {sideA?.thumbnail ? (
+                    <img
+                      src={sideA.thumbnail}
+                      alt=""
+                      style={{
+                        height: "100%",
+                        width: "100%",
+                        objectFit: "cover",
+                      }}
+                    />
+                  ) : null}
                 </div>
               )}
             </div>
 
-            {/* VS */}
-            <div style={{ display: "flex", justifyContent: "center" }}>
+            {/* VS normal (left/center/right) */}
+            {opts.vsPlacement !== "overlay" && (
               <div
                 style={{
-                  padding: "4px 10px",
-                  fontSize: 12,
-                  background: theme.vsBg,
-                  border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
-                  borderRadius: 10,
-                  fontWeight: theme.strongWeight,
-                  animation: theme.pulse ? "vsPulse 1.8s ease-in-out infinite" : "none",
+                  display: "flex",
+                  justifyContent:
+                    opts.vsPlacement === "left"
+                      ? "flex-start"
+                      : opts.vsPlacement === "right"
+                      ? "flex-end"
+                      : "center",
                 }}
               >
-                VS
+                <div
+                  style={{
+                    padding: vsBig ? "12px 16px" : "4px 10px",
+                    fontSize: vsBig ? 14 : 12,
+                    background: theme.vsBg,
+                    border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
+                    borderRadius: vsBig ? 999 : 10,
+                    fontWeight: theme.strongWeight,
+                    animation: theme.pulse
+                      ? "vsPulse 1.8s ease-in-out infinite"
+                      : "none",
+                  }}
+                >
+                  VS
+                </div>
               </div>
-            </div>
+            )}
 
             {/* B */}
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
               {theme.showThumbs && (
                 <div
                   style={{
-                    height: 56, width: 56, overflow: "hidden", borderRadius: theme.radius,
-                    background: "rgba(255,255,255,.05)", border: `1px solid ${theme.panelBorder}`, flexShrink: 0,
+                    height: 56,
+                    width: 56,
+                    overflow: "hidden",
+                    borderRadius: theme.radius,
+                    background: "rgba(255,255,255,.05)",
+                    border: `1px solid ${theme.panelBorder}`,
+                    flexShrink: 0,
                   }}
                 >
-                  {sideB?.thumbnail ? <img src={sideB.thumbnail} alt="" style={{ height: "100%", width: "100%", objectFit: "cover" }} /> : null}
+                  {sideB?.thumbnail ? (
+                    <img
+                      src={sideB.thumbnail}
+                      alt=""
+                      style={{
+                        height: "100%",
+                        width: "100%",
+                        objectFit: "cover",
+                      }}
+                    />
+                  ) : null}
                 </div>
               )}
               <div style={{ minWidth: 0, textAlign: "left" }}>
-                <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
+                <div
+                  className="truncate"
+                  style={{
+                    fontSize: "22px",
+                    color: theme.text,
+                    fontWeight: theme.strongWeight,
+                  }}
+                >
                   {playerB || "—"}
                 </div>
                 <div className="truncate" style={{ fontSize: 12, color: theme.subtext }}>
@@ -385,44 +650,101 @@ function WidgetPanel({
                 </div>
               </div>
             </div>
+
+            {/* VS overlay */}
+            {opts.vsPlacement === "overlay" && (
+              <div
+                style={{
+                  pointerEvents: "none",
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <div
+                  style={{
+                    padding: vsBig ? "12px 16px" : "4px 10px",
+                    fontSize: vsBig ? 14 : 12,
+                    background: theme.vsBg,
+                    border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
+                    borderRadius: vsBig ? 999 : 10,
+                    fontWeight: theme.strongWeight,
+                    animation: theme.pulse
+                      ? "vsPulse 1.8s ease-in-out infinite"
+                      : "none",
+                  }}
+                >
+                  VS
+                </div>
+              </div>
+            )}
           </div>
 
           {/* chips + subtotais */}
-          <div style={{ marginTop: 24, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+          <div
+            style={{
+              marginTop: 24,
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 24,
+            }}
+          >
+            {/* A */}
             <div>
-              <div style={{ display: "flex", flexWrap: "wrap" }}>
-                {aPays.map((p, i) => (
-                  <Chip key={`a-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
-                ))}
-              </div>
               <div
                 style={{
-                  display: "inline-flex", marginTop: 10, alignItems: "center", gap: 8, padding: "6px 12px",
-                  fontSize: 12, background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
-                  borderRadius: theme.radius, color: theme.subtext,
+                  display: stacked ? "flex" : "flex",
+                  flexDirection: stacked ? "column" : "row",
+                  flexWrap: stacked ? "nowrap" : "wrap",
+                  alignItems: "flex-start",
                 }}
               >
-                <span>Subtotal</span>
-                <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(aTotal)}</span>
+                {aPays.map((p, i) => (
+                  <Chip
+                    key={`a-${i}`}
+                    amount={p.amount}
+                    ok={Number(p.amount || 0) >= Number(buyCost || 0)}
+                    i={i}
+                    theme={theme}
+                    opts={opts}
+                    stacked={stacked}
+                  />
+                ))}
               </div>
+              <SubtotalBadge
+                value={aTotal}
+                align={opts.subtotalAlign === "split" ? "left" : opts.subtotalAlign}
+              />
             </div>
 
+            {/* B */}
             <div>
-              <div style={{ display: "flex", flexWrap: "wrap" }}>
-                {bPays.map((p, i) => (
-                  <Chip key={`b-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} />
-                ))}
-              </div>
               <div
                 style={{
-                  display: "inline-flex", marginTop: 10, alignItems: "center", gap: 8, padding: "6px 12px",
-                  fontSize: 12, background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
-                  borderRadius: theme.radius, color: theme.subtext,
+                  display: stacked ? "flex" : "flex",
+                  flexDirection: stacked ? "column" : "row",
+                  flexWrap: stacked ? "nowrap" : "wrap",
+                  alignItems: "flex-start",
                 }}
               >
-                <span>Subtotal</span>
-                <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(bTotal)}</span>
+                {bPays.map((p, i) => (
+                  <Chip
+                    key={`b-${i}`}
+                    amount={p.amount}
+                    ok={Number(p.amount || 0) >= Number(buyCost || 0)}
+                    i={i}
+                    theme={theme}
+                    opts={opts}
+                    stacked={stacked}
+                  />
+                ))}
               </div>
+              <SubtotalBadge
+                value={bTotal}
+                align={opts.subtotalAlign === "split" ? "right" : opts.subtotalAlign}
+              />
             </div>
           </div>
 
@@ -439,23 +761,94 @@ function WidgetPanel({
                   : "center",
             }}
           >
-            <div
-              style={{
-                padding: "8px 16px",
-                background: theme.totalBg,
-                border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`,
-                borderRadius: theme.pillRadius,
-                color: theme.accent,
-                fontWeight: theme.strongWeight,
-                boxShadow: "0 10px 30px rgba(0,0,0,.35)",
-              }}
-            >
-              {opts?.totalLabelMode === "value"
-                ? fmtMoney(aTotal + bTotal)
-                : `Total paid: ${fmtMoney(aTotal + bTotal)}`}
-            </div>
+            <TotalBadge value={aTotal + bTotal} />
           </div>
         </>
+      )}
+
+      {/* ───────── Vertical layout (paridade com preview) ───────── */}
+      {opts?.layoutKind === "vertical" && (
+        <div style={{ height: "100%", display: "flex", flexDirection: "column", gap: 12 }}>
+          {opts?.bonusDock === "right" ? (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+              <div style={{ display: "flex", gap: 8 }}>{BadgeBest}{/* vazio */}</div>
+              <div>{BadgeBonus}</div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>{BadgeBest}{BadgeBonus}</div>
+          )}
+
+          {/* A */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {theme.showThumbs && (
+              <div
+                style={{
+                  height: 48, width: 48, overflow: "hidden", borderRadius: theme.radius,
+                  background: "rgba(255,255,255,.05)", border: `1px solid ${theme.panelBorder}`, flexShrink: 0,
+                }}
+              >
+                {sideA?.thumbnail ? <img src={sideA.thumbnail} alt="" style={{ height:"100%", width:"100%", objectFit:"cover" }} /> : null}
+              </div>
+            )}
+            <div style={{ minWidth: 0 }}>
+              <div className="truncate" style={{ fontSize: 20, color: theme.text, fontWeight: theme.strongWeight }}>{playerA || "—"}</div>
+              <div className="truncate" style={{ fontSize: 12, color: theme.subtext }}>{sideA?.name || "—"}</div>
+            </div>
+          </div>
+
+          <div style={{ display: stacked ? "flex" : "flex", flexDirection: stacked ? "column" : "row", flexWrap: stacked ? "nowrap" : "wrap", alignItems: "flex-start" }}>
+            {aPays.map((p,i)=>(
+              <Chip key={`va-${i}`} amount={p.amount} ok={Number(p.amount||0)>=Number(buyCost||0)} i={i} theme={theme} opts={opts} stacked={stacked}/>
+            ))}
+          </div>
+          <SubtotalBadge value={aTotal} align="left" />
+
+          {/* VS */}
+          <div style={{ width: "100%", display: "flex", justifyContent: "center", padding: "4px 0" }}>
+            <div
+              style={{
+                padding: vsBig ? "12px 16px" : "4px 10px",
+                fontSize: vsBig ? 14 : 12,
+                background: theme.vsBg,
+                border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
+                borderRadius: vsBig ? 999 : 10,
+                fontWeight: theme.strongWeight,
+                animation: theme.pulse ? "vsPulse 1.8s ease-in-out infinite" : "none",
+              }}
+            >
+              VS
+            </div>
+          </div>
+
+          {/* B */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {theme.showThumbs && (
+              <div
+                style={{
+                  height: 48, width: 48, overflow: "hidden", borderRadius: theme.radius,
+                  background: "rgba(255,255,255,.05)", border: `1px solid ${theme.panelBorder}`, flexShrink: 0,
+                }}
+              >
+                {sideB?.thumbnail ? <img src={sideB.thumbnail} alt="" style={{ height:"100%", width:"100%", objectFit:"cover" }} /> : null}
+              </div>
+            )}
+            <div style={{ minWidth: 0 }}>
+              <div className="truncate" style={{ fontSize: 20, color: theme.text, fontWeight: theme.strongWeight }}>{playerB || "—"}</div>
+              <div className="truncate" style={{ fontSize: 12, color: theme.subtext }}>{sideB?.name || "—"}</div>
+            </div>
+          </div>
+
+          <div style={{ display: stacked ? "flex" : "flex", flexDirection: stacked ? "column" : "row", flexWrap: stacked ? "nowrap" : "wrap", alignItems: "flex-start" }}>
+            {bPays.map((p,i)=>(
+              <Chip key={`vb-${i}`} amount={p.amount} ok={Number(p.amount||0)>=Number(buyCost||0)} i={i} theme={theme} opts={opts} stacked={stacked}/>
+            ))}
+          </div>
+          <SubtotalBadge value={bTotal} align="left" />
+
+          <div style={{ marginTop: "auto", display: "flex", justifyContent: opts?.totalJustify === "left" ? "flex-start" : opts?.totalJustify === "right" ? "flex-end" : "center" }}>
+            <TotalBadge value={aTotal + bTotal} />
+          </div>
+        </div>
       )}
     </div>
   );
@@ -494,7 +887,7 @@ export default function WidgetOverlay() {
   const [layout, setLayout] = React.useState(DEFAULT_LAYOUT);
   const [opts, setOpts] = React.useState(DEFAULT_OPTS);
 
-  // aplicar anim=0 para desligar tudo (caso esteja no URL)
+  // anim=0 no URL desliga pulse/shine
   const effTheme = React.useMemo(() => {
     if (loc.anim === "0" || loc.anim === "off") {
       return { ...theme, pulse: false, shine: false };
@@ -547,12 +940,17 @@ export default function WidgetOverlay() {
       .select("theme, layout, options")
       .eq("battle_id", bId)
       .maybeSingle();
+
     if (ws?.theme && !shallowEq(ws.theme, theme))
       setTheme({ ...DEFAULT_THEME, ...ws.theme });
     if (ws?.layout && !shallowEq(ws.layout, layout))
       setLayout({ ...DEFAULT_LAYOUT, ...ws.layout });
     if (ws?.options && !shallowEq(ws.options, opts))
-      setOpts({ ...DEFAULT_OPTS, ...ws.options });
+      setOpts({
+        ...DEFAULT_OPTS,
+        ...ws.options,
+        overlay: { ...DEFAULT_OPTS.overlay, ...(ws.options?.overlay || {}) },
+      });
 
     // entries
     const { data: entries } = await supabase
@@ -687,8 +1085,13 @@ export default function WidgetOverlay() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loc.token, loc.battleId]);
 
-  // alinhamento vertical
-  const alignItems = align === "top" ? "flex-start" : align === "bottom" ? "flex-end" : "center";
+  // alinhamento vertical da caixa escalada
+  const alignItems =
+    (loc.hasAlign ? loc.align : (opts?.overlay?.align ?? "center")) === "top"
+      ? "flex-start"
+      : (loc.hasAlign ? loc.align : (opts?.overlay?.align ?? "center")) === "bottom"
+      ? "flex-end"
+      : "center";
 
   return (
     <div
@@ -742,7 +1145,7 @@ export default function WidgetOverlay() {
             {err}
           </div>
         ) : (
-          // Wrapper com scale (nada é cortado; cabe sempre)
+          // Wrapper com scale (letterbox: nunca corta)
           <div style={{ position: "relative", width: baseW * scale, height: baseH * scale }}>
             <div
               style={{
@@ -757,7 +1160,6 @@ export default function WidgetOverlay() {
             >
               <WidgetPanel
                 theme={effTheme}
-                layout={layout}
                 opts={opts}
                 bestOf={bestOf}
                 buyCost={buyCost}
