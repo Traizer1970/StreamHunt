@@ -89,6 +89,10 @@ const DICT = {
     copyURL: "Copiar URL",
     openDesigner: "Abrir Designer",
     smallWidget: "Widget compacto",
+    preset: "Preset",
+    designCards: "Cards (Start • B/E • #Bonus)",
+    designClassic: "Clássico (KPIs + thumbs + chip)",
+    openLink: "Abrir link",
   },
   en: {
     back: "Back",
@@ -139,6 +143,10 @@ const DICT = {
     copyURL: "Copy URL",
     openDesigner: "Open Designer",
     smallWidget: "Compact widget",
+    preset: "Preset",
+    designCards: "Cards (Start • B/E • #Bonus)",
+    designClassic: "Classic (KPIs + thumbs + chip)",
+    openLink: "Open link",
   },
 };
 function useLang() {
@@ -161,6 +169,7 @@ function useLang() {
   );
   return { lang, t, setLang };
 }
+
 // ── colunas possíveis para a ordem no DB
 const ORDER_COLS = ["order_index", "order", "position", "sort", "order_idx"];
 
@@ -834,7 +843,7 @@ function RedeemDrawer({
                 "Sem slots"
               )}
             </div>
-            {/* Ícone fecha SEM confirmação (para garantir que funciona) */}
+            {/* Ícone fecha SEM confirmação */}
             <button
               onClick={closeNow}
               className="p-2 rounded-lg hover:bg-white/10 transition"
@@ -863,11 +872,10 @@ function RedeemDrawer({
 
           {s ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
-              {/* header card com estilo SUPER */}
               <div
                 className={cn(
                   "md:col-span-3 flex items-center gap-3 p-3 rounded-xl border",
-                  isSuper
+                  getIsSuper(s)
                     ? "bg-fuchsia-500/10 border-fuchsia-400/40 ring-1 ring-fuchsia-400/20"
                     : "bg-white/5 border-white/10"
                 )}
@@ -878,22 +886,14 @@ function RedeemDrawer({
                     alt=""
                     className={cn(
                       "h-14 w-14 rounded object-cover object-bottom bg-black/30",
-                      isSuper && "ring-2 ring-fuchsia-400/60"
+                      getIsSuper(s) && "ring-2 ring-fuchsia-400/60"
                     )}
                   />
                 ) : (
                   <div className="h-14 w-14 rounded bg-white/10" />
                 )}
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold truncate flex items-center gap-2">
-                    <span className="truncate">{s.name}</span>
-                    {isSuper && (
-                      <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full border bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-400/40 inline-flex items-center gap-1">
-                        <Star className="h-3 w-3 fill-fuchsia-300" />
-                        Super
-                      </span>
-                    )}
-                  </div>
+                  <div className="font-semibold truncate">{s.name}</div>
                   <div className="text-xs opacity-70 truncate">{s.provider}</div>
                 </div>
                 <Button
@@ -902,7 +902,8 @@ function RedeemDrawer({
                     try {
                       navigator.clipboard.writeText(s.name || "");
                     } catch {}
-                    showToast(`${t("copied")} ${s.name}`);
+                    // pequeno feedback via alert é suficiente aqui:
+                    // showToast é opcional neste contexto
                   }}
                   className="h-9"
                   title={t("copySlot")}
@@ -951,7 +952,6 @@ function RedeemDrawer({
           )}
 
           <div className="flex items-center justify-end gap-2 mb-4">
-            {/* Botão “Fechar” SEM confirmação (garante que funciona) */}
             <Button variant="outline" onClick={closeNow}>
               {t("close")}
             </Button>
@@ -983,7 +983,6 @@ function RedeemDrawer({
                             try {
                               navigator.clipboard.writeText(it.name || "");
                             } catch {}
-                            showToast(`${t("copied")} ${it.name}`);
                             return;
                           }
                           setIdx(i);
@@ -1042,34 +1041,8 @@ function RedeemDrawer({
               )}
             </>
           )}
-
-          {/* Toast */}
-          {toastMsg && (
-            <div
-              className={cn(
-                "pointer-events-none absolute right-4 bottom-4 transition-all",
-                toastOpen ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
-              )}
-            >
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs text-white shadow-lg backdrop-blur-sm">
-                <Check className="h-3.5 w-3.5" />
-                {toastMsg}
-              </div>
-            </div>
-          )}
         </div>
       </div>
-
-      {/* Confirmar fechar ao clicar no fundo */}
-      <ConfirmDialog
-        open={confirmClose}
-        title={t("confirmCloseTitle")}
-        body={t("confirmCloseBody")}
-        confirmText={t("close")}
-        cancelText={t("cancel")}
-        onConfirm={closeNow}
-        onCancel={() => setConfirmClose(false)}
-      />
     </div>
   );
 }
@@ -1111,12 +1084,31 @@ export default function HuntDetail({ numberId }) {
 
   const [sortBy, setSortBy] = React.useState({ key: "order", dir: 1 });
 
+  // Painéis (collapse) de overlays
+  const [openHuntPanel, setOpenHuntPanel] = React.useState(false);
+  const [openOpeningPanel, setOpenOpeningPanel] = React.useState(false);
+
+  // Configurações persistentes e independentes (localStorage)
+  const [huntCfg, setHuntCfg] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem("overlay:hunt:defaults") || "{}"); }
+    catch { return {}; }
+  });
+  const [openingCfg, setOpeningCfg] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem("overlay:opening:defaults") || "{}"); }
+    catch { return {}; }
+  });
+
+  React.useEffect(() => {
+    localStorage.setItem("overlay:hunt:defaults", JSON.stringify(huntCfg));
+  }, [huntCfg]);
+  React.useEffect(() => {
+    localStorage.setItem("overlay:opening:defaults", JSON.stringify(openingCfg));
+  }, [openingCfg]);
+
   const sortedSlots = React.useMemo(() => {
     const arr = [...slots];
 
-    if (sortBy.key === "order") {
-      return arr;
-    }
+    if (sortBy.key === "order") return arr;
 
     if (sortBy.key === "betsize") {
       arr.sort(
@@ -1165,7 +1157,6 @@ export default function HuntDetail({ numberId }) {
     const [moved] = arr.splice(from, 1);
     arr.splice(i, 0, moved);
 
-    // Atualiza os índices locais
     arr.forEach((row, idx) => {
       row._raw = { ...(row._raw || {}) };
       for (const c of ORDER_COLS) row._raw[c] = idx + 1;
@@ -1174,7 +1165,6 @@ export default function HuntDetail({ numberId }) {
     setSlots(arr);
     dragIndex.current = null;
 
-    // Persistir no DB
     try {
       await persistOrder(arr);
     } catch {}
@@ -1203,7 +1193,6 @@ export default function HuntDetail({ numberId }) {
       const { slots: apiSlots } = await listHuntSlots({ numberId: nId });
       let list = apiSlots || [];
 
-      // ordenar pela coluna de ordem que existir no DB
       const haveOrder = list.some((s) => readOrderFromRow(s) != null);
       if (haveOrder) {
         list = [...list].sort((a, b) => {
@@ -1262,16 +1251,31 @@ export default function HuntDetail({ numberId }) {
       (typeof window !== "undefined" &&
         `${location.origin}${location.pathname}`) ||
       "";
-    const q = new URLSearchParams({
-      // valores usados pelo Designer por defeito (podem ser alterados lá)
-      kpi: "start,won,pl",
-      grid: "1",
-      thumbs: "1",
-      pulse: "1",
-      shine: "1",
-      style: "chip",
-    }).toString();
-    return `${base}#/overlay/${kind}/${hunt?.number_id || nId}?${q}`;
+    if (kind === "hunt") {
+      const cfg = {
+        design: huntCfg.design || "cards",
+        // opções “classic” (continua suportado)
+        kpi: huntCfg.kpi || "start,won,pl",
+        grid: huntCfg.grid ?? "1",
+        thumbs: huntCfg.thumbs ?? "1",
+        pulse: huntCfg.pulse ?? "1",
+        shine: huntCfg.shine ?? "1",
+        style: huntCfg.style || "chip",
+        align: huntCfg.align || "center",
+        pad: huntCfg.pad ?? "16",
+      };
+      const q = new URLSearchParams(cfg).toString();
+      return `${base}#/overlay/hunt/${hunt?.number_id || nId}?${q}`;
+    } else {
+      const cfg = {
+        pill: openingCfg.pill ?? "1",
+        thumbs: openingCfg.thumbs ?? "1",
+        title: openingCfg.title || "Opening",
+        pad: openingCfg.pad ?? "12",
+      };
+      const q = new URLSearchParams(cfg).toString();
+      return `${base}#/overlay/opening/${hunt?.number_id || nId}?${q}`;
+    }
   }
 
   if (busy) {
@@ -1294,6 +1298,28 @@ export default function HuntDetail({ numberId }) {
       </div>
     );
   }
+
+  // helpers UI
+  const Panel = ({ title, open, onToggle, children }) => (
+    <div className="rounded-xl border border-white/10 bg-white/5">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-3 py-2"
+      >
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <CopyIcon className="h-4 w-4 opacity-70" />
+          {title}
+        </div>
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 transition-transform",
+            open ? "rotate-180" : ""
+          )}
+        />
+      </button>
+      {open && <div className="px-3 pb-3 pt-1 border-t border-white/10">{children}</div>}
+    </div>
+  );
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
@@ -1377,44 +1403,40 @@ export default function HuntDetail({ numberId }) {
         </div>
       </div>
 
-      {/* ── Widget compacto (discreto) */}
+      {/* ── Widget compacto */}
       <div
         className={cn(
-          "rounded-xl border p-3 mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3",
+          "rounded-xl border p-3 mb-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3",
           isDark ? "border-white/10 bg-white/5" : "border-zinc-200 bg-white"
         )}
       >
         <div className="flex items-center gap-2">
           <Wand2 className="h-4 w-4 opacity-70" />
-          <div className="text-sm font-medium">{t("smallWidget")}</div>
+          <div className="text-sm font-medium">Compact widget</div>
           <div className="text-[11px] opacity-60">
-            {t("overlayHunt")} / {t("overlayOpening")}
+            Overlay (Hunt) / Overlay (Opening)
           </div>
         </div>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
-            onClick={() => {
-              const url = buildOverlayURL("hunt");
-              try { navigator.clipboard.writeText(url); } catch {}
-            }}
+            onClick={() => setOpenHuntPanel((v) => !v)}
             className="h-8"
-            title={`${t("copyURL")} – ${t("overlayHunt")}`}
+            title="Overlay (Hunt)"
           >
             <CopyIcon className="h-4 w-4 mr-1" />
-            {t("overlayHunt")}
+            Overlay (Hunt)
+            <ChevronDown className={cn("h-4 w-4 ml-1 transition-transform", openHuntPanel ? "rotate-180" : "")} />
           </Button>
           <Button
             variant="outline"
-            onClick={() => {
-              const url = buildOverlayURL("opening");
-              try { navigator.clipboard.writeText(url); } catch {}
-            }}
+            onClick={() => setOpenOpeningPanel((v) => !v)}
             className="h-8"
-            title={`${t("copyURL")} – ${t("overlayOpening")}`}
+            title="Overlay (Opening)"
           >
             <CopyIcon className="h-4 w-4 mr-1" />
-            {t("overlayOpening")}
+            Overlay (Opening)
+            <ChevronDown className={cn("h-4 w-4 ml-1 transition-transform", openOpeningPanel ? "rotate-180" : "")} />
           </Button>
           <Button
             onClick={() => {
@@ -1429,10 +1451,183 @@ export default function HuntDetail({ numberId }) {
         </div>
       </div>
 
+      {/* Painel Overlay (Hunt) */}
+      {openHuntPanel && (
+        <Panel
+          title="Overlay (Hunt)"
+          open={true}
+          onToggle={() => setOpenHuntPanel((v) => !v)}
+        >
+          <div className="grid md:grid-cols-3 gap-3">
+            <div className="space-y-2">
+              <div className="text-xs opacity-70">{t("preset")}</div>
+              <select
+                className="h-9 w-full rounded-md bg-zinc-900 border border-white/10 px-2"
+                value={huntCfg.design || "cards"}
+                onChange={(e) => setHuntCfg((c) => ({ ...c, design: e.target.value }))}
+              >
+                <option value="cards">{t("designCards")}</option>
+                <option value="classic">{t("designClassic")}</option>
+              </select>
+
+              {/* campos extra quando clássico */}
+              {huntCfg.design === "classic" && (
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={(huntCfg.thumbs ?? "1") === "1"}
+                      onChange={(e) =>
+                        setHuntCfg((c) => ({ ...c, thumbs: e.target.checked ? "1" : "0" }))
+                      }
+                    />
+                    Thumbs
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={(huntCfg.pulse ?? "1") === "1"}
+                      onChange={(e) =>
+                        setHuntCfg((c) => ({ ...c, pulse: e.target.checked ? "1" : "0" }))
+                      }
+                    />
+                    Pulse
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={(huntCfg.shine ?? "1") === "1"}
+                      onChange={(e) =>
+                        setHuntCfg((c) => ({ ...c, shine: e.target.checked ? "1" : "0" }))
+                      }
+                    />
+                    Shine
+                  </label>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-xs opacity-70">Padding (px)</div>
+              <Input
+                type="number"
+                value={huntCfg.pad ?? 16}
+                onChange={(e) => setHuntCfg((c) => ({ ...c, pad: e.target.value }))}
+              />
+              <div className="text-xs opacity-70">Alinhamento</div>
+              <select
+                className="h-9 w-full rounded-md bg-zinc-900 border border-white/10 px-2"
+                value={huntCfg.align || "center"}
+                onChange={(e) => setHuntCfg((c) => ({ ...c, align: e.target.value }))}
+              >
+                <option value="left">left</option>
+                <option value="center">center</option>
+              </select>
+            </div>
+
+            <div className="flex items-end justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const url = buildOverlayURL("hunt");
+                  try { navigator.clipboard.writeText(url); } catch {}
+                }}
+              >
+                <CopyIcon className="h-4 w-4 mr-2" />
+                {t("copyURL")}
+              </Button>
+              <Button
+                onClick={() => window.open(buildOverlayURL("hunt"), "_blank")}
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                {t("openLink")}
+              </Button>
+            </div>
+          </div>
+
+          <div className="text-xs opacity-60 mt-2 break-all">
+            {buildOverlayURL("hunt")}
+          </div>
+        </Panel>
+      )}
+
+      {/* Painel Overlay (Opening) */}
+      {openOpeningPanel && (
+        <div className="mt-3">
+          <Panel
+            title="Overlay (Opening)"
+            open={true}
+            onToggle={() => setOpenOpeningPanel((v) => !v)}
+          >
+            <div className="grid md:grid-cols-3 gap-3">
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={(openingCfg.thumbs ?? "1") === "1"}
+                    onChange={(e) =>
+                      setOpeningCfg((c) => ({ ...c, thumbs: e.target.checked ? "1" : "0" }))
+                    }
+                  />
+                  Thumbs
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={(openingCfg.pill ?? "1") === "1"}
+                    onChange={(e) =>
+                      setOpeningCfg((c) => ({ ...c, pill: e.target.checked ? "1" : "0" }))
+                    }
+                  />
+                  Pílula P/L
+                </label>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-xs opacity-70">Título</div>
+                <Input
+                  value={openingCfg.title || "Opening"}
+                  onChange={(e) => setOpeningCfg((c) => ({ ...c, title: e.target.value }))}
+                />
+                <div className="text-xs opacity-70">Padding (px)</div>
+                <Input
+                  type="number"
+                  value={openingCfg.pad ?? 12}
+                  onChange={(e) => setOpeningCfg((c) => ({ ...c, pad: e.target.value }))}
+                />
+              </div>
+
+              <div className="flex items-end justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const url = buildOverlayURL("opening");
+                    try { navigator.clipboard.writeText(url); } catch {}
+                  }}
+                >
+                  <CopyIcon className="h-4 w-4 mr-2" />
+                  {t("copyURL")}
+                </Button>
+                <Button
+                  onClick={() => window.open(buildOverlayURL("opening"), "_blank")}
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  {t("openLink")}
+                </Button>
+              </div>
+            </div>
+
+            <div className="text-xs opacity-60 mt-2 break-all">
+              {buildOverlayURL("opening")}
+            </div>
+          </Panel>
+        </div>
+      )}
+
       {/* Tabela */}
       <div
         className={cn(
-          "rounded-xl border overflow-hidden",
+          "rounded-xl border overflow-hidden mt-4",
           isDark ? "border-white/10" : "border-zinc-200"
         )}
       >
