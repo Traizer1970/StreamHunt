@@ -24,11 +24,6 @@ import {
   ExternalLink,
   Palette,
   Save,
-  // NOVOS ícones usados no overlay (Hunt)
-  Image as ImageIcon,
-  Coins,
-  Hash,
-  Sparkles,
 } from "lucide-react";
 
 import { getHuntByNumberId } from "@/lib/hunts";
@@ -169,13 +164,19 @@ const DICT = {
 function useLang() {
   const [lang, setLang] = React.useState(() => {
     const ls =
-      (typeof localStorage !== "undefined" && localStorage.getItem("lang")) ||
+      (typeof localStorage !== "undefined" &&
+        localStorage.getItem("lang")) ||
       "";
     const html =
-      (typeof document !== "undefined" && document.documentElement.lang) || "";
+      (typeof document !== "undefined" &&
+        document.documentElement.lang) ||
+      "";
     const nav =
-      (typeof navigator !== "undefined" && navigator.language) || "pt-PT";
-    const pick = (ls || html || nav).toLowerCase().startsWith("pt")
+      (typeof navigator !== "undefined" && navigator.language) ||
+      "pt-PT";
+    const pick = (ls || html || nav)
+      .toLowerCase()
+      .startsWith("pt")
       ? "pt"
       : "en";
     return pick;
@@ -230,10 +231,20 @@ const toNum = (v) => {
 /* ───────────────────────── helpers ───────────────────────── */
 async function updateSuperFlag(rowId, value) {
   const tryFns = [
-    () => supabase.from("hunt_slots").update({ is_super: !!value }).eq("id", rowId),
-    () => supabase.from("hunt_slots").update({ super: !!value }).eq("id", rowId),
-    () => supabase.from("hunt_slots").update({ is_super: !!value }).eq("ID", rowId),
-    () => supabase.from("hunt_slots").update({ super: !!value }).eq("ID", rowId),
+    () =>
+      supabase
+        .from("hunt_slots")
+        .update({ is_super: !!value })
+        .eq("id", rowId),
+    () =>
+      supabase
+        .from("hunt_slots")
+        .update({ super: !!value })
+        .eq("id", rowId),
+    () =>
+      supabase.from("hunt_slots").update({ is_super: !!value }).eq("ID", rowId),
+    () =>
+      supabase.from("hunt_slots").update({ super: !!value }).eq("ID", rowId),
   ];
   let last;
   for (const fn of tryFns) {
@@ -248,17 +259,37 @@ const getIsSuper = (s) =>
 
 /* tentar persistir order_index (com fallbacks de coluna/ID) */
 async function persistOrder(slots) {
-  const colCandidates = ["order_index", "order", "position", "sort", "order_idx"];
+  const colCandidates = [
+    "order_index",
+    "order",
+    "position",
+    "sort",
+    "order_idx",
+  ];
   for (let i = 0; i < slots.length; i++) {
     const rowId = slots[i].id;
     let ok = false;
     for (const col of colCandidates) {
-      const r1 = await supabase.from("hunt_slots").update({ [col]: i + 1 }).eq("id", rowId);
-      if (!r1.error) { ok = true; break; }
-      const r2 = await supabase.from("hunt_slots").update({ [col]: i + 1 }).eq("ID", rowId);
-      if (!r2.error) { ok = true; break; }
+      const r1 = await supabase
+        .from("hunt_slots")
+        .update({ [col]: i + 1 })
+        .eq("id", rowId);
+      if (!r1.error) {
+        ok = true;
+        break;
+      }
+      const r2 = await supabase
+        .from("hunt_slots")
+        .update({ [col]: i + 1 })
+        .eq("ID", rowId);
+      if (!r2.error) {
+        ok = true;
+        break;
+      }
     }
-    if (!ok) { /* ignora em silêncio */ }
+    if (!ok) {
+      // se não houver nenhuma coluna, ignoramos silenciosamente
+    }
   }
 }
 
@@ -273,7 +304,15 @@ function useDebounced(value, delay = 250) {
 }
 
 /* ───────────────────────── Modais Auxiliares ───────────────────────── */
-function ConfirmDialog({ open, title, body, confirmText, cancelText, onConfirm, onCancel }) {
+function ConfirmDialog({
+  open,
+  title,
+  body,
+  confirmText,
+  cancelText,
+  onConfirm,
+  onCancel,
+}) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[95]">
@@ -283,7 +322,9 @@ function ConfirmDialog({ open, title, body, confirmText, cancelText, onConfirm, 
           <div className="text-lg font-semibold mb-2">{title}</div>
           <div className="text-sm opacity-80 mb-5">{body}</div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onCancel}>{cancelText}</Button>
+            <Button variant="outline" onClick={onCancel}>
+              {cancelText}
+            </Button>
             <Button onClick={onConfirm}>{confirmText}</Button>
           </div>
         </div>
@@ -322,22 +363,36 @@ function AddBonusModal({ open, onClose, numberId, onAdded }) {
         if (active) setBusy(false);
       }
     })();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [open, dQuery]);
 
   const resetForm = () => {
-    setQuery(""); setResults([]); setSelected(null); setBetSize("");
-    setIsSuper(false); setErr("");
+    setQuery("");
+    setResults([]);
+    setSelected(null);
+    setBetSize("");
+    setIsSuper(false);
+    setErr("");
   };
-  const handleClose = () => { resetForm(); onClose && onClose(); };
+  const handleClose = () => {
+    resetForm();
+    onClose && onClose();
+  };
 
   async function handleAdd() {
     try {
       setErr("");
       if (!selected) return setErr("Escolhe uma slot.");
       const bs = toNum(betSize);
-      if (!Number.isFinite(bs) || bs <= 0) return setErr("Betsize inválida.");
-      const payload = { slot_id: selected.id, bet_size: bs, super: isSuper };
+      if (!Number.isFinite(bs) || bs <= 0)
+        return setErr("Betsize inválida.");
+      const payload = {
+        slot_id: selected.id,
+        bet_size: bs,
+        super: isSuper,
+      };
       setBusy(true);
       await addHuntSlot(numberId, payload);
       onAdded && onAdded();
@@ -353,12 +408,20 @@ function AddBonusModal({ open, onClose, numberId, onAdded }) {
 
   return (
     <div className="fixed inset-0 z-[70]">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleClose} />
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={handleClose}
+      />
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-[680px]">
         <div className="rounded-2xl border border-white/10 bg-zinc-950 text-white shadow-2xl p-4 md:p-5">
           <div className="flex items-center justify-between mb-3">
             <div className="text-lg font-semibold">Add bonus</div>
-            <button type="button" onClick={handleClose} className="p-2 rounded-lg hover:bg-white/10 transition" aria-label="Fechar">
+            <button
+              type="button"
+              onClick={handleClose}
+              className="p-2 rounded-lg hover:bg-white/10 transition"
+              aria-label="Fechar"
+            >
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -385,26 +448,35 @@ function AddBonusModal({ open, onClose, numberId, onAdded }) {
                   </div>
                 )}
                 {!busy && results.length === 0 && dQuery && (
-                  <div className="px-3 py-3 text-sm opacity-60">Sem resultados.</div>
+                  <div className="px-3 py-3 text-sm opacity-60">
+                    Sem resultados.
+                  </div>
                 )}
-                {!busy && results.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => setSelected(s)}
-                    className="w-full text-left px-3 py-2.5 hover:bg-white/5 flex items-center gap-3"
-                  >
-                    {s.thumbnail ? (
-                      <img src={s.thumbnail} alt="" className="h-8 w-8 rounded object-cover bg-black/30" />
-                    ) : (
-                      <div className="h-8 w-8 rounded bg-white/10" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate">{s.name}</div>
-                      <div className="text-xs opacity-70 truncate">{s.provider}</div>
-                    </div>
-                    <ChevronDown className="h-4 w-4 opacity-60" />
-                  </button>
-                ))}
+                {!busy &&
+                  results.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => setSelected(s)}
+                      className="w-full text-left px-3 py-2.5 hover:bg-white/5 flex items-center gap-3"
+                    >
+                      {s.thumbnail ? (
+                        <img
+                          src={s.thumbnail}
+                          alt=""
+                          className="h-8 w-8 rounded object-cover bg-black/30"
+                        />
+                      ) : (
+                        <div className="h-8 w-8 rounded bg-white/10" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">{s.name}</div>
+                        <div className="text-xs opacity-70 truncate">
+                          {s.provider}
+                        </div>
+                      </div>
+                      <ChevronDown className="h-4 w-4 opacity-60" />
+                    </button>
+                  ))}
               </div>
             </div>
           ) : (
@@ -413,18 +485,30 @@ function AddBonusModal({ open, onClose, numberId, onAdded }) {
 
               <div className="flex items-center gap-3 p-3 rounded-xl border border-white/10 bg-zinc-900">
                 {selected.thumbnail ? (
-                  <img src={selected.thumbnail} alt="" className="h-12 w-12 rounded object-cover bg-black/30" />
+                  <img
+                    src={selected.thumbnail}
+                    alt=""
+                    className="h-12 w-12 rounded object-cover bg-black/30"
+                  />
                 ) : (
                   <div className="h-12 w-12 rounded bg-white/10" />
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold truncate">{selected.name}</div>
-                  <div className="text-xs opacity-70 truncate">{selected.provider}</div>
+                  <div className="text-xs opacity-70 truncate">
+                    {selected.provider}
+                  </div>
                 </div>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => { setSelected(null); setQuery(""); setResults([]); setIsSuper(false); setBetSize(""); }}
+                  onClick={() => {
+                    setSelected(null);
+                    setQuery("");
+                    setResults([]);
+                    setIsSuper(false);
+                    setBetSize("");
+                  }}
                   className="h-9"
                 >
                   <ChevronLeft className="h-4 w-4 mr-1" />
@@ -434,7 +518,9 @@ function AddBonusModal({ open, onClose, numberId, onAdded }) {
 
               <div className="grid md:grid-cols-2 gap-3 items-end">
                 <div>
-                  <div className="text-xs mb-1 opacity-70">{t("betsizeReq")}</div>
+                  <div className="text-xs mb-1 opacity-70">
+                    {t("betsizeReq")}
+                  </div>
                   <Input
                     type="text"
                     inputMode="decimal"
@@ -451,7 +537,9 @@ function AddBonusModal({ open, onClose, numberId, onAdded }) {
                     onClick={() => setIsSuper((v) => !v)}
                     className={cn(
                       "h-11 px-4 rounded-xl border text-sm font-medium transition inline-flex items-center gap-2",
-                      isSuper ? "bg-fuchsia-600/20 border-fuchsia-500 text-fuchsia-200" : "bg-zinc-900 border-white/10 text-white/70 hover:text-white"
+                      isSuper
+                        ? "bg-fuchsia-600/20 border-fuchsia-500 text-fuchsia-200"
+                        : "bg-zinc-900 border-white/10 text-white/70 hover:text-white"
                     )}
                     title="Marcar como Super bonus"
                   >
@@ -459,8 +547,15 @@ function AddBonusModal({ open, onClose, numberId, onAdded }) {
                     {t("superBonus")}
                   </button>
 
-                  <Button type="button" onClick={handleAdd} disabled={busy || !selected || !betSize} className="h-11 px-5">
-                    {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                  <Button
+                    type="button"
+                    onClick={handleAdd}
+                    disabled={busy || !selected || !betSize}
+                    className="h-11 px-5"
+                  >
+                    {busy ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : null}
                     Adicionar
                   </Button>
                 </div>
@@ -483,7 +578,16 @@ function EditBonusModal({ open, row, onClose, onSaved }) {
 
   React.useEffect(() => {
     setBet(row ? row.bet_size ?? "" : "");
-    setIsSuper(row ? !!(row?.is_super ?? row?.super ?? row?._raw?.is_super ?? row?._raw?.super) : false);
+    setIsSuper(
+      row
+        ? !!(
+            row?.is_super ??
+            row?.super ??
+            row?._raw?.is_super ??
+            row?._raw?.super
+          )
+        : false
+    );
   }, [row]);
 
   if (!open || !row) return null;
@@ -510,13 +614,24 @@ function EditBonusModal({ open, row, onClose, onSaved }) {
         <div className="rounded-2xl border border-white/10 bg-zinc-950 text-white shadow-2xl p-4 md:p-5">
           <div className="flex items-center justify-between mb-3">
             <div className="text-lg font-semibold">Editar bonus</div>
-            <button type="button" onClick={onClose} className="p-2 rounded-lg hover:bg-white/10 transition" aria-label="Fechar">
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-white/10 transition"
+              aria-label="Fechar"
+            >
               <X className="h-5 w-5" />
             </button>
           </div>
 
           <div className="flex items-center gap-3 mb-3">
-            {row?.thumbnail ? <img src={row.thumbnail} alt="" className="h-10 w-10 rounded object-cover" /> : null}
+            {row?.thumbnail ? (
+              <img
+                src={row.thumbnail}
+                alt=""
+                className="h-10 w-10 rounded object-cover"
+              />
+            ) : null}
             <div className="min-w-0">
               <div className="text-sm font-medium truncate">{row?.name}</div>
               <div className="text-xs opacity-70 truncate">{row?.provider}</div>
@@ -548,7 +663,9 @@ function EditBonusModal({ open, row, onClose, onSaved }) {
                     : "border-white/10 text-white/70 hover:bg-white/10"
                 )}
               >
-                <Star className={cn("h-4 w-4", isSuper ? "fill-fuchsia-400" : "")} />
+                <Star
+                  className={cn("h-4 w-4", isSuper ? "fill-fuchsia-400" : "")}
+                />
                 <span className="font-medium">Super bonus</span>
               </button>
             </div>
@@ -556,7 +673,9 @@ function EditBonusModal({ open, row, onClose, onSaved }) {
 
           <div className="mt-4 flex items-center justify-end gap-2">
             <Button type="button" onClick={save} disabled={busy}>
-              {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              {busy ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : null}
               Guardar
             </Button>
           </div>
@@ -575,18 +694,33 @@ function ConfirmDeleteModal({ open, slot, onCancel, onConfirm }) {
       <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-[520px]">
         <div className="rounded-2xl border border-white/10 bg-zinc-950 text-white shadow-2xl p-5">
-          <div className="text-lg font-semibold mb-3">{t("eliminarBonus")}</div>
+          <div className="text-lg font-semibold mb-3">
+            {t("eliminarBonus")}
+          </div>
           <div className="flex items-center gap-3 mb-4">
-            {slot?.thumbnail ? <img src={slot.thumbnail} alt="" className="h-10 w-10 rounded object-cover" /> : null}
+            {slot?.thumbnail ? (
+              <img
+                src={slot.thumbnail}
+                alt=""
+                className="h-10 w-10 rounded object-cover"
+              />
+            ) : null}
             <div className="min-w-0">
               <div className="text-sm font-medium truncate">{slot?.name}</div>
-              <div className="text-xs opacity-70 truncate">{slot?.provider}</div>
+              <div className="text-xs opacity-70 truncate">
+                {slot?.provider}
+              </div>
             </div>
           </div>
           <div className="text-sm opacity-80 mb-5">{t("eliminarPerg")}</div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onCancel}>{t("cancel")}</Button>
-            <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={onConfirm}>
+            <Button variant="outline" onClick={onCancel}>
+              {t("cancel")}
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={onConfirm}
+            >
               <Trash2 className="h-4 w-4 mr-2" />
               {t("delete")}
             </Button>
@@ -597,610 +731,27 @@ function ConfirmDeleteModal({ open, slot, onCancel, onConfirm }) {
   );
 }
 
-/* ───────────────────────── NEW: Overlay (Hunt) completo ───────────────────────── */
+/* ───────────────────────── Overlays — helpers & previews ───────────────────────── */
 
-// Tema base
-const HUNT_DEFAULT_THEME = {
-  bgStart: "#0b1020",
-  bgEnd: "#161a27",
+// opções rápidas (guardadas só em memória/localStorage)
+const DEFAULT_HUNT_OVERLAY = {
+  design: "cards",
 
-  text: "#e5e7eb",
-  subtext: "#9ca3af",
-  accent: "#7dd3fc",
-
-  pos: "#22c55e",
-  neg: "#ef4444",
-
-  panelBorder: "rgba(255,255,255,0.10)",
-  panelBorderWidth: 1,
-  panelRadius: 18,
-
-  cardRadius: 16,
-  cardBorder: "rgba(255,255,255,0.10)",
-  cardBorderWidth: 1,
-
-  chipBg: "rgba(0,0,0,.35)",
-  chipBorder: "rgba(255,255,255,.25)",
-  chipRadius: 12,
-
-  badgeBg: "rgba(255,255,255,0.08)",
-  badgeBorder: "rgba(255,255,255,0.18)",
-  badgeBorderWidth: 1,
-  badgeRadius: 999,
-
-  bubbleBg: "rgba(255,255,255,.10)",
-  bubbleBorder: "rgba(255,255,255,.18)",
-  bubbleBorderWidth: 1,
-  bubbleRadius: 16,
-
-  fontFamily:
-    "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji','Segoe UI Emoji'",
-  fontScale: 100,
-  strongWeight: 600,
-
-  shine: true,
-  pulse: true,
-  showIndex: true,
+  // NOVO — controlo de apresentação
+  cardMode: "grid",        // 'grid' | 'focus3'
+  kpiStyle: "minimal",     // 'minimal' | 'pill'
+  cardH: 140,              // altura em px no modo grid
+  showIdx: true,
   showBet: true,
-  showTitle: false,
-};
 
-// Opções / OBS
-const HUNT_DEFAULT_OPTS = {
-  preset: "cards_start_be_count",
-  gridCols: 8,
   pad: 16,
   align: "center",
-  cardW: 120,
-  cardH: 90,
-  gap: 12,
-  overlay: {
-    mode: "auto",
-    width: 1280,
-    height: 720,
-    baseW: 980,
-    baseH: 360,
-    pad: 16,
-    align: "center",
-  },
+  shine: true,
+  pulse: true,
+  thumbs: true,
+  baseW: 560,
+  baseH: 280,
 };
-
-// Presets de tamanho
-const HUNT_SIZE_PRESETS = [
-  { name: "Compact", o: { cardW: 112, cardH: 80, gap: 10, gridCols: 7 }, t: { fontScale: 96 } },
-  { name: "Default", o: { cardW: 120, cardH: 90, gap: 12, gridCols: 8 }, t: { fontScale: 100 } },
-  { name: "XL", o: { cardW: 140, cardH: 104, gap: 14, gridCols: 9 }, t: { fontScale: 106 } },
-  { name: "Sidebar Tall", o: { cardW: 110, cardH: 84, gap: 10, gridCols: 4 }, t: { fontScale: 98 } },
-];
-
-// Presets visuais (look)
-const HUNT_LOOK_PRESETS = [
-  {
-    name: "Cards (Start • B/E • #Bonus)",
-    key: "cards_start_be_count",
-    apply: (o, t) => ({
-      o: { ...o, preset: "cards_start_be_count" },
-      t: { ...t, showTitle: false, showBet: true, showIndex: true },
-    }),
-  },
-  {
-    name: "Cards + Title",
-    key: "cards_with_title",
-    apply: (o, t) => ({
-      o: { ...o, preset: "cards_with_title" },
-      t: { ...t, showTitle: true, showBet: true },
-    }),
-  },
-  {
-    name: "Tiles Minimal",
-    key: "tiles_min",
-    apply: (o, t) => ({
-      o: { ...o, preset: "tiles_min" },
-      t: { ...t, showTitle: false, showBet: false, showIndex: false, bubbleBg: "rgba(0,0,0,.24)" },
-    }),
-  },
-];
-
-// Guardar/ler definições do widget (opcional; ignora se tabela não existir)
-async function dbLoadHuntWidgetSettings(numberId) {
-  try {
-    const { data } = await supabase
-      .from("hunt_widget_settings")
-      .select("theme, options")
-      .eq("hunt_number_id", numberId)
-      .maybeSingle();
-    return { theme: data?.theme || null, options: data?.options || null };
-  } catch { return { theme: null, options: null }; }
-}
-async function dbSaveHuntWidgetSettings(numberId, theme, options) {
-  try {
-    await supabase.from("hunt_widget_settings").upsert([{ hunt_number_id: numberId, theme, options }]);
-  } catch { /* noop */ }
-}
-
-// URL builder (Hunt) — independente do Opening
-function buildHuntOverlayUrl2(base, numberId, opts) {
-  if (!numberId) return "";
-  const qs = new URLSearchParams();
-  qs.set("preset", opts?.preset || "cards_start_be_count");
-  qs.set("pad", String(opts?.overlay?.pad ?? 16));
-  qs.set("align", String(opts?.overlay?.align || "center"));
-  qs.set("cols", String(opts?.gridCols || 8));
-  qs.set("cw", String(opts?.cardW || 120));
-  qs.set("ch", String(opts?.cardH || 90));
-  qs.set("gap", String(opts?.gap || 12));
-  if (opts?.overlay?.mode === "fixed") {
-    qs.set("pinsize", "1");
-    if (opts?.overlay?.width) qs.set("w", String(opts.overlay.width));
-    if (opts?.overlay?.height) qs.set("h", String(opts.overlay.height));
-  }
-  return `${base}#/overlay/hunt/${numberId}?${qs.toString()}`;
-}
-
-// Pequeno chip KPI
-function KpiBadge({ icon, label, value, theme }) {
-  return (
-    <div
-      className="inline-flex items-center gap-2 px-3 py-1.5"
-      style={{
-        background: theme.badgeBg,
-        border: `${theme.badgeBorderWidth}px solid ${theme.badgeBorder}`,
-        borderRadius: theme.badgeRadius,
-        fontFamily: theme.fontFamily,
-      }}
-    >
-      <span className="opacity-80">{icon}</span>
-      <span style={{ color: theme.subtext, fontWeight: 500, fontSize: "12px" }}>{label}</span>
-      <span style={{ color: theme.text, fontWeight: theme.strongWeight, fontSize: "12px" }}>{value}</span>
-    </div>
-  );
-}
-
-// Preview do widget (Hunt)
-function HuntWidgetPreview({ theme, opts, hunt, slots = [], kpis }) {
-  const baseW = Number(opts?.overlay?.baseW) || 980;
-  const baseH = Number(opts?.overlay?.baseH) || 360;
-
-  const cardW = Number(opts?.cardW) || 120;
-  const cardH = Number(opts?.cardH) || 90;
-  const gap = Number(opts?.gap) || 12;
-  const cols = Math.max(1, Number(opts?.gridCols) || 8);
-
-  const rowsShown = Math.ceil(Math.min(slots.length, cols * 2) / cols);
-
-  const pl = Number(kpis?.pl || 0);
-  const plTone = pl >= 0 ? theme.pos : theme.neg;
-  const be = Math.max(0, Number(kpis?.startCost || 0) - Number(kpis?.amountWon || 0));
-
-  return (
-    <>
-      <style>{`
-        @keyframes sweepHunt { 0% { transform: translateX(-120%);} 100% { transform: translateX(120%);} }
-        @keyframes popHunt { 0% { transform: scale(.96); opacity: 0;} 100% { transform: scale(1); opacity: 1;} }
-      `}</style>
-      <div
-        className="relative overflow-hidden"
-        style={{
-          width: baseW,
-          height: baseH,
-          padding: opts?.overlay?.pad ?? 16,
-          background: `linear-gradient(135deg, ${theme.bgStart}, ${theme.bgEnd})`,
-          border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
-          borderRadius: theme.panelRadius,
-          color: theme.text,
-          fontFamily: theme.fontFamily,
-          fontSize: `${theme.fontScale}%`,
-        }}
-      >
-        {theme.shine && (
-          <div
-            className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/10 to-transparent"
-            style={{ animation: "sweepHunt 5.2s linear infinite" }}
-          />
-        )}
-
-        {/* header KPIs */}
-        <div className="flex items-center gap-2 mb-2">
-          <div
-            className="px-3 py-1.5"
-            style={{
-              background: theme.badgeBg,
-              border: `${theme.badgeBorderWidth}px solid ${theme.badgeBorder}`,
-              borderRadius: theme.badgeRadius,
-              fontWeight: 600,
-            }}
-          >
-            {hunt?.title ? hunt.title : `Hunt #${hunt?.number_id ?? ""}`}
-          </div>
-
-          <KpiBadge icon={<Sparkles className="h-4 w-4" />} label="Start" value={fmtMoney(kpis?.startCost || 0)} theme={theme} />
-          <KpiBadge icon={<ImageIcon className="h-4 w-4" />} label="B/E" value={fmtMoney(be)} theme={theme} />
-          <KpiBadge icon={<Hash className="h-4 w-4" />} label="# Bonus" value={slots.length} theme={theme} />
-        </div>
-
-        {/* grid de cards */}
-        <div
-          className="relative"
-          style={{
-            display: "grid",
-            gridTemplateColumns: `repeat(${cols}, ${cardW}px)`,
-            gridAutoRows: `${cardH}px`,
-            gap,
-            alignContent: opts.align === "bottom" ? "end" : opts.align === "top" ? "start" : "center",
-            height: `calc(100% - 60px)`,
-          }}
-        >
-          {slots.slice(0, cols * rowsShown).map((s, i) => {
-            const idx = i + 1;
-            return (
-              <div
-                key={s.id || i}
-                className="relative overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,.35)]"
-                style={{
-                  borderRadius: theme.cardRadius,
-                  border: `${theme.cardBorderWidth}px solid ${theme.cardBorder}`,
-                  background: "rgba(255,255,255,.06)",
-                  animation: theme.pulse ? "popHunt .18s ease-out both" : "none",
-                  animationDelay: `${i * 35}ms`,
-                }}
-                title={s.name}
-              >
-                {/* index */}
-                {theme.showIndex && (
-                  <div
-                    className="absolute left-1 top-1 text-[11px] font-semibold px-1.5 py-0.5"
-                    style={{
-                      background: theme.chipBg,
-                      border: `1px solid ${theme.chipBorder}`,
-                      borderRadius: 999,
-                      textShadow: "0 1px 0 rgba(0,0,0,.35)",
-                    }}
-                  >
-                    #{idx}
-                  </div>
-                )}
-
-                {/* thumbnail */}
-                {s.thumbnail ? (
-                  <img src={s.thumbnail} alt="" className="h-full w-full object-cover object-bottom" draggable={false} />
-                ) : (
-                  <div className="h-full w-full" />
-                )}
-
-                {/* bottom chips: bet e/ou título */}
-                <div className="absolute left-0 right-0 bottom-1 px-2 flex items-end justify-between gap-2">
-                  {theme.showTitle && (
-                    <div
-                      className="truncate max-w-[70%] px-2 py-0.5 text-[11px]"
-                      style={{ background: theme.chipBg, border: `1px solid ${theme.chipBorder}`, borderRadius: theme.chipRadius }}
-                    >
-                      {s.name || "—"}
-                    </div>
-                  )}
-                  {theme.showBet && (
-                    <div
-                      className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 text-[11px]"
-                      style={{ background: theme.chipBg, border: `1px solid ${theme.chipBorder}`, borderRadius: theme.chipRadius, fontWeight: theme.strongWeight }}
-                      title="Betsize"
-                    >
-                      <Coins className="h-3.5 w-3.5 opacity-80" />
-                      {s.bet_size != null ? String(s.bet_size) : "—"}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* P/L no rodapé */}
-        <div className="absolute left-0 right-0 flex justify-center" style={{ bottom: 10 }}>
-          <div
-            className="inline-flex items-center gap-2 px-3 py-1.5 text-sm"
-            style={{
-              background: theme.bubbleBg,
-              border: `${theme.bubbleBorderWidth}px solid ${theme.bubbleBorder}`,
-              borderRadius: theme.bubbleRadius,
-            }}
-          >
-            <span className="opacity-80">P/L:</span>
-            <span className="tabular-nums" style={{ color: plTone, fontWeight: theme.strongWeight }}>
-              {fmtMoney(pl)}
-            </span>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-}
-
-// Designer do Hunt
-function HuntOverlayDesigner({ open, onClose, numberId, theme, setTheme, opts, setOpts, previewProps, persist }) {
-  if (!open) return null;
-
-  const applySize = (p) => {
-    setOpts((o) => ({ ...o, ...p.o }));
-    if (p.t) setTheme((t) => ({ ...t, ...p.t }));
-  };
-  const applyLook = (preset) => {
-    const r = preset.apply(opts, theme);
-    setOpts((o) => ({ ...o, ...(r.o || {}) }));
-    setTheme((t) => ({ ...t, ...(r.t || {}) }));
-  };
-
-  return (
-    <div className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm">
-      <div className="absolute inset-x-0 top-0 h-14 px-4 flex items-center justify-between border-b border-white/10 bg-zinc-950/70">
-        <div className="flex items-center gap-2">
-          <SlidersHorizontal className="h-5 w-5 text-white/80" />
-          <div>Overlay Designer — Hunt #{numberId}</div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={() => { persist(); onClose(); }} className="h-9">Guardar & fechar</Button>
-          <Button variant="outline" onClick={onClose} className="h-9">Fechar</Button>
-        </div>
-      </div>
-
-      <div className="absolute inset-x-0 top-14 bottom-0 grid xl:grid-cols-[520px_1fr]">
-        {/* controls */}
-        <div className="border-r border-white/10 bg-zinc-950/70 overflow-auto">
-          <div className="p-4 space-y-4">
-            {/* Look presets */}
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-              <div className="text-xs opacity-70 mb-2">Visual preset</div>
-              <div className="grid grid-cols-1 gap-2">
-                {HUNT_LOOK_PRESETS.map((p) => (
-                  <button
-                    key={p.key}
-                    onClick={() => applyLook(p)}
-                    className={cn(
-                      "rounded-lg border border-white/10 px-3 py-2 text-left text-sm hover:ring-2 hover:ring-sky-400",
-                      opts.preset === p.key ? "ring-2 ring-sky-400" : ""
-                    )}
-                  >
-                    {p.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Size presets */}
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-              <div className="text-xs opacity-70 mb-2">Sizes</div>
-              <div className="grid grid-cols-2 gap-2">
-                {HUNT_SIZE_PRESETS.map((s) => (
-                  <button key={s.name} onClick={() => applySize(s)} className="rounded-lg border border-white/10 px-3 py-2 text-sm hover:ring-2 hover:ring-sky-400">
-                    {s.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Grid / cards */}
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
-              <div className="text-xs opacity-70">Grid</div>
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <div className="text-xs opacity-70 mb-1">Cols</div>
-                  <Input type="number" value={opts.gridCols} onChange={(e) => setOpts((o) => ({ ...o, gridCols: Math.max(1, Number(e.target.value) || 1) }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
-                </div>
-                <div>
-                  <div className="text-xs opacity-70 mb-1">Card W</div>
-                  <Input type="number" value={opts.cardW} onChange={(e) => setOpts((o) => ({ ...o, cardW: Math.max(60, Number(e.target.value) || 60) }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
-                </div>
-                <div>
-                  <div className="text-xs opacity-70 mb-1">Card H</div>
-                  <Input type="number" value={opts.cardH} onChange={(e) => setOpts((o) => ({ ...o, cardH: Math.max(50, Number(e.target.value) || 50) }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
-                </div>
-                <div>
-                  <div className="text-xs opacity-70 mb-1">Gap</div>
-                  <Input type="number" value={opts.gap} onChange={(e) => setOpts((o) => ({ ...o, gap: Math.max(0, Number(e.target.value) || 0) }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
-                </div>
-                <div>
-                  <div className="text-xs opacity-70 mb-1">Padding</div>
-                  <Input type="number" value={opts.overlay.pad} onChange={(e) => setOpts((o) => ({ ...o, overlay: { ...o.overlay, pad: Math.max(0, Number(e.target.value) || 0) } }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
-                </div>
-                <div>
-                  <div className="text-xs opacity-70 mb-1">Align</div>
-                  <select
-                    value={opts.overlay.align}
-                    onChange={(e) => setOpts((o) => ({ ...o, overlay: { ...o.overlay, align: e.target.value } }))}
-                    className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white px-3 w-full"
-                  >
-                    <option value="top">Top</option>
-                    <option value="center">Center</option>
-                    <option value="bottom">Bottom</option>
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  ["Mostrar #", "showIndex"],
-                  ["Mostrar bet", "showBet"],
-                  ["Brilho", "shine"],
-                  ["Pulse", "pulse"],
-                ].map(([lab, key]) => (
-                  <label key={key} className="text-sm flex items-center gap-2">
-                    <input type="checkbox" checked={!!theme[key]} onChange={(e) => setTheme((t) => ({ ...t, [key]: e.target.checked }))} />
-                    {lab}
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Cores rápidas */}
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
-              <div className="text-xs opacity-70">Colors</div>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  ["Background start", "bgStart"],
-                  ["Background end", "bgEnd"],
-                  ["Accent", "accent"],
-                  ["OK (green)", "pos"],
-                  ["NOK (red)", "neg"],
-                ].map(([lbl, key]) => (
-                  <div key={key}>
-                    <div className="text-[11px] opacity-70 mb-1">{lbl}</div>
-                    <input type="color" value={theme[key]} onChange={(e) => setTheme((t) => ({ ...t, [key]: e.target.value }))} className="h-9 w-full rounded-lg border border-white/10 bg-transparent p-0" />
-                  </div>
-                ))}
-              </div>
-              <div>
-                <div className="text-[11px] opacity-70 mb-1">Font %</div>
-                <input type="range" min={90} max={115} step={1} value={theme.fontScale} onChange={(e) => setTheme((t) => ({ ...t, fontScale: Number(e.target.value) }))} className="w-full" />
-              </div>
-            </div>
-
-            <div className="flex gap-2 sticky bottom-3">
-              <Button onClick={persist} className="h-10">Guardar</Button>
-              <Button variant="outline" onClick={() => { setTheme({ ...HUNT_DEFAULT_THEME }); setOpts({ ...HUNT_DEFAULT_OPTS }); }} className="h-10">Restaurar defaults</Button>
-            </div>
-          </div>
-        </div>
-
-        {/* live preview */}
-        <div className="p-6 overflow-auto">
-          <HuntWidgetPreview theme={theme} opts={opts} {...previewProps} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Seção colapsável simples
-function Collapsible({ title, children, defaultOpen = true }) {
-  const [open, setOpen] = React.useState(defaultOpen);
-  return (
-    <div className="rounded-xl border border-white/10 bg-white/5">
-      <button type="button" onClick={() => setOpen((v) => !v)} className="w-full flex items-center justify-between px-3 py-2 text-left">
-        <div className="font-medium">{title}</div>
-        <ChevronDown className={cn("h-4 w-4 transition", open ? "rotate-180 opacity-100" : "opacity-70")} />
-      </button>
-      {open && <div className="border-t border-white/10 p-3">{children}</div>}
-    </div>
-  );
-}
-
-// Card completo do Overlay (Hunt)
-function HuntOverlaySection({ hunt, slots = [], kpis }) {
-  const { isDark } = useTheme();
-  const [theme, setTheme] = React.useState(HUNT_DEFAULT_THEME);
-  const [opts, setOpts] = React.useState(HUNT_DEFAULT_OPTS);
-  const [openDesigner, setOpenDesigner] = React.useState(false);
-
-  const base = React.useMemo(
-    () => `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, ""),
-    []
-  );
-
-  const overlayUrl = React.useMemo(
-    () => buildHuntOverlayUrl2(base, hunt?.number_id, opts),
-    [base, hunt?.number_id, opts]
-  );
-
-  const previewProps = React.useMemo(() => ({ hunt, slots, kpis }), [hunt, slots, kpis]);
-
-  // carrega/grava do supabase (se existir)
-  React.useEffect(() => {
-    (async () => {
-      if (!hunt?.number_id) return;
-      const { theme: t, options: o } = await dbLoadHuntWidgetSettings(hunt.number_id);
-      if (t) setTheme({ ...HUNT_DEFAULT_THEME, ...t });
-      if (o) setOpts({ ...HUNT_DEFAULT_OPTS, ...o, overlay: { ...HUNT_DEFAULT_OPTS.overlay, ...(o.overlay || {}) } });
-    })();
-  }, [hunt?.number_id]);
-
-  const persist = React.useCallback(async () => {
-    if (!hunt?.number_id) return;
-    await dbSaveHuntWidgetSettings(hunt.number_id, theme, opts);
-  }, [hunt?.number_id, theme, opts]);
-
-  const copyUrl = async () => { if (!overlayUrl) return; try { await navigator.clipboard.writeText(overlayUrl); } catch {} };
-  const openOverlay = () => { if (!overlayUrl) return; window.open(overlayUrl, "_blank", "noopener,noreferrer"); };
-
-  return (
-    <>
-      <Collapsible title="Overlay (Hunt)" defaultOpen>
-        <div className="grid md:grid-cols-[1fr_auto_auto] gap-2 items-end">
-          {/* esquerda: 3 selects compactos */}
-          <div className="grid md:grid-cols-3 gap-2">
-            <div>
-              <div className="text-xs opacity-70 mb-1">Preset</div>
-              <select
-                value={opts.preset}
-                onChange={(e) => setOpts((o) => ({ ...o, preset: e.target.value }))}
-                className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-              >
-                {HUNT_LOOK_PRESETS.map((p) => (
-                  <option key={p.key} value={p.key}>{p.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <div className="text-xs opacity-70 mb-1">Padding (px)</div>
-              <Input type="number" value={opts.overlay.pad} onChange={(e) => setOpts((o) => ({ ...o, overlay: { ...o.overlay, pad: Number(e.target.value) || 0 } }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
-            </div>
-            <div>
-              <div className="text-xs opacity-70 mb-1">Alignment</div>
-              <select
-                value={opts.overlay.align}
-                onChange={(e) => setOpts((o) => ({ ...o, overlay: { ...o.overlay, align: e.target.value } }))}
-                className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-              >
-                <option value="top">top</option>
-                <option value="center">center</option>
-                <option value="bottom">bottom</option>
-              </select>
-            </div>
-          </div>
-
-          {/* ações */}
-          <Button onClick={copyUrl} className="h-9 justify-center">
-            <CopyIcon className="h-4 w-4 mr-2" />
-            Copy URL
-          </Button>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={openOverlay} className="h-9 justify-center">
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Open overlay
-            </Button>
-            <Button variant="secondary" onClick={() => setOpenDesigner(true)} className="h-9 justify-center">
-              <SlidersHorizontal className="h-4 w-4 mr-2" />
-              Open Designer
-            </Button>
-          </div>
-        </div>
-
-        {/* preview ao vivo */}
-        <div className={cn("mt-3 rounded-xl p-3", isDark ? "bg-white/5 border border-white/10" : "bg-white border border-zinc-200")}>
-          <HuntWidgetPreview theme={theme} opts={opts} {...previewProps} />
-          <div className="mt-3 flex justify-end">
-            <Button onClick={persist} className="h-9">
-              <Save className="h-4 w-4 mr-2" />
-              Guardar definições
-            </Button>
-          </div>
-        </div>
-      </Collapsible>
-
-      <HuntOverlayDesigner
-        open={openDesigner}
-        onClose={() => setOpenDesigner(false)}
-        numberId={hunt?.number_id}
-        theme={theme}
-        setTheme={setTheme}
-        opts={opts}
-        setOpts={setOpts}
-        previewProps={previewProps}
-        persist={persist}
-      />
-    </>
-  );
-}
-
-/* ───────────────────────── Opening overlay (mantém o teu) ───────────────────────── */
-
-// opções rápidas (guardadas localmente)
 const DEFAULT_OPENING_OVERLAY = {
   design: "default",
   pad: 16,
@@ -1214,14 +765,37 @@ const DEFAULT_OPENING_OVERLAY = {
 function useLocalState(key, initial) {
   const [s, setS] = React.useState(() => {
     try {
-      const str = typeof localStorage !== "undefined" && localStorage.getItem(key);
+      const str =
+        typeof localStorage !== "undefined" && localStorage.getItem(key);
       return str ? { ...initial, ...JSON.parse(str) } : initial;
-    } catch { return initial; }
+    } catch {
+      return initial;
+    }
   });
   React.useEffect(() => {
-    try { localStorage.setItem(key, JSON.stringify(s)); } catch {}
+    try {
+      localStorage.setItem(key, JSON.stringify(s));
+    } catch {}
   }, [key, s]);
   return [s, setS];
+}
+
+function buildHuntOverlayUrl(base, huntNumberId, opts) {
+  const qs = new URLSearchParams();
+  qs.set("design", "cards");
+  qs.set("kpi", opts.kpiStyle === "minimal" ? "min" : "pill"); // estilo KPI
+  qs.set("mode", opts.cardMode || "grid");                     // grid | focus3
+  qs.set("showIdx", opts.showIdx ? "1" : "0");
+  qs.set("showBet", opts.showBet ? "1" : "0");
+  if (opts.thumbs) qs.set("thumbs", "1");
+  if (opts.shine) qs.set("shine", "1");
+  if (opts.pulse) qs.set("pulse", "1");
+  qs.set("align", String(opts.align || "center"));
+  qs.set("pad", String(opts.pad || 0));
+  qs.set("bw", String(opts.baseW || 560));
+  qs.set("bh", String(opts.baseH || 280));
+  qs.set("cardH", String(opts.cardH || 140));
+  return `${base}#/overlay/hunt/${huntNumberId}?${qs.toString()}`;
 }
 function buildOpeningOverlayUrl(base, huntNumberId, opts) {
   const qs = new URLSearchParams();
@@ -1234,15 +808,196 @@ function buildOpeningOverlayUrl(base, huntNumberId, opts) {
   qs.set("bh", String(opts.baseH || 320));
   return `${base}#/overlay/opening/${huntNumberId}?${qs.toString()}`;
 }
-// Preview minimal para Opening (igual ao teu)
+
+/* Preview compacto estilo battle — AGORA com Focus 3 + KPI minimal */
+function HuntOverlayPreview({ hunt, slots, opts }) {
+  const { t } = useLang();
+
+  const start = Number(hunt?.start_cost) || slots.reduce((a, s) => a + toNum(s.bet_size), 0);
+  const won = slots.reduce((a, s) => a + toNum(s.payout), 0);
+  const beLeft = Math.max(0, start - won);
+
+  const baseW = Number(opts.baseW || 560);
+  const baseH = Number(opts.baseH || 280);
+  const pad   = Number(opts.pad || 0);
+
+  const mode = opts.cardMode || "grid";        // 'grid' | 'focus3'
+  const kpiStyle = opts.kpiStyle || "minimal"; // 'minimal' | 'pill'
+
+  // pequenos “chips” minimalistas
+  const Mini = ({ label, value }) => (
+    <div
+      className="px-2.5 py-1 rounded-md border text-[12px]"
+      style={{ borderColor: "rgba(255,255,255,.12)", background: "rgba(255,255,255,.06)" }}
+      title={label}
+    >
+      <span className="opacity-70 mr-1">{label}:</span>
+      <b className={numCls}>{value}</b>
+    </div>
+  );
+
+  const Pill = ({ label, value }) => (
+    <div
+      className="px-3 py-1.5 rounded-full border text-[12px]"
+      style={{ borderColor: "rgba(255,255,255,.15)", background: "rgba(255,255,255,.10)" }}
+    >
+      {label}: <b className={numCls}>{value}</b>
+    </div>
+  );
+
+  function Card({ s, i, tall = false }) {
+    const superB = getIsSuper(s);
+    const showIdx = !!opts.showIdx;
+    const showBet = !!opts.showBet;
+    const h = tall ? Math.max(180, Math.round(baseH - 96 - pad)) : Math.max(80, Number(opts.cardH || 140));
+
+    return (
+      <div
+        className="relative rounded-xl overflow-hidden border"
+        style={{
+          height: h,
+          borderColor: superB ? "rgba(232,121,249,.55)" : "rgba(255,255,255,.10)",
+          boxShadow: superB ? "0 0 0 3px rgba(232,121,249,.18), 0 14px 36px rgba(0,0,0,.45)" : "0 12px 28px rgba(0,0,0,.35)"
+        }}
+        title={s?.name}
+      >
+        {opts.shine && (
+          <div
+            className="absolute inset-y-0 left-0 w-1/3 pointer-events-none"
+            style={{
+              background: "linear-gradient(90deg, transparent, rgba(255,255,255,.12), transparent)",
+              animation: "sweep 4.8s linear infinite"
+            }}
+          />
+        )}
+
+        {s?.thumbnail ? (
+          <img src={s.thumbnail} alt="" className="absolute inset-0 h-full w-full object-cover object-center" />
+        ) : (
+          <div className="absolute inset-0 bg-white/10" />
+        )}
+
+        <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/60 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 to-transparent" />
+
+        {showIdx && (
+          <div className="absolute left-1.5 top-1.5 z-10 text-[11px] font-bold px-1.5 py-0.5 rounded bg-black/70">
+            #{i + 1}
+          </div>
+        )}
+        {superB && (
+          <div className="absolute right-1.5 top-1.5 z-10">
+            <div className="px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide"
+                 style={{ background: "rgba(232,121,249,.9)", color: "#120614", boxShadow: "0 0 22px rgba(232,121,249,.45)" }}>
+              SUPER
+            </div>
+          </div>
+        )}
+
+        <div className="absolute left-2 right-2 bottom-2">
+          <div
+            className="px-2.5 py-1.5 rounded-lg border text-white shadow-[0_10px_30px_rgba(0,0,0,.45)] truncate"
+            style={{ background: "rgba(0,0,0,.45)", borderColor: "rgba(255,255,255,.18)" }}
+            title={s?.name || ""}
+          >
+            <div className="font-semibold leading-tight truncate">{s?.name || "—"}</div>
+            {showBet && (
+              <div className="mt-0.5 text-[11px] opacity-85 flex items-center gap-1">
+                <span className="h-[6px] w-[6px] rounded-full bg-white/70" />
+                {s?.bet_size != null ? fmtMoney(toNum(s.bet_size)) : "—"}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="rounded-xl border overflow-hidden relative"
+      style={{
+        width: baseW,
+        height: baseH,
+        background: "linear-gradient(135deg, rgba(14,22,42,1) 0%, rgba(28,26,49,1) 100%)",
+        borderColor: "rgba(255,255,255,.10)"
+      }}
+    >
+      <style>{`
+        @keyframes sweep { 0% { transform: translateX(-120%);} 100% { transform: translateX(120%);} }
+      `}</style>
+
+      {/* Topo KPIs */}
+      <div className="px-3" style={{ paddingTop: 10, paddingBottom: 8 + pad }}>
+        <div className="flex items-center justify-between gap-2 text-[12px]">
+          <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10">
+            {hunt?.title || "Hunt"}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {kpiStyle === "minimal" ? (
+              <>
+                <Mini label={t("kpiStart")} value={fmtMoney(start)} />
+                <Mini label={t("kpiBE")} value={fmtMoney(beLeft)} />
+                <Mini label={t("kpiBonus")} value={String(slots.length)} />
+              </>
+            ) : (
+              <>
+                <Pill label={t("kpiStart")} value={fmtMoney(start)} />
+                <Pill label={t("kpiBE")} value={fmtMoney(beLeft)} />
+                <Pill label={t("kpiBonus")} value={String(slots.length)} />
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* LISTAGEM */}
+      {mode !== "focus3" ? (
+        <div className="px-3" style={{ display: "grid", gridTemplateColumns: "repeat(8,minmax(0,1fr))", gap: 8 }}>
+          {slots.slice(0, 16).map((s, i) => (
+            <Card key={s.id} s={s} i={i} tall={false} />
+          ))}
+        </div>
+      ) : (
+        <div className="px-3" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 12 }}>
+          {slots.slice(0, 3).map((s, i) => (
+            <Card key={s.id} s={s} i={i} tall={true} />
+          ))}
+        </div>
+      )}
+
+      {/* P/L ao centro (discreto) */}
+      <div className="absolute left-1/2 -translate-x-1/2 bottom-3">
+        <div
+          className="px-3 py-1.5 rounded-full border text-[12px] shadow-[0_10px_30px_rgba(0,0,0,.35)]"
+          style={{ borderColor: "rgba(255,255,255,.18)", background: "rgba(255,255,255,.10)" }}
+        >
+          P/L:{" "}
+          <b className={cn(numCls, won - start >= 0 ? "text-emerald-300" : "text-rose-300")}>
+            {renderPL(won - start)}
+          </b>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OpeningOverlayPreview({ hunt, slots, opts }) {
   const current = slots[0] || null;
   const baseW = Number(opts.baseW || 560);
   const baseH = Number(opts.baseH || 320);
 
   return (
-    <div className="rounded-xl border border-white/10 overflow-hidden relative"
-      style={{ width: baseW, height: baseH, background: "linear-gradient(135deg, rgba(15,16,33,1) 0%, rgba(24,16,40,1) 100%)" }}>
+    <div
+      className="rounded-xl border border-white/10 overflow-hidden relative"
+      style={{
+        width: baseW,
+        height: baseH,
+        background:
+          "linear-gradient(135deg, rgba(15,16,33,1) 0%, rgba(24,16,40,1) 100%)",
+      }}
+    >
       <div className="px-3 pt-3 pb-2 flex items-center justify-between">
         <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
           {hunt?.title || "Hunt"} — Opening
@@ -1251,18 +1006,41 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
           {current ? current.name : "—"}
         </div>
       </div>
-      <div className="px-3" style={{ display: "grid", gridTemplateColumns: "repeat(8,minmax(0,1fr))", gap: 8 }}>
+
+      <div
+        className="px-3"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(8,minmax(0,1fr))",
+          gap: 8,
+        }}
+      >
         {slots.slice(0, 24).map((s, i) => (
-          <div key={s.id} className="relative rounded-lg overflow-hidden border border-white/10" title={s.name}>
-            <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">#{i + 1}</div>
-            {s.thumbnail ? <img src={s.thumbnail} alt="" className="h-14 w-full object-cover object-bottom" /> : <div className="h-14 w-full bg-white/10" />}
+          <div
+            key={s.id}
+            className="relative rounded-lg overflow-hidden border border-white/10"
+            title={s.name}
+          >
+            <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">
+              #{i + 1}
+            </div>
+            {s.thumbnail ? (
+              <img
+                src={s.thumbnail}
+                alt=""
+                className="h-14 w-full object-cover object-bottom"
+              />
+            ) : (
+              <div className="h-14 w-full bg-white/10" />
+            )}
           </div>
         ))}
       </div>
     </div>
   );
 }
-function OpeningDesigner({ open, onClose, opts, setOpts, title }) {
+
+function Designer({ open, onClose, opts, setOpts, title }) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-sm">
@@ -1272,10 +1050,17 @@ function OpeningDesigner({ open, onClose, opts, setOpts, title }) {
           <div>{title}</div>
         </div>
         <div className="flex items-center gap-2">
-          <Button className="h-9" onClick={onClose}><Save className="h-4 w-4 mr-2" />Save & Close</Button>
-          <Button variant="outline" className="h-9" onClick={onClose}><X className="h-4 w-4 mr-2" />Cancel</Button>
+          <Button className="h-9" onClick={onClose}>
+            <Save className="h-4 w-4 mr-2" />
+            Save & Close
+          </Button>
+          <Button variant="outline" className="h-9" onClick={onClose}>
+            <X className="h-4 w-4 mr-2" />
+            Cancel
+          </Button>
         </div>
       </div>
+
       <div className="absolute inset-x-0 top-14 bottom-0 grid md:grid-cols-[420px_1fr]">
         <div className="border-r border-white/10 bg-zinc-950/70 overflow-auto">
           <div className="p-4 space-y-4">
@@ -1284,99 +1069,314 @@ function OpeningDesigner({ open, onClose, opts, setOpts, title }) {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <div className="text-xs opacity-70 mb-1">Base width</div>
-                  <Input type="number" value={opts.baseW} onChange={(e) => setOpts((o) => ({ ...o, baseW: Number(e.target.value) || 0 }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
+                  <Input
+                    type="number"
+                    value={opts.baseW}
+                    onChange={(e) =>
+                      setOpts((o) => ({ ...o, baseW: Number(e.target.value) || 0 }))
+                    }
+                    className="h-9 bg-zinc-900 border-white/10 text-white"
+                  />
                 </div>
                 <div>
                   <div className="text-xs opacity-70 mb-1">Base height</div>
-                  <Input type="number" value={opts.baseH} onChange={(e) => setOpts((o) => ({ ...o, baseH: Number(e.target.value) || 0 }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
+                  <Input
+                    type="number"
+                    value={opts.baseH}
+                    onChange={(e) =>
+                      setOpts((o) => ({ ...o, baseH: Number(e.target.value) || 0 }))
+                    }
+                    className="h-9 bg-zinc-900 border-white/10 text-white"
+                  />
                 </div>
               </div>
+
               <div className="grid grid-cols-2 gap-2 mt-2">
                 <div>
                   <div className="text-xs opacity-70 mb-1">Padding</div>
-                  <Input type="number" value={opts.pad} onChange={(e) => setOpts((o) => ({ ...o, pad: Number(e.target.value) || 0 }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
+                  <Input
+                    type="number"
+                    value={opts.pad}
+                    onChange={(e) =>
+                      setOpts((o) => ({ ...o, pad: Number(e.target.value) || 0 }))
+                    }
+                    className="h-9 bg-zinc-900 border-white/10 text-white"
+                  />
                 </div>
                 <div>
                   <div className="text-xs opacity-70 mb-1">Align</div>
-                  <select value={opts.align} onChange={(e) => setOpts((o) => ({ ...o, align: e.target.value }))} className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white px-3">
+                  <select
+                    value={opts.align}
+                    onChange={(e) =>
+                      setOpts((o) => ({ ...o, align: e.target.value }))
+                    }
+                    className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+                  >
                     <option value="left">Left</option>
                     <option value="center">Center</option>
                     <option value="right">Right</option>
                   </select>
                 </div>
               </div>
+
               <div className="mt-3 text-xs opacity-70">Effects</div>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <label className="flex items-center gap-2">
-                  <input type="checkbox" checked={!!opts.shine} onChange={(e) => setOpts((o) => ({ ...o, shine: !!e.target.checked }))} />
+                  <input
+                    type="checkbox"
+                    checked={!!opts.shine}
+                    onChange={(e) =>
+                      setOpts((o) => ({ ...o, shine: !!e.target.checked }))
+                    }
+                  />
                   Shine
                 </label>
                 <label className="flex items-center gap-2">
-                  <input type="checkbox" checked={!!opts.pulse} onChange={(e) => setOpts((o) => ({ ...o, pulse: !!e.target.checked }))} />
+                  <input
+                    type="checkbox"
+                    checked={!!opts.pulse}
+                    onChange={(e) =>
+                      setOpts((o) => ({ ...o, pulse: !!e.target.checked }))
+                    }
+                  />
                   Pulse
                 </label>
               </div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-sm">
-              As opções são gravadas localmente (localStorage) para este navegador/conta.
+
+            <div className="text-[11px] opacity-60">
+              Dica: em OBS, usa sempre o mesmo <b>Width/Height</b> do browser
+              source para evitar cortes.
             </div>
           </div>
         </div>
-        <div className="p-6 overflow-auto" />
+
+        <div className="p-6 overflow-auto">
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-sm">
+            As opções são gravadas localmente (localStorage) para este
+            navegador/conta.
+          </div>
+        </div>
       </div>
     </div>
   );
 }
-function OpeningOverlayCard({ hunt, slots }) {
-  const { t } = useLang();
-  const [opts, setOpts] = useLocalState("overlay.opening.opts", DEFAULT_OPENING_OVERLAY);
-  const [open, setOpen] = React.useState(true);
-  const [openDesigner, setOpenDesigner] = React.useState(false);
-  const base = React.useMemo(() => `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, ""), []);
-  const url = React.useMemo(() => (!hunt?.number_id ? "" : buildOpeningOverlayUrl(base, hunt.number_id, opts)), [base, hunt?.number_id, opts]);
 
-  const copyUrl = async () => { if (!url) return; try { await navigator.clipboard.writeText(url); } catch { alert("Não consegui copiar o URL."); } };
-  const openOverlay = () => { if (!url) return; window.open(url, "_blank", "noopener,noreferrer"); };
+function OverlayCard({
+  type, // "hunt" | "opening"
+  hunt,
+  slots,
+  opts,
+  setOpts,
+}) {
+  const { t } = useLang();
+  const { profile } = React.useContext(AuthCtx) || {};
+  const [open, setOpen] = React.useState(false);
+  const [openDesigner, setOpenDesigner] = React.useState(false);
+
+  const base = React.useMemo(
+    () =>
+      `${window.location.origin}${window.location.pathname}`.replace(
+        /\/+$/,
+        ""
+      ),
+    []
+  );
+  const url = React.useMemo(() => {
+    if (!hunt?.number_id) return "";
+    return type === "hunt"
+      ? buildHuntOverlayUrl(base, hunt.number_id, opts)
+      : buildOpeningOverlayUrl(base, hunt.number_id, opts);
+  }, [type, hunt?.number_id, base, opts]);
+
+  const copyUrl = async () => {
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      alert("Não consegui copiar o URL.");
+    }
+  };
+  const openOverlay = () => {
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
 
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.03]">
-      <button type="button" onClick={() => setOpen((v) => !v)} className="w-full px-3 py-2 text-left flex items-center gap-2">
-        <div className="h-8 w-8 rounded-lg bg-white/10 flex items-center justify-center"><SlidersHorizontal className="h-4 w-4" /></div>
-        <div className="font-medium flex-1">{t("overlayOpening")}</div>
-        <ChevronDown className={cn("h-4 w-4 transition", open ? "rotate-180 opacity-100" : "opacity-70")} />
+      {/* Cabeçalho compacto (abre/fecha) */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full px-3 py-2 text-left flex items-center gap-2"
+      >
+        <div className="h-8 w-8 rounded-lg bg-white/10 flex items-center justify-center">
+          <SlidersHorizontal className="h-4 w-4" />
+        </div>
+        <div className="font-medium flex-1">
+          {type === "hunt" ? t("overlayHunt") : t("overlayOpening")}
+        </div>
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 transition",
+            open ? "rotate-180 opacity-100" : "opacity-70"
+          )}
+        />
       </button>
+
+      {/* Conteúdo */}
       {open && (
         <div className="px-3 pb-3 space-y-3">
           <div className="grid md:grid-cols-3 gap-2">
             <div>
               <div className="text-xs opacity-70 mb-1">{t("preset")}</div>
-              <select value={opts.design} onChange={(e) => setOpts((o) => ({ ...o, design: e.target.value }))} className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3">
-                <option value="default">Default</option>
-                <option value="minimal">Minimal</option>
+              <select
+                value={opts.design}
+                onChange={(e) =>
+                  setOpts((o) => ({ ...o, design: e.target.value }))
+                }
+                className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+              >
+                {type === "hunt" ? (
+                  <option value="cards">Cards (Start • B/E • #Bonus)</option>
+                ) : (
+                  <>
+                    <option value="default">Default</option>
+                    <option value="minimal">Minimal</option>
+                  </>
+                )}
               </select>
             </div>
             <div>
               <div className="text-xs opacity-70 mb-1">{t("padding")}</div>
-              <Input type="number" value={opts.pad} onChange={(e) => setOpts((o) => ({ ...o, pad: Number(e.target.value) || 0 }))} className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white" />
+              <Input
+                type="number"
+                value={opts.pad}
+                onChange={(e) =>
+                  setOpts((o) => ({ ...o, pad: Number(e.target.value) || 0 }))
+                }
+                className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+              />
             </div>
             <div>
               <div className="text-xs opacity-70 mb-1">{t("align")}</div>
-              <select value={opts.align} onChange={(e) => setOpts((o) => ({ ...o, align: e.target.value }))} className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3">
+              <select
+                value={opts.align}
+                onChange={(e) =>
+                  setOpts((o) => ({ ...o, align: e.target.value }))
+                }
+                className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+              >
                 <option value="left">{t("left")}</option>
                 <option value="center">{t("center")}</option>
                 <option value="right">{t("right")}</option>
               </select>
             </div>
           </div>
+
+          {/* NOVO — Controlo extra para Hunt */}
+          {type === "hunt" && (
+            <div className="grid md:grid-cols-3 gap-2">
+              <div>
+                <div className="text-xs opacity-70 mb-1">Cards</div>
+                <select
+                  value={opts.cardMode}
+                  onChange={(e) => setOpts(o => ({ ...o, cardMode: e.target.value }))}
+                  className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+                >
+                  <option value="grid">Grid (até 16)</option>
+                  <option value="focus3">Focus 3 (grandes)</option>
+                </select>
+              </div>
+
+              <div>
+                <div className="text-xs opacity-70 mb-1">KPI style</div>
+                <select
+                  value={opts.kpiStyle}
+                  onChange={(e) => setOpts(o => ({ ...o, kpiStyle: e.target.value }))}
+                  className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+                >
+                  <option value="minimal">Minimal</option>
+                  <option value="pill">Pills</option>
+                </select>
+              </div>
+
+              <div>
+                <div className="text-xs opacity-70 mb-1">Card height (px)</div>
+                <Input
+                  type="number"
+                  value={opts.cardH}
+                  onChange={(e) => setOpts(o => ({ ...o, cardH: Number(e.target.value) || 120 }))}
+                  className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+                />
+                <div className="text-[11px] opacity-60 mt-1">
+                  Usado no <b>grid</b>. No <b>Focus 3</b> a altura cresce automaticamente.
+                </div>
+              </div>
+
+              <div className="col-span-3 grid grid-cols-2 gap-2 text-sm mt-1">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={!!opts.showIdx}
+                    onChange={(e) => setOpts(o => ({ ...o, showIdx: !!e.target.checked }))}
+                  />
+                  Mostrar número (#)
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={!!opts.showBet}
+                    onChange={(e) => setOpts(o => ({ ...o, showBet: !!e.target.checked }))}
+                  />
+                  Mostrar bet no card
+                </label>
+              </div>
+            </div>
+          )}
+
+          {/* URL + ações */}
           <div className="flex items-center gap-2">
-            <Button type="button" className="h-9" onClick={copyUrl}><CopyIcon className="h-4 w-4 mr-2" />{t("copyUrl")}</Button>
-            <Button type="button" variant="outline" className="h-9" onClick={openOverlay}><ExternalLink className="h-4 w-4 mr-2" />{t("openLink")}</Button>
-            <Button type="button" variant="secondary" className="h-9" onClick={() => setOpenDesigner(true)}><SlidersHorizontal className="h-4 w-4 mr-2" />{t("openDesigner")}</Button>
+            <Button type="button" className="h-9" onClick={copyUrl}>
+              <CopyIcon className="h-4 w-4 mr-2" />
+              {t("copyUrl")}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9"
+              onClick={openOverlay}
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              {t("openLink")}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-9"
+              onClick={() => setOpenDesigner(true)}
+            >
+              <SlidersHorizontal className="h-4 w-4 mr-2" />
+              {t("openDesigner")}
+            </Button>
           </div>
+
+          {/* Preview ao vivo */}
           <div className="overflow-auto">
-            <OpeningOverlayPreview hunt={hunt} slots={slots} opts={opts} />
+            {type === "hunt" ? (
+              <HuntOverlayPreview hunt={hunt} slots={slots} opts={opts} />
+            ) : (
+              <OpeningOverlayPreview hunt={hunt} slots={slots} opts={opts} />
+            )}
           </div>
-          <OpeningDesigner open={openDesigner} onClose={() => setOpenDesigner(false)} opts={opts} setOpts={setOpts} title="Opening — Designer" />
+
+          <Designer
+            open={openDesigner}
+            onClose={() => setOpenDesigner(false)}
+            opts={opts}
+            setOpts={setOpts}
+            title={`${type === "hunt" ? "Hunt" : "Opening"} — Designer`}
+          />
         </div>
       )}
     </div>
@@ -1384,11 +1384,18 @@ function OpeningOverlayCard({ hunt, slots }) {
 }
 
 /* ───────────────────────── Redeem Drawer ───────────────────────── */
-function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart */ }) {
+function RedeemDrawer({
+  open,
+  onClose,
+  hunt,
+  slots,
+  onSaved /* baselineAtStart */,
+}) {
   const { t } = useLang();
   const [idx, setIdx] = React.useState(0);
   const [busy, setBusy] = React.useState(false);
 
+  // ESC fecha (fix)
   React.useEffect(() => {
     if (!open) return;
     const onEsc = (e) => e.key === "Escape" && askClose();
@@ -1396,6 +1403,7 @@ function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart *
     return () => window.removeEventListener("keydown", onEsc);
   }, [open]);
 
+  // paginação thumbs: 24 por página
   const PER_PAGE = 24;
   const [page, setPage] = React.useState(0);
   React.useEffect(() => setPage(Math.floor(idx / PER_PAGE)), [idx]);
@@ -1437,11 +1445,22 @@ function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart *
       removeTimer.current = setTimeout(() => setToastMsg(""), 320);
     }, 1200);
   }, []);
-  React.useEffect(() => () => { clearTimeout(hideTimer.current); clearTimeout(removeTimer.current); }, []);
+  React.useEffect(
+    () => () => {
+      clearTimeout(hideTimer.current);
+      clearTimeout(removeTimer.current);
+    },
+    []
+  );
 
   const [confirmClose, setConfirmClose] = React.useState(false);
-  function askClose() { setConfirmClose(true); }
-  function closeNow() { setConfirmClose(false); onClose && onClose(); }
+  function askClose() {
+    setConfirmClose(true);
+  }
+  function closeNow() {
+    setConfirmClose(false);
+    onClose && onClose();
+  }
 
   async function handleSaveAndNext() {
     if (!s) return;
@@ -1452,9 +1471,14 @@ function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart *
         const n = toNum(v);
         return Number.isFinite(n) ? n : null;
       };
-      const patch = { payout: numOrNull(payout), multiplier: numOrNull(multiplier), bet_size: numOrNull(bet) };
+      const patch = {
+        payout: numOrNull(payout),
+        multiplier: numOrNull(multiplier),
+        bet_size: numOrNull(bet),
+      };
       await updateHuntSlot(s.id, patch);
       onSaved && onSaved();
+
       if (idx < slots.length - 1) setIdx((i) => i + 1);
       else closeNow();
     } catch (e) {
@@ -1466,15 +1490,22 @@ function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart *
 
   if (!open) return null;
 
-  const sumPayoutsNow = slots.reduce((acc, it, i) => acc + (i === idx ? toNum(payout) : toNum(it.payout)), 0);
+  const sumPayoutsNow = slots.reduce((acc, it, i) => {
+    return acc + (i === idx ? toNum(payout) : toNum(it.payout));
+  }, 0);
+
   const startCost = toNum(hunt?.start_cost);
   const amountWonNow = sumPayoutsNow;
   const plNow = amountWonNow - startCost;
 
   const remaining = slots.slice(idx + 1);
-  const sumRemainingBets = remaining.reduce((a, it) => a + toNum(it.bet_size), 0);
+  const sumRemainingBets = remaining.reduce(
+    (a, it) => a + toNum(it.bet_size),
+    0
+  );
   const requiredNet = Math.max(0, startCost - amountWonNow);
-  const avgRequiredX = sumRemainingBets > 0 ? requiredNet / sumRemainingBets : null;
+  const avgRequiredX =
+    sumRemainingBets > 0 ? requiredNet / sumRemainingBets : null;
 
   const processedMultipliers = slots
     .slice(0, idx + 1)
@@ -1484,8 +1515,10 @@ function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart *
       return b > 0 && Number.isFinite(p) ? p / b : null;
     })
     .filter((v) => v != null);
+
   const currAvgX = processedMultipliers.length
-    ? processedMultipliers.reduce((a, v) => a + v, 0) / processedMultipliers.length
+    ? processedMultipliers.reduce((a, v) => a + v, 0) /
+      processedMultipliers.length
     : null;
   const cumulativeX = processedMultipliers.length
     ? processedMultipliers.reduce((a, v) => a + v, 0)
@@ -1499,19 +1532,45 @@ function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart *
           <div className="flex items-center justify-between mb-4">
             <div className="text-lg font-semibold">
               Start Redeeming —{" "}
-              {s ? (<span className="opacity-90">{s.name} <span className="opacity-60">({idx + 1}/{slots.length})</span></span>) : "Sem slots"}
+              {s ? (
+                <span className="opacity-90">
+                  {s.name}{" "}
+                  <span className="opacity-60">
+                    ({idx + 1}/{slots.length})
+                  </span>
+                </span>
+              ) : (
+                "Sem slots"
+              )}
             </div>
-            <button type="button" onClick={askClose} className="p-2 rounded-lg hover:bg-white/10 transition" aria-label="Fechar"><X className="h-5 w-5" /></button>
+            <button
+              type="button"
+              onClick={askClose}
+              className="p-2 rounded-lg hover:bg-white/10 transition"
+              aria-label="Fechar"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
 
           <div className="grid md:grid-cols-6 gap-3 mb-5">
             {[
-              [ "P/L", renderPL(plNow), plNow >= 0 ? "text-emerald-400" : "text-red-400" ],
-              [ "Amount won", fmtMoney(amountWonNow) ],
-              [ "Start cost", fmtMoney(startCost) ],
-              [ "Avg. Required X", avgRequiredX != null ? avgRequiredX.toFixed(2) : "—" ],
-              [ "Current Avg. X", currAvgX != null ? currAvgX.toFixed(2) : "—" ],
-              [ "Cumulative X", cumulativeX != null ? `${cumulativeX.toFixed(2)}x` : "—" ],
+              [
+                t("pl"),
+                renderPL(plNow),
+                plNow >= 0 ? "text-emerald-400" : "text-red-400",
+              ],
+              [t("amountWon"), fmtMoney(amountWonNow)],
+              [t("startCost"), fmtMoney(startCost)],
+              [
+                t("avgReqX"),
+                avgRequiredX != null ? avgRequiredX.toFixed(2) : t("none"),
+              ],
+              [t("currAvgX"), currAvgX != null ? currAvgX.toFixed(2) : t("none")],
+              [
+                t("cumulativeX"),
+                cumulativeX != null ? `${cumulativeX.toFixed(2)}x` : t("none"),
+              ],
             ].map(([label, value, color], i) => (
               <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-3">
                 <div className="text-[11px] opacity-70">{label}</div>
@@ -1522,94 +1581,200 @@ function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart *
 
           {s ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
-              <div className={cn("md:col-span-3 flex items-center gap-3 p-3 rounded-xl border", getIsSuper(s) ? "bg-fuchsia-500/10 border-fuchsia-400/40 ring-1 ring-fuchsia-400/20" : "bg-white/5 border-white/10")}>
+              <div
+                className={cn(
+                  "md:col-span-3 flex items-center gap-3 p-3 rounded-xl border",
+                  isSuper
+                    ? "bg-fuchsia-500/10 border-fuchsia-400/40 ring-1 ring-fuchsia-400/20"
+                    : "bg-white/5 border-white/10"
+                )}
+              >
                 {s.thumbnail ? (
-                  <img src={s.thumbnail} alt="" className={cn("h-14 w-14 rounded object-cover object-bottom bg-black/30", getIsSuper(s) && "ring-2 ring-fuchsia-400/60")} />
-                ) : (<div className="h-14 w-14 rounded bg-white/10" />)}
+                  <img
+                    src={s.thumbnail}
+                    alt=""
+                    className={cn(
+                      "h-14 w-14 rounded object-cover object-bottom bg-black/30",
+                      isSuper && "ring-2 ring-fuchsia-400/60"
+                    )}
+                  />
+                ) : (
+                  <div className="h-14 w-14 rounded bg-white/10" />
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold truncate flex items-center gap-2">
                     <span className="truncate">{s.name}</span>
-                    {getIsSuper(s) && (
+                    {isSuper && (
                       <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full border bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-400/40 inline-flex items-center gap-1">
-                        <Star className="h-3 w-3 fill-fuchsia-300" />Super
+                        <Star className="h-3 w-3 fill-fuchsia-300" />
+                        Super
                       </span>
                     )}
                   </div>
-                  <div className="text-xs opacity-70 truncate">{s.provider}</div>
+                  <div className="text-xs opacity-70 truncate">
+                    {s.provider}
+                  </div>
                 </div>
-                <Button type="button" variant="outline" onClick={() => { try { navigator.clipboard.writeText(s.name || ""); } catch {} showToast(`Copiado: ${s.name}`); }} className="h-9" title="Copy slot name">
-                  <CopyIcon className="h-4 w-4 mr-1" />Copy slot name
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    try {
+                      navigator.clipboard.writeText(s.name || "");
+                    } catch {}
+                    showToast(`${t("copied")} ${s.name}`);
+                  }}
+                  className="h-9"
+                  title={t("copySlot")}
+                >
+                  <CopyIcon className="h-4 w-4 mr-1" />
+                  {t("copySlot")}
                 </Button>
               </div>
 
               <div>
-                <div className="text-xs mb-1 opacity-70">Payout</div>
-                <Input type="text" inputMode="decimal" value={payout ?? ""} onChange={(e) => setPayout(e.target.value)} placeholder="ex.: 125,00" className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white placeholder:text-white/40 pl-3" />
+                <div className="text-xs mb-1 opacity-70">{t("payout")}</div>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={payout ?? ""}
+                  onChange={(e) => setPayout(e.target.value)}
+                  placeholder="ex.: 125,00"
+                  className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white placeholder:text-white/40 pl-3"
+                />
               </div>
               <div>
-                <div className="text-xs mb-1 opacity-70">Multiplier</div>
-                <Input type="text" inputMode="decimal" value={multiplier ?? ""} onChange={(e) => setMultiplier(e.target.value)} placeholder="ex.: 127,00" className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white placeholder:text-white/40 pl-3" />
+                <div className="text-xs mb-1 opacity-70">{t("multiplier")}</div>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={multiplier ?? ""}
+                  onChange={(e) => setMultiplier(e.target.value)}
+                  placeholder="ex.: 127,00"
+                  className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white placeholder:text-white/40 pl-3"
+                />
               </div>
               <div>
-                <div className="text-xs mb-1 opacity-70">Betsize</div>
-                <Input type="text" inputMode="decimal" value={bet ?? ""} onChange={(e) => setBet(e.target.value)} placeholder="ex.: 2" className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white placeholder:text-white/40 pl-3" />
+                <div className="text-xs mb-1 opacity-70">{t("betsizeReq")}</div>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={bet ?? ""}
+                  onChange={(e) => setBet(e.target.value)}
+                  placeholder="ex.: 2"
+                  className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white placeholder:text-white/40 pl-3"
+                />
               </div>
             </div>
           ) : (
-            <div className="opacity-70 text-sm mb-6">Ainda sem slots neste hunt.</div>
+            <div className="opacity-70 text-sm mb-6">
+              Ainda sem slots neste hunt.
+            </div>
           )}
 
           <div className="flex items-center justify-end gap-2 mb-4">
-            <Button type="button" variant="outline" onClick={askClose}>Close</Button>
+            <Button type="button" variant="outline" onClick={askClose}>
+              {t("close")}
+            </Button>
             <Button type="button" onClick={handleSaveAndNext} disabled={!s || busy}>
-              {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ChevronRight className="h-4 w-4 mr-2" />}
-              Save & continue
+              {busy ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <ChevronRight className="h-4 w-4 mr-2" />
+              )}
+              {t("saveContinue")}
             </Button>
           </div>
 
-          {/* thumbs com paginação */}
           {slots.length > 0 && (
             <>
               <div className="grid grid-cols-8 gap-3">
-                {slots.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE).map((it, localIdx) => {
-                  const i = page * PER_PAGE + localIdx;
-                  const active = i === idx;
-                  const superB = getIsSuper(it);
-                  return (
-                    <button
-                      key={it.id}
-                      type="button"
-                      onClick={(e) => {
-                        if (e.ctrlKey) {
-                          try { navigator.clipboard.writeText(it.name || ""); } catch {}
-                          showToast(`Copiado: ${it.name}`);
-                          return;
-                        }
-                        setIdx(i);
-                      }}
-                      className={cn("relative rounded-xl overflow-hidden border transition", active ? "border-emerald-400 ring-2 ring-emerald-400/20" : "border-white/10 hover:border-white/20")}
-                      title="Click to select • Ctrl+Click to copy name"
-                    >
-                      <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">#{i + 1}</div>
-                      {superB && <div className="absolute right-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-fuchsia-600/80">SUPER</div>}
-                      {it.thumbnail ? <img src={it.thumbnail} alt="" className="h-20 w-full object-cover object-bottom" /> : <div className="h-20 w-full bg-white/10" />}
-                    </button>
-                  );
-                })}
+                {slots
+                  .slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE)
+                  .map((it, localIdx) => {
+                    const i = page * PER_PAGE + localIdx;
+                    const active = i === idx;
+                    const superB = getIsSuper(it);
+                    return (
+                      <button
+                        key={it.id}
+                        type="button"
+                        onClick={(e) => {
+                          if (e.ctrlKey) {
+                            try {
+                              navigator.clipboard.writeText(it.name || "");
+                            } catch {}
+                            showToast(`${t("copied")} ${it.name}`);
+                            return;
+                          }
+                          setIdx(i);
+                        }}
+                        className={cn(
+                          "relative rounded-xl overflow-hidden border transition",
+                          active
+                            ? "border-emerald-400 ring-2 ring-emerald-400/20"
+                            : "border-white/10 hover:border-white/20"
+                        )}
+                        title={t("copyHint")}
+                      >
+                        <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">
+                          #{i + 1}
+                        </div>
+                        {superB && (
+                          <div className="absolute right-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-fuchsia-600/80">
+                            SUPER
+                          </div>
+                        )}
+                        {it.thumbnail ? (
+                          <img
+                            src={it.thumbnail}
+                            alt=""
+                            className="h-20 w-full object-cover object-bottom"
+                          />
+                        ) : (
+                          <div className="h-20 w-full bg-white/10" />
+                        )}
+                      </button>
+                    );
+                  })}
               </div>
               {pageCount > 1 && (
                 <div className="mt-3 flex items-center justify-center gap-2 text-sm">
-                  <Button type="button" variant="outline" className="h-8 px-3" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}><ChevronLeft className="h-4 w-4" /></Button>
-                  <div className="opacity-70">{page + 1} / {pageCount}</div>
-                  <Button type="button" variant="outline" className="h-8 px-3" onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))} disabled={page === pageCount - 1}><ChevronRight className="h-4 w-4" /></Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 px-3"
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
+                    disabled={page === 0}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="opacity-70">
+                    {page + 1} / {pageCount}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 px-3"
+                    onClick={() =>
+                      setPage((p) => Math.min(pageCount - 1, p + 1))
+                    }
+                    disabled={page === pageCount - 1}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
                 </div>
               )}
             </>
           )}
 
-          {/* Toast */}
           {toastMsg && (
-            <div className={cn("pointer-events-none absolute right-4 bottom-4 transition-all", toastOpen ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2")}>
+            <div
+              className={cn(
+                "pointer-events-none absolute right-4 bottom-4 transition-all",
+                toastOpen ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
+              )}
+            >
               <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs text-white shadow-lg backdrop-blur-sm">
                 <Check className="h-3.5 w-3.5" />
                 {toastMsg}
@@ -1621,10 +1786,10 @@ function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart *
 
       <ConfirmDialog
         open={confirmClose}
-        title="Exit Opening?"
-        body="You have progress in this session. Are you sure you want to close?"
-        confirmText="Close"
-        cancelText="Cancel"
+        title={t("confirmCloseTitle")}
+        body={t("confirmCloseBody")}
+        confirmText={t("close")}
+        cancelText={t("cancel")}
         onConfirm={closeNow}
         onCancel={() => setConfirmClose(false)}
       />
@@ -1638,7 +1803,9 @@ export default function HuntDetail({ numberId }) {
   const { t } = useLang();
 
   const [nId, setNId] = React.useState(() => {
-    const m = (typeof location !== "undefined" && location.hash) || "";
+    const m =
+      (typeof location !== "undefined" && location.hash) ||
+      "";
     const mm = m.match(/#\/hunts\/(\d+)/i);
     return Number(numberId ?? (mm && mm[1])) || 0;
   });
@@ -1667,22 +1834,46 @@ export default function HuntDetail({ numberId }) {
 
   const [sortBy, setSortBy] = React.useState({ key: "order", dir: 1 });
 
+  // overlays – estados guardados localmente (compacto e não ocupa o ecrã todo)
+  const [huntOpts, setHuntOpts] = useLocalState(
+    "overlay.hunt.opts",
+    DEFAULT_HUNT_OVERLAY
+  );
+  const [openingOpts, setOpeningOpts] = useLocalState(
+    "overlay.opening.opts",
+    DEFAULT_OPENING_OVERLAY
+  );
+
   const sortedSlots = React.useMemo(() => {
     const arr = [...slots];
+
     if (sortBy.key === "order") return arr;
+
     if (sortBy.key === "betsize") {
-      arr.sort((a, b) => (toNum(a.bet_size) - toNum(b.bet_size)) * sortBy.dir || a.name.localeCompare(b.name));
+      arr.sort(
+        (a, b) =>
+          (toNum(a.bet_size) - toNum(b.bet_size)) * sortBy.dir ||
+          a.name.localeCompare(b.name)
+      );
       return arr;
     }
+
     if (sortBy.key === "date") {
       const getTime = (r) => {
         const raw = r?._raw || {};
-        const c1 = raw.created_at || raw.createdAt || raw.timestamp || r.created_at;
+        const c1 =
+          raw.created_at ||
+          raw.createdAt ||
+          raw.timestamp ||
+          r.created_at;
         return c1 ? new Date(c1).getTime() : 0;
       };
-      arr.sort((a, b) => (getTime(a) - getTime(b)) * sortBy.dir || a.id - b.id);
+      arr.sort(
+        (a, b) => (getTime(a) - getTime(b)) * sortBy.dir || a.id - b.id
+      );
       return arr;
     }
+
     if (sortBy.key === "random") {
       for (let i = arr.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -1690,25 +1881,37 @@ export default function HuntDetail({ numberId }) {
       }
       return arr;
     }
+
     return arr;
   }, [slots, sortBy]);
 
+  // drag & drop
   const dragIndex = React.useRef(null);
-  function onDragStart(i) { dragIndex.current = i; }
-  function onDragOver(e) { e.preventDefault(); }
+  function onDragStart(i) {
+    dragIndex.current = i;
+  }
+  function onDragOver(e) {
+    e.preventDefault();
+  }
   async function onDrop(i) {
     const from = dragIndex.current;
     if (from == null || from === i) return;
+
     const arr = [...sortedSlots];
     const [moved] = arr.splice(from, 1);
     arr.splice(i, 0, moved);
+
     arr.forEach((row, idx) => {
       row._raw = { ...(row._raw || {}) };
       for (const c of ORDER_COLS) row._raw[c] = idx + 1;
     });
+
     setSlots(arr);
     dragIndex.current = null;
-    try { await persistOrder(arr); } catch {}
+
+    try {
+      await persistOrder(arr);
+    } catch {}
   }
 
   React.useEffect(() => {
@@ -1733,6 +1936,7 @@ export default function HuntDetail({ numberId }) {
       setErrSlots("");
       const { slots: apiSlots } = await listHuntSlots({ numberId: nId });
       let list = apiSlots || [];
+
       const haveOrder = list.some((s) => readOrderFromRow(s) != null);
       if (haveOrder) {
         list = [...list].sort((a, b) => {
@@ -1743,27 +1947,40 @@ export default function HuntDetail({ numberId }) {
           return A - B || a.id - b.id;
         });
       }
+
       setSlots(list);
       setSortBy((s) => (s.key === "order" ? s : { key: "order", dir: 1 }));
     } catch {
-      setSlots([]); setErrSlots("Falha a carregar as slots deste hunt.");
+      setSlots([]);
+      setErrSlots("Falha a carregar as slots deste hunt.");
     }
   }, [nId]);
 
-  React.useEffect(() => { refreshSlots(); }, [refreshSlots]);
+  React.useEffect(() => {
+    refreshSlots();
+  }, [refreshSlots]);
 
-  // KPIs
   const kpis = React.useMemo(() => {
     const startFromHunt = Number(hunt?.start_cost);
-    const startFromSlots = slots.reduce((a, s) => a + (toNum(s.bet_size) || 0), 0);
+    const startFromSlots = slots.reduce(
+      (a, s) => a + (toNum(s.bet_size) || 0),
+      0
+    );
     const start = Number.isFinite(startFromHunt) ? startFromHunt : startFromSlots;
-    const amountWon = slots.reduce((a, s) => a + (toNum(s.payout) || 0), 0);
+
+    const amountWon = slots.reduce(
+      (a, s) => a + (toNum(s.payout) || 0),
+      0
+    );
     const bonusCount = slots.length;
     const pl = amountWon - start;
+
     return { pl, amountWon, bonusCount, startCost: start };
   }, [hunt, slots]);
 
-  function goBack() { window.location.hash = "#/hunts"; }
+  function goBack() {
+    window.location.hash = "#/hunts";
+  }
 
   const [openRedeem, setOpenRedeem] = React.useState(false);
   const [baselineAtStart, setBaselineAtStart] = React.useState(0);
@@ -1777,7 +1994,13 @@ export default function HuntDetail({ numberId }) {
     setOpenRedeem(true);
   };
 
-  if (busy) return <div className="max-w-7xl mx-auto px-4 py-10 text-sm opacity-70">A carregar…</div>;
+  if (busy) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-10 text-sm opacity-70">
+        A carregar…
+      </div>
+    );
+  }
   if (!hunt) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-10">
@@ -1797,21 +2020,43 @@ export default function HuntDetail({ numberId }) {
       {/* Top bar */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={goBack}><IconBack className="mr-2 h-4 w-4" />{t("back")}</Button>
+          <Button variant="outline" onClick={goBack}>
+            <IconBack className="mr-2 h-4 w-4" />
+            {t("back")}
+          </Button>
           <h1 className="text-xl font-semibold">{hunt.title}</h1>
         </div>
       </div>
 
-      {/* KPIs topo */}
+      {/* KPIs topo — mais compacto */}
       <div className="grid md:grid-cols-4 gap-2 mb-3">
         {[
-          [ "Profit/Loss +/-", renderPL(kpis.pl), kpis.pl >= 0 ? "text-emerald-400" : "text-red-400" ],
-          [ "Bonus Count", String(kpis.bonusCount), "" ],
-          [ t("startCost"), fmtMoney(kpis.startCost), "" ],
-          [ t("amountWon"), fmtMoney(kpis.amountWon), "" ],
+          [
+            "Profit/Loss +/-",
+            renderPL(kpis.pl),
+            kpis.pl >= 0 ? "text-emerald-400" : "text-red-400",
+          ],
+          ["Bonus Count", String(kpis.bonusCount), ""],
+          [t("startCost"), fmtMoney(kpis.startCost), ""],
+          [t("amountWon"), fmtMoney(kpis.amountWon), ""],
         ].map(([label, value, color], i) => (
-          <div key={i} className={cn("rounded-xl border p-3", isDark ? "border-white/10 bg-white/5" : "border-zinc-200 bg-white")}>
-            <div className={cn("text-[11px] leading-none mb-1", isDark ? "text-white/60" : "text-zinc-600")}>{label}</div>
+          <div
+            key={i}
+            className={cn(
+              "rounded-xl border p-3",
+              isDark
+                ? "border-white/10 bg-white/5"
+                : "border-zinc-200 bg-white"
+            )}
+          >
+            <div
+              className={cn(
+                "text-[11px] leading-none mb-1",
+                isDark ? "text-white/60" : "text-zinc-600"
+              )}
+            >
+              {label}
+            </div>
             <div className={cn("font-semibold", numCls, color)}>{value}</div>
           </div>
         ))}
@@ -1819,35 +2064,86 @@ export default function HuntDetail({ numberId }) {
 
       {/* Ações rápidas */}
       <div className="grid md:grid-cols-4 gap-2 mb-3">
-        <Button variant="outline" className="h-10" onClick={() => setSortBy((s) => ({ key: "betsize", dir: s.key === "betsize" ? -s.dir : -1 }))}>
-          <SlidersHorizontal className="mr-2 h-4 w-4" />{t("betsize")}
+        <Button
+          variant="outline"
+          className="h-10"
+          onClick={() =>
+            setSortBy((s) => ({
+              key: "betsize",
+              dir: s.key === "betsize" ? -s.dir : -1,
+            }))
+          }
+        >
+          <SlidersHorizontal className="mr-2 h-4 w-4" />
+          {t("betsize")}
         </Button>
-        <Button variant="outline" className="h-10" onClick={() => setSortBy((s) => ({ key: "date", dir: s.key === "date" ? -s.dir : -1 }))}>
-          <CalendarIcon className="mr-2 h-4 w-4" />{t("date")}
+        <Button
+          variant="outline"
+          className="h-10"
+          onClick={() =>
+            setSortBy((s) => ({ key: "date", dir: s.key === "date" ? -s.dir : -1 }))
+          }
+        >
+          <CalendarIcon className="mr-2 h-4 w-4" />
+          {t("date")}
         </Button>
-        <Button variant="outline" className="h-10" onClick={() => setSortBy({ key: "random", dir: 1 })}>
-          <Shuffle className="mr-2 h-4 w-4" />{t("random")}
+        <Button
+          variant="outline"
+          className="h-10"
+          onClick={() => setSortBy({ key: "random", dir: 1 })}
+        >
+          <Shuffle className="mr-2 h-4 w-4" />
+          {t("random")}
         </Button>
 
         <div className="flex items-center justify-end">
-          <Button className="h-10" onClick={openStart}><Play className="mr-2 h-4 w-4" />{t("startRedeeming")}</Button>
+          <Button className="h-10" onClick={openStart}>
+            <Play className="mr-2 h-4 w-4" />
+            {t("startRedeeming")}
+          </Button>
           <div className="w-2" />
-          <Button variant="outline" onClick={() => setOpenAdd(true)}><Plus className="mr-2 h-4 w-4" />{t("addBonus")}</Button>
+          <Button variant="outline" onClick={() => setOpenAdd(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            {t("addBonus")}
+          </Button>
         </div>
       </div>
 
-      {/* Widget compacto com os DOIS overlays */}
+      {/* Widget compacto (discreto) com 2 overlays */}
       <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 mb-4">
         <div className="text-sm font-medium mb-2">{t("overlays")}</div>
         <div className="grid lg:grid-cols-2 gap-3">
-          <HuntOverlaySection hunt={hunt} slots={sortedSlots} kpis={kpis} />
-          <OpeningOverlayCard hunt={hunt} slots={sortedSlots} />
+          <OverlayCard
+            type="hunt"
+            hunt={hunt}
+            slots={sortedSlots}
+            opts={huntOpts}
+            setOpts={setHuntOpts}
+          />
+          <OverlayCard
+            type="opening"
+            hunt={hunt}
+            slots={sortedSlots}
+            opts={openingOpts}
+            setOpts={setOpeningOpts}
+          />
         </div>
       </div>
 
       {/* Tabela */}
-      <div className={cn("rounded-xl border overflow-hidden", isDark ? "border-white/10" : "border-zinc-200")}>
-        <div className={cn("grid grid-cols-12 items-center px-4 py-3 text-xs font-semibold", isDark ? "bg-white/[0.04]" : "bg-zinc-50")}>
+      <div
+        className={cn(
+          "rounded-xl border overflow-hidden",
+          isDark ? "border-white/10" : "border-zinc-200"
+        )}
+      >
+        {/* Header */}
+        <div
+          className={cn(
+            "grid grid-cols-12 items-center px-4 py-3 text-xs font-semibold",
+            isDark ? "bg-white/[0.04]" : "bg-zinc-50"
+          )}
+        >
           <div className="col-span-7">{t("bonus")}</div>
           <div className="col-span-1 text-center">{t("betsize")}</div>
           <div className="col-span-2 text-center">{t("payout")}</div>
@@ -1855,50 +2151,116 @@ export default function HuntDetail({ numberId }) {
           <div className="col-span-1 text-right">{t("actions")}</div>
         </div>
 
-        {errSlots && <div className="px-4 py-3 text-sm text-red-400">{errSlots}</div>}
-        {sortedSlots.length === 0 && !errSlots && <div className="px-4 py-6 text-sm opacity-70">Ainda sem slots neste hunt.</div>}
+        {errSlots && (
+          <div className="px-4 py-3 text-sm text-red-400">{errSlots}</div>
+        )}
+
+        {sortedSlots.length === 0 && !errSlots && (
+          <div className="px-4 py-6 text-sm opacity-70">
+            Ainda sem slots neste hunt.
+          </div>
+        )}
 
         {sortedSlots.map((s, i) => {
           const isSuper = getIsSuper(s);
           return (
             <div
               key={s.id}
-              className={cn("grid grid-cols-12 items-center px-4 py-4 min-h-[56px] border-t",
+              className={cn(
+                "grid grid-cols-12 items-center px-4 py-4 min-h-[56px] border-t",
                 isDark ? "border-white/10" : "border-zinc-200",
-                isSuper ? "bg-fuchsia-500/5 border-l-4 border-l-fuchsia-400/70" : ""
+                isSuper
+                  ? "bg-fuchsia-500/5 border-l-4 border-l-fuchsia-400/70"
+                  : ""
               )}
               draggable
               onDragStart={() => onDragStart(i)}
               onDragOver={onDragOver}
               onDrop={() => onDrop(i)}
             >
+              {/* BONUS */}
               <div className="col-span-7 flex items-center gap-3 min-w-0">
                 <div className="text-[11px] opacity-60 w-6">#{i + 1}</div>
-                {s.thumbnail ? <img src={s.thumbnail} alt="" className="h-8 w-8 rounded object-cover" /> : <div className="h-8 w-8 rounded bg-white/10" />}
+                {s.thumbnail ? (
+                  <img
+                    src={s.thumbnail}
+                    alt=""
+                    className="h-8 w-8 rounded object-cover"
+                  />
+                ) : (
+                  <div className="h-8 w-8 rounded bg-white/10" />
+                )}
                 <div className="min-w-0">
                   <div className="truncate font-medium flex items-center gap-2">
                     <span className="truncate">{s.name}</span>
                     {isSuper && (
                       <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full border bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-400/40 inline-flex items-center gap-1">
-                        <Star className="h-3 w-3 fill-fuchsia-300" />Super
+                        <Star className="h-3 w-3 fill-fuchsia-300" />
+                        Super
                       </span>
                     )}
                   </div>
-                  <div className="text-xs opacity-70 truncate">{s.provider || "—"}</div>
+                  <div className="text-xs opacity-70 truncate">
+                    {s.provider || "—"}
+                  </div>
                 </div>
               </div>
 
-              <div className={cn("col-span-1 text-center flex items-center justify-center", numCls)}>{s.bet_size ?? "—"}</div>
-              <div className={cn("col-span-2 text-center flex items-center justify-center", numCls)}>{s.payout != null ? fmtMoney(s.payout) : "—"}</div>
-              <div className={cn("col-span-1 text-center flex items-center justify-center", numCls)}>
-                {s.multiplier != null ? Number(s.multiplier).toFixed(2) : "—"}
+              {/* Colunas numéricas */}
+              <div
+                className={cn(
+                  "col-span-1 text-center flex items-center justify-center",
+                  numCls
+                )}
+              >
+                {s.bet_size ?? "—"}
+              </div>
+              <div
+                className={cn(
+                  "col-span-2 text-center flex items-center justify-center",
+                  numCls
+                )}
+              >
+                {s.payout != null ? fmtMoney(s.payout) : "—"}
+              </div>
+              <div
+                className={cn(
+                  "col-span-1 text-center flex items-center justify-center",
+                  numCls
+                )}
+              >
+                {s.multiplier != null
+                  ? Number(s.multiplier).toFixed(2)
+                  : "—"}
               </div>
 
+              {/* Ações */}
               <div className="col-span-1 flex items-center justify-end gap-2">
-                <Button type="button" variant="outline" size="icon" title={t("edit")} className="h-7 w-7" onClick={() => { setEditRow(s); setEditOpen(true); }}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  title={t("edit")}
+                  className="h-7 w-7"
+                  onClick={() => {
+                    setEditRow(s);
+                    setEditOpen(true);
+                  }}
+                >
                   <Pencil className="h-4 w-4" />
                 </Button>
-                <Button type="button" variant="destructive" size="icon" title={t("delete")} className="h-7 w-7 text-white" onClick={() => { setDelRow(s); setDelOpen(true); }}>
+
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon"
+                  title={t("delete")}
+                  className="h-7 w-7 text-white"
+                  onClick={() => {
+                    setDelRow(s);
+                    setDelOpen(true);
+                  }}
+                >
                   <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
@@ -1907,16 +2269,51 @@ export default function HuntDetail({ numberId }) {
         })}
       </div>
 
-      <div className="text-[11px] mt-8 opacity-60 text-center">{t("playResponsibly")}</div>
+      <div className="text-[11px] mt-8 opacity-60 text-center">
+        {t("playResponsibly")}
+      </div>
 
       {/* Modais */}
-      <AddBonusModal open={openAdd} onClose={() => setOpenAdd(false)} numberId={hunt.number_id} onAdded={refreshSlots} />
-      <RedeemDrawer open={openRedeem} onClose={() => setOpenRedeem(false)} hunt={hunt} slots={sortedSlots} onSaved={refreshSlots} baselineAtStart={baselineAtStart} />
-      <EditBonusModal open={editOpen} row={editRow} onClose={() => setEditOpen(false)} onSaved={refreshSlots} />
-      <ConfirmDeleteModal open={delOpen} slot={delRow} onCancel={() => setDelOpen(false)} onConfirm={async () => {
-        try { await deleteHuntSlot(delRow.id); setDelOpen(false); setDelRow(null); await refreshSlots(); } catch (e) { alert(e.message || "Falha ao eliminar."); }
-      }} />
+      <AddBonusModal
+        open={openAdd}
+        onClose={() => setOpenAdd(false)}
+        numberId={hunt.number_id}
+        onAdded={refreshSlots}
+      />
 
+      <RedeemDrawer
+        open={openRedeem}
+        onClose={() => setOpenRedeem(false)}
+        hunt={hunt}
+        slots={sortedSlots}
+        onSaved={refreshSlots}
+        baselineAtStart={baselineAtStart}
+      />
+
+      <EditBonusModal
+        open={editOpen}
+        row={editRow}
+        onClose={() => setEditOpen(false)}
+        onSaved={refreshSlots}
+      />
+
+      <ConfirmDeleteModal
+        open={delOpen}
+        slot={delRow}
+        onCancel={() => setDelOpen(false)}
+        onConfirm={async () => {
+          try {
+            await deleteHuntSlot(delRow.id);
+            setDelOpen(false);
+            setDelRow(null);
+            await refreshSlots();
+          } catch (e) {
+            alert(e.message || "Falha ao eliminar.");
+          }
+        }}
+      />
+
+      {/* Confirmar início do redeem */}
       <ConfirmDialog
         open={confirmStart}
         title={t("confirmStartTitle")}
