@@ -1,6 +1,6 @@
 // /src/hunt-detail.jsx
 import React from "react";
-import { useTheme } from "@/contexts/auth-context";
+import { useTheme, AuthCtx } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -21,6 +21,9 @@ import {
   Pencil,
   Trash2,
   Check,
+  ExternalLink,
+  Palette,
+  Save,
 } from "lucide-react";
 
 import { getHuntByNumberId } from "@/lib/hunts";
@@ -80,6 +83,15 @@ const DICT = {
     none: "—",
     copyHint: "Clique para selecionar • Ctrl+Clique para copiar o nome",
     playResponsibly: "Jogue com responsabilidade. 18+. Template UI.",
+    widget: "Widget",
+    openDesigner: "Open Designer",
+    openOverlay: "Open overlay",
+    copyUrl: "Copy URL",
+    kpiWon: "Amount won",
+    kpiStart: "Start cost",
+    kpiPL: "P/L",
+    bonusCount: "Bonus Count",
+    hunt: "Hunt",
   },
   en: {
     back: "Back",
@@ -123,6 +135,15 @@ const DICT = {
     none: "—",
     copyHint: "Click to select • Ctrl+Click to copy name",
     playResponsibly: "Play responsibly. 18+. Template UI.",
+    widget: "Widget",
+    openDesigner: "Open Designer",
+    openOverlay: "Open overlay",
+    copyUrl: "Copy URL",
+    kpiWon: "Amount won",
+    kpiStart: "Start cost",
+    kpiPL: "P/L",
+    bonusCount: "Bonus Count",
+    hunt: "Hunt",
   },
 };
 function useLang() {
@@ -181,7 +202,132 @@ const toNum = (v) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-/* ───────────────────────── helpers ───────────────────────── */
+/* ───────────────────────── Widget: tema/opções ───────────────────────── */
+const DEFAULT_THEME = {
+  bgStart: "#0b1020",
+  bgEnd: "#111827",
+
+  panelBorder: "rgba(255,255,255,0.12)",
+  panelBorderWidth: 1,
+
+  text: "#e5e7eb",
+  subtext: "#9ca3af",
+  accent: "#7dd3fc",
+
+  chipBg: "rgba(255,255,255,0.08)",
+  chipBorder: "rgba(255,255,255,0.18)",
+  chipBorderWidth: 1,
+  chipRadius: 12,
+
+  badgeBg: "rgba(255,255,255,0.08)",
+  badgeBorder: "rgba(255,255,255,0.18)",
+  badgeBorderWidth: 1,
+
+  totalBg: "rgba(255,255,255,0.10)",
+  totalBorder: "rgba(255,255,255,0.18)",
+  totalBorderWidth: 1,
+
+  pos: "#22c55e",
+  neg: "#ef4444",
+  vsBg: "rgba(99,102,241,0.35)",
+
+  radius: 18,
+  pillRadius: 16,
+  fontFamily:
+    "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji','Segoe UI Emoji'",
+  fontScale: 100,
+  fontWeight: 400,
+  strongWeight: 500,
+
+  showThumbs: true,
+  shine: true,
+  pulse: true,
+};
+const DEFAULT_LAYOUT = {
+  mode: "default", // "default" | "free" (para futuro)
+  positions: {},
+};
+const DEFAULT_OPTS = {
+  layoutKind: "horizontal", // 'horizontal' | 'vertical'
+  totalJustify: "center",
+  totalLabelMode: "label+value",
+  totalLabelText: "P/L",
+
+  kpiLayout: "grid", // 'grid' | 'row'
+  showKpiStart: true,
+  showKpiWon: true,
+  showKpiPL: true,
+  showBonusCount: true,
+
+  overlay: {
+    mode: "auto",
+    width: 1920,
+    height: 1080,
+    baseW: 1100,
+    baseH: 420,
+    pad: 24,
+    align: "center",
+  },
+};
+/* Presets de cores */
+const PRESETS = [
+  { name: "Neon",    t: { bgStart: "#0f0c29", bgEnd: "#302b63", accent: "#22d3ee", pos: "#10b981", neg: "#ef4444", vsBg: "rgba(34,211,238,0.35)" } },
+  { name: "Sunset",  t: { bgStart: "#1f0a26", bgEnd: "#3a0b2e", accent: "#fb7185", pos: "#f59e0b", neg: "#ef4444", vsBg: "rgba(251,113,133,0.35)" } },
+  { name: "Emerald", t: { bgStart: "#06251f", bgEnd: "#0b3830", accent: "#34d399", pos: "#22c55e", neg: "#e11d48", vsBg: "rgba(52,211,153,0.28)" } },
+  { name: "Magenta", t: { bgStart: "#1e0031", bgEnd: "#2b0b3f", accent: "#c084fc", pos: "#a7f3d0", neg: "#fb7185", vsBg: "rgba(192,132,252,0.35)" } },
+  { name: "Carbon",  t: { bgStart: "#0b0b0b", bgEnd: "#171717", accent: "#93c5fd", pos: "#86efac", neg: "#fca5a5", vsBg: "rgba(147,197,253,0.25)" } },
+  { name: "Twilight",t: { bgStart: "#0b1b3a", bgEnd: "#112a46", accent: "#7dd3fc", pos: "#22c55e", neg: "#fb7185", vsBg: "rgba(125,211,252,0.30)" } },
+];
+/* Presets de tamanho */
+const SIZE_PRESETS = [
+  { name: "Small",       dir: "h", o: { baseW: 880,  baseH: 360, pad: 20, align: "center" }, theme: { fontScale: 95 } },
+  { name: "Default",     dir: "h", o: { baseW: 1100, baseH: 420, pad: 24, align: "center" }, theme: { fontScale: 100 } },
+  { name: "Wide Bar",    dir: "h", o: { baseW: 1400, baseH: 360, pad: 20, align: "center" }, theme: { fontScale: 98, pillRadius: 14 } },
+  { name: "XL",          dir: "h", o: { baseW: 1500, baseH: 520, pad: 28, align: "center" }, theme: { fontScale: 108 } },
+  { name: "Vertical • Compact", dir: "v", o: { baseW: 440, baseH: 640, pad: 16, align: "center" }, theme: { fontScale: 96 } },
+  { name: "Vertical • Sidebar", dir: "v", o: { baseW: 480, baseH: 720, pad: 18, align: "center" }, theme: { fontScale: 96 } },
+  { name: "Vertical • Tall",    dir: "v", o: { baseW: 560, baseH: 860, pad: 20, align: "center" }, theme: { fontScale: 98 } },
+];
+
+/* ---- URL builder para o overlay do Hunt ---- */
+function buildOverlayUrl(base, token, opts, huntNumberId) {
+  const o = (opts && opts.overlay) || {};
+  const qs = new URLSearchParams();
+  if (huntNumberId) qs.set("id", String(huntNumberId));
+  if (typeof o.baseW === "number") qs.set("bw", String(o.baseW));
+  if (typeof o.baseH === "number") qs.set("bh", String(o.baseH));
+  if (typeof o.pad === "number")   qs.set("pad", String(o.pad));
+  if (o.align) qs.set("align", String(o.align));
+  if (o.mode === "fixed") {
+    qs.set("pinsize", "1");
+    if (o.width)  qs.set("w", String(o.width));
+    if (o.height) qs.set("h", String(o.height));
+  }
+  qs.set("dir", opts?.layoutKind === "vertical" ? "v" : "h");
+  const q = qs.toString();
+  return `${base}#/overlay/hunt/${token}${q ? `?${q}` : ""}`;
+}
+
+/* ----------------------------- DB helpers ----------------------------- */
+async function dbLoadWidgetSettings(huntNumberId) {
+  const { data } = await supabase
+    .from("hunt_widget_settings")
+    .select("theme, layout, options")
+    .eq("hunt_number_id", huntNumberId)
+    .maybeSingle();
+  return {
+    theme: data?.theme || null,
+    layout: data?.layout || null,
+    options: data?.options || null,
+  };
+}
+async function dbSaveWidgetSettings(huntNumberId, theme, layout, options) {
+  await supabase.from("hunt_widget_settings").upsert([
+    { hunt_number_id: huntNumberId, theme, layout, options },
+  ]);
+}
+
+/* ───────────────────────── helpers existentes ───────────────────────── */
 async function updateSuperFlag(rowId, value) {
   const tryFns = [
     () => supabase.from("hunt_slots").update({ is_super: !!value }).eq("id", rowId),
@@ -232,6 +378,673 @@ function useDebounced(value, delay = 250) {
     return () => clearTimeout(id);
   }, [value, delay]);
   return v;
+}
+
+/* ───────────────── UI ───────────────── */
+function AccentCard({ title, children, className }) {
+  const { isDark } = useTheme();
+  return (
+    <div className={cn("relative rounded-xl", isDark ? "bg-white/5 border border-white/10" : "bg-white border border-zinc-200", className)}>
+      {title && <div className="px-4 pt-4 pb-1 text-xs opacity-80">{title}</div>}
+      <div className="px-4 pt-4 pb-4">{children}</div>
+    </div>
+  );
+}
+
+/* ───────── ColorField (reutilizado) ───────── */
+function ColorField({ label, value, onChange }) {
+  const swatchRef = React.useRef(null);
+  const [open, setOpen] = React.useState(false);
+  const [anchor, setAnchor] = React.useState({ left: 0, top: 0 });
+  const [tempHex, setTempHex] = React.useState("#ffffff");
+  const [textValue, setTextValue] = React.useState(value || "");
+
+  React.useEffect(() => setTextValue(value || ""), [value]);
+
+  const toHex = React.useCallback((v) => {
+    if (!v) return "#ffffff";
+    v = String(v).trim();
+    if (v.startsWith("#")) {
+      if (v.length === 4) {
+        const r = v[1], g = v[2], b = v[3];
+        return `#${r}${r}${g}${g}${b}${b}`;
+      }
+      return v.slice(0, 7);
+    }
+    const m = v.match(/rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+    if (m) {
+      const clamp = (n) => Math.max(0, Math.min(255, n | 0));
+      const [r, g, b] = [clamp(+m[1]), clamp(+m[2]), clamp(+m[3])];
+      return "#" + [r, g, b].map((x) => x.toString(16).padStart(2, "0")).join("").slice(0, 6);
+    }
+    return "#ffffff";
+  }, []);
+
+  const openPicker = () => {
+    const rect = swatchRef.current?.getBoundingClientRect();
+    const panelW = 260, panelH = 220, pad = 8;
+    let left = rect?.left ?? 0;
+    let top = rect ? rect.bottom + pad : 0;
+    left = Math.max(pad, Math.min(window.innerWidth - panelW - pad, left));
+    top = Math.max(pad, Math.min(window.innerHeight - panelH - pad, top));
+    setAnchor({ left, top });
+    setTempHex(toHex(textValue || value));
+    setOpen(true);
+  };
+
+  const applyAndClose = () => {
+    onChange?.(tempHex);
+    setTextValue(tempHex);
+    setOpen(false);
+  };
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+      <div className="text-xs opacity-70 mb-1">{label}</div>
+      <div className="flex items-center gap-3">
+        <button
+          ref={swatchRef}
+          type="button"
+          onClick={openPicker}
+          className="h-9 w-9 rounded-lg border border-white/10 shadow-inner"
+          style={{ background: textValue || value || "#ffffff" }}
+          title="Pick color"
+        />
+        <Input
+          value={textValue}
+          onChange={(e) => {
+            setTextValue(e.target.value);
+            onChange?.(e.target.value);
+          }}
+          className="h-9 bg-zinc-900 border-white/10 text-white"
+        />
+      </div>
+
+      {open && (
+        <div className="fixed inset-0 z-[9999]" onMouseDown={() => setOpen(false)}>
+          <div
+            onMouseDown={(e) => e.stopPropagation()}
+            className="rounded-xl border border-white/10 bg-zinc-900/95 p-3 shadow-2xl"
+            style={{ position: "fixed", left: anchor.left, top: anchor.top, width: 260, height: 220, backdropFilter: "blur(6px)" }}
+          >
+            <div className="text-xs opacity-70 mb-2">Pick a color</div>
+            <input
+              type="color"
+              value={tempHex}
+              onChange={(e) => setTempHex(e.target.value)}
+              className="block w-full h-40 rounded-lg border border-white/10 p-0 cursor-pointer bg-transparent"
+            />
+            <div className="mt-2 flex items-center gap-2">
+              <Input value={tempHex} onChange={(e) => setTempHex(e.target.value)} className="h-9 bg-zinc-800 border-white/10 text-white" />
+              <Button type="button" className="h-9" onClick={applyAndClose}>OK</Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ───────── Preview do Widget (Hunt) ───────── */
+function HuntWidgetPreview({
+  theme,
+  opts,
+  huntTitle,
+  numberId,
+  bonusCount,
+  kpiStart,
+  kpiWon,
+  kpiPL,
+  slots = [],
+}) {
+  const baseW = Number(opts?.overlay?.baseW) || 1100;
+  const baseH = Number(opts?.overlay?.baseH) || 420;
+  const isVertical = opts?.layoutKind === "vertical";
+
+  const TotalBadge = ({ value, labelMode = "label+value", labelText = "P/L" }) => {
+    const showOnlyValue = labelMode === "value";
+    const txt = showOnlyValue ? renderPL(value) : (labelText ? `${labelText}: ${renderPL(value)}` : renderPL(value));
+    return (
+      <div
+        className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
+        style={{
+          background: theme.totalBg,
+          border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`,
+          borderRadius: theme.pillRadius,
+          color: value >= 0 ? theme.pos : theme.neg,
+          fontWeight: theme.strongWeight,
+        }}
+      >
+        {txt}
+      </div>
+    );
+  };
+
+  const KPI = ({ label, value }) => (
+    <div
+      className="rounded-xl p-3"
+      style={{
+        background: theme.chipBg,
+        border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
+        color: theme.text,
+        fontWeight: theme.strongWeight,
+      }}
+    >
+      <div className="text-[11px]" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>
+        {label}
+      </div>
+      <div className={numCls}>{value}</div>
+    </div>
+  );
+
+  return (
+    <>
+      <style>{`
+        @keyframes sweep { 0% { transform: translateX(-120%);} 100% { transform: translateX(120%);} }
+        @keyframes vsPulse { 0%{ transform:scale(1); opacity:1 } 50%{ transform:scale(1.04); opacity:.92 } 100%{ transform:scale(1); opacity:1 } }
+      `}</style>
+      <div
+        className="relative overflow-hidden"
+        style={{
+          width: baseW,
+          height: baseH,
+          padding: isVertical ? 18 : 24,
+          background: `linear-gradient(135deg, ${theme.bgStart}, ${theme.bgEnd})`,
+          border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
+          borderRadius: theme.radius,
+          color: theme.text,
+          fontFamily: theme.fontFamily,
+          fontSize: `${theme.fontScale}%`,
+          isolation: "isolate",
+          contain: "paint",
+        }}
+      >
+        {theme.shine && (
+          <div
+            className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+            style={{ animation: "sweep 4.8s linear infinite" }}
+          />
+        )}
+
+        {/* HEADER */}
+        <div className={cn("flex items-center", isVertical ? "justify-center gap-2" : "justify-between gap-2")}>
+          <div
+            className="px-3 py-1.5"
+            style={{
+              background: theme.badgeBg,
+              border: `${theme.badgeBorderWidth}px solid ${theme.badgeBorder}`,
+              borderRadius: theme.pillRadius,
+              color: theme.text,
+              fontWeight: theme.strongWeight,
+            }}
+          >
+            {huntTitle || "—"}
+            {numberId ? <span style={{ marginLeft: 8, color: theme.accent, fontWeight: theme.strongWeight }}>#{numberId}</span> : null}
+          </div>
+          {!isVertical && (
+            <div
+              className="px-3 py-1.5"
+              style={{
+                background: theme.badgeBg,
+                border: `${theme.badgeBorderWidth}px solid ${theme.badgeBorder}`,
+                borderRadius: theme.pillRadius,
+                color: theme.text,
+                fontWeight: theme.fontWeight,
+              }}
+            >
+              <span>Bonus</span>
+              <span style={{ marginLeft: 6, color: theme.accent, fontWeight: theme.strongWeight }}>{bonusCount}</span>
+            </div>
+          )}
+        </div>
+
+        {/* KPIs */}
+        {opts.kpiLayout === "grid" ? (
+          <div className={cn(isVertical ? "mt-3 grid grid-cols-1 gap-3" : "mt-5 grid grid-cols-3 gap-4")}>
+            {opts.showKpiStart && <KPI label="Start" value={fmtMoney(kpiStart)} />}
+            {opts.showKpiWon && <KPI label="Won" value={fmtMoney(kpiWon)} />}
+            {opts.showKpiPL && <KPI label="P/L" value={renderPL(kpiPL)} />}
+          </div>
+        ) : (
+          <div className={cn("mt-5 flex gap-3", isVertical ? "flex-col" : "flex-row")}>
+            {opts.showKpiStart && <KPI label="Start" value={fmtMoney(kpiStart)} />}
+            {opts.showKpiWon && <KPI label="Won" value={fmtMoney(kpiWon)} />}
+            {opts.showKpiPL && <KPI label="P/L" value={renderPL(kpiPL)} />}
+          </div>
+        )}
+
+        {/* THUMBS */}
+        {theme.showThumbs && slots.length > 0 && (
+          <div className={cn(isVertical ? "mt-4 grid grid-cols-6 gap-2" : "mt-6 grid grid-cols-10 gap-2")}>
+            {slots.slice(0, isVertical ? 12 : 20).map((s, i) => {
+              const superB = getIsSuper(s);
+              return (
+                <div key={s.id || i} className="relative rounded-lg overflow-hidden border border-white/10">
+                  {superB && (
+                    <div className="absolute right-1 top-1 z-10 text-[9px] font-semibold px-1.5 py-0.5 rounded bg-fuchsia-600/80">
+                      SUPER
+                    </div>
+                  )}
+                  {s.thumbnail ? (
+                    <img src={s.thumbnail} alt="" className="h-12 w-full object-cover object-bottom" />
+                  ) : (
+                    <div className="h-12 w-full bg-white/10" />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* TOTAL / P/L */}
+        <div
+          className={cn(
+            "mt-6 flex",
+            opts?.totalJustify === "left" ? "justify-start" : opts?.totalJustify === "right" ? "justify-end" : "justify-center"
+          )}
+        >
+          <TotalBadge value={kpiPL} labelMode={opts.totalLabelMode} labelText={opts.totalLabelText} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ───────── Designer ───────── */
+function HuntWidgetDesigner({ open, onClose, numberId, theme, setTheme, layout, setLayout, opts, setOpts, previewProps, persist }) {
+  const { t } = useLang();
+  if (!open) return null;
+
+  const applySizePreset = (p) => {
+    setOpts((o)=>({ ...o, layoutKind: p.dir==="v" ? "vertical" : "horizontal", overlay: { ...o.overlay, ...p.o } }));
+    if (p.theme) setTheme((t)=>({ ...t, ...p.theme }));
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm">
+      <div className="absolute inset-x-0 top-0 h-14 px-4 flex items-center justify-between border-b border-white/10 bg-zinc-950/60">
+        <div className="flex items-center gap-2">
+          <Palette className="h-5 w-5 text-white/80" />
+          <div>Widget Designer</div>
+          <div className="text-xs opacity-60">{t("hunt")} #{numberId}</div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => { persist(); onClose(); }} className="h-9">
+            <Save className="h-4 w-4 mr-2" />
+            Save & Close
+          </Button>
+          <Button variant="outline" onClick={onClose} className="h-9">
+            <X className="h-4 w-4 mr-2" />
+            Cancel
+          </Button>
+        </div>
+      </div>
+
+      <div className="absolute inset-x-0 top-14 bottom-0 grid xl:grid-cols-[520px_1fr]">
+        {/* Controls */}
+        <div className="border-r border-white/10 bg-zinc-950/70 overflow-auto">
+          <div className="p-4 space-y-4">
+            {/* Orientation */}
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <div className="text-xs opacity-70 mb-2">Orientation</div>
+              <div className="flex items-center gap-4 text-sm">
+                <label className="flex items-center gap-2">
+                  <input type="radio" checked={opts.layoutKind === "horizontal"}
+                         onChange={() => setOpts(o => ({...o, layoutKind: "horizontal"}))} />
+                  Horizontal
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="radio" checked={opts.layoutKind === "vertical"}
+                         onChange={() => setOpts(o => ({...o, layoutKind: "vertical"}))} />
+                  Vertical
+                </label>
+              </div>
+            </div>
+
+            {/* Size presets */}
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <div className="text-xs opacity-70 mb-2">Size presets</div>
+              <div className="grid grid-cols-2 gap-2">
+                {SIZE_PRESETS.map((p) => (
+                  <button
+                    key={p.name}
+                    onClick={()=>applySizePreset(p)}
+                    className="rounded-lg border border-white/10 px-3 py-2 text-sm hover:ring-2 hover:ring-sky-400">
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Color presets */}
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <div className="text-xs opacity-70 mb-2">Color presets</div>
+              <div className="grid grid-cols-2 gap-2">
+                {PRESETS.map((p) => (
+                  <button
+                    key={p.name}
+                    onClick={() => setTheme((t) => ({ ...t, ...p.t }))}
+                    className="rounded-lg overflow-hidden border border-white/10 hover:ring-2 hover:ring-sky-400 transition"
+                    title={p.name}
+                  >
+                    <div className="h-10" style={{ background: `linear-gradient(135deg, ${p.t.bgStart || theme.bgStart}, ${p.t.bgEnd || theme.bgEnd})` }} />
+                    <div className="px-2 py-1 text-[11px] opacity-80">{p.name}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Colors */}
+            <div className="grid grid-cols-1 gap-4">
+              {[
+                ["Background start", "bgStart"],
+                ["Background end", "bgEnd"],
+                ["Panel/Line border", "panelBorder"],
+                ["Text", "text"],
+                ["Subtext", "subtext"],
+                ["Accent", "accent"],
+                ["Chip bg", "chipBg"],
+                ["Chip border", "chipBorder"],
+                ["OK (green)", "pos"],
+                ["NOK (red)", "neg"],
+                ["Badge bg", "badgeBg"],
+                ["Badge border", "badgeBorder"],
+                ["Total bg", "totalBg"],
+                ["Total border", "totalBorder"],
+                ["Highlight bg", "vsBg"],
+              ].map(([lbl, key]) => (
+                <ColorField key={key} label={lbl} value={theme[key]} onChange={(v) => setTheme((t) => ({ ...t, [key]: v }))} />
+              ))}
+            </div>
+
+            {/* Layout / Typography */}
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
+              <div className="text-xs opacity-70 mb-1">Layout</div>
+
+              {[
+                ["Panel border width", "panelBorderWidth", 0, 4],
+                ["Badge border width", "badgeBorderWidth", 0, 4],
+                ["Total border width", "totalBorderWidth", 0, 4],
+                ["Chip border width", "chipBorderWidth", 0, 4],
+              ].map(([lbl, key, min, max]) => (
+                <div key={key}>
+                  <label className="block text-sm">{lbl}: {theme[key]}px</label>
+                  <input type="range" min={min} max={max} step={1} value={theme[key]} onChange={(e) => setTheme((t) => ({ ...t, [key]: Number(e.target.value) }))} className="w-full" />
+                </div>
+              ))}
+
+              {[
+                ["Border radius (boxes)", "radius", 8, 28],
+                ["Pill radius", "pillRadius", 8, 30],
+                ["Chip radius", "chipRadius", 8, 20],
+                ["Font size", "fontScale", 80, 130],
+                ["Font weight (normal)", "fontWeight", 300, 700],
+                ["Font weight (strong)", "strongWeight", 300, 800],
+              ].map(([lbl, key, min, max]) => (
+                <div key={key}>
+                  <label className="block text-sm">{lbl}: {theme[key]}{key==="fontScale"?"%":"px"}</label>
+                  <input type="range" min={min} max={max} step={key.includes("Weight")?50:1} value={theme[key]} onChange={(e) => setTheme((t) => ({ ...t, [key]: Number(e.target.value) }))} className="w-full" />
+                </div>
+              ))}
+
+              <label className="block text-sm">Font family</label>
+              <Input value={theme.fontFamily} onChange={(e) => setTheme((t) => ({ ...t, fontFamily: e.target.value }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
+            </div>
+
+            {/* KPIs & Content */}
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
+              <div className="text-xs opacity-70 mb-1">KPIs</div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={opts.showKpiStart} onChange={(e)=>setOpts(o=>({...o, showKpiStart:e.target.checked}))} />
+                  Start
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={opts.showKpiWon} onChange={(e)=>setOpts(o=>({...o, showKpiWon:e.target.checked}))} />
+                  Won
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={opts.showKpiPL} onChange={(e)=>setOpts(o=>({...o, showKpiPL:e.target.checked}))} />
+                  P/L
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={opts.showBonusCount} onChange={(e)=>setOpts(o=>({...o, showBonusCount:e.target.checked}))} />
+                  Bonus count badge
+                </label>
+              </div>
+
+              <div className="text-xs opacity-70 mt-2">KPI layout</div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                {["grid","row"].map(v=>(
+                  <label key={v} className="flex items-center gap-2">
+                    <input type="radio" checked={opts.kpiLayout===v} onChange={()=>setOpts(o=>({...o, kpiLayout:v}))}/>
+                    {v}
+                  </label>
+                ))}
+              </div>
+
+              <div className="text-xs opacity-70 mt-2">P/L label</div>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="radio" checked={opts.totalLabelMode==="label+value"} onChange={()=>setOpts(o=>({...o, totalLabelMode:"label+value"}))}/>
+                  Label + Value
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="radio" checked={opts.totalLabelMode==="value"} onChange={()=>setOpts(o=>({...o, totalLabelMode:"value"}))}/>
+                  Value only
+                </label>
+              </div>
+              <Input value={opts.totalLabelText} onChange={(e)=>setOpts(o=>({...o, totalLabelText:e.target.value}))} className="h-9 bg-zinc-900 border-white/10 text-white" placeholder="Label text (ex.: P/L)" />
+
+              <div className="text-xs opacity-70 mt-2">Total alignment</div>
+              <div className="grid grid-cols-3 gap-2 text-sm">
+                {["left","center","right"].map(v=>(
+                  <label key={v} className="flex items-center gap-2">
+                    <input type="radio" checked={opts.totalJustify===v} onChange={()=>setOpts(o=>({...o, totalJustify:v}))}/>
+                    {v[0].toUpperCase()+v.slice(1)}
+                  </label>
+                ))}
+              </div>
+
+              <div className="text-xs opacity-70 mt-2">Aparência</div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={theme.showThumbs} onChange={(e)=>setTheme(t=>({...t, showThumbs:e.target.checked}))}/>
+                  Mostrar thumbs
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={theme.shine} onChange={(e)=>setTheme(t=>({...t, shine:e.target.checked}))}/>
+                  Shine
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={theme.pulse} onChange={(e)=>setTheme(t=>({...t, pulse:e.target.checked}))}/>
+                  Pulse
+                </label>
+              </div>
+            </div>
+
+            {/* Canvas / OBS */}
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
+              <div className="text-xs opacity-70 mb-1">Canvas / OBS</div>
+
+              <div className="flex items-center gap-3">
+                <div className="text-sm w-36">Output</div>
+                <label className="text-sm flex items-center gap-1">
+                  <input type="radio" checked={opts.overlay.mode === "auto"} onChange={() => setOpts(o => ({ ...o, overlay: { ...o.overlay, mode: "auto" } }))} />
+                  Auto-fit
+                </label>
+                <label className="text-sm flex items-center gap-1">
+                  <input type="radio" checked={opts.overlay.mode === "fixed"} onChange={() => setOpts(o => ({ ...o, overlay: { ...o.overlay, mode: "fixed" } }))} />
+                  Fixed (px)
+                </label>
+              </div>
+
+              {opts.overlay.mode === "fixed" && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <div className="text-xs opacity-70 mb-1">Width (px)</div>
+                    <Input type="number" value={opts.overlay.width} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, width: Number(e.target.value) || 0 } }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
+                  </div>
+                  <div>
+                    <div className="text-xs opacity-70 mb-1">Height (px)</div>
+                    <Input type="number" value={opts.overlay.height} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, height: Number(e.target.value) || 0 } }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <div className="text-xs opacity-70 mb-1">Panel base width</div>
+                  <Input type="number" value={opts.overlay.baseW} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, baseW: Number(e.target.value) || 0 } }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
+                </div>
+                <div>
+                  <div className="text-xs opacity-70 mb-1">Panel base height</div>
+                  <Input type="number" value={opts.overlay.baseH} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, baseH: Number(e.target.value) || 0 } }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <div className="text-xs opacity-70 mb-1">Padding (px)</div>
+                  <Input type="number" value={opts.overlay.pad} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, pad: Number(e.target.value) || 0 } }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
+                </div>
+                <div>
+                  <div className="text-xs opacity-70 mb-1">Vertical align</div>
+                  <select value={opts.overlay.align} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, align: e.target.value } }))} className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white px-3">
+                    <option value="top">Top</option>
+                    <option value="center">Center</option>
+                    <option value="bottom">Bottom</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="text-[11px] opacity-70">
+                Em <b>Fixed</b>, usa o mesmo Width/Height no “Browser Source” do OBS. O overlay faz letterbox e nunca corta conteúdo.
+              </div>
+            </div>
+
+            {/* Save */}
+            <div className="flex gap-2 sticky bottom-3">
+              <Button onClick={persist} className="h-10">
+                <Save className="h-4 w-4 mr-2" />
+                Save
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setTheme({ ...DEFAULT_THEME });
+                  setLayout({ ...DEFAULT_LAYOUT, mode: layout.mode });
+                  setOpts({ ...DEFAULT_OPTS });
+                }}
+                className="h-10"
+              >
+                Restore defaults
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Live preview */}
+        <div className="p-6 overflow-auto">
+          <HuntWidgetPreview theme={theme} opts={opts} {...previewProps} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ───────── Widget Card ───────── */
+function HuntWidgetCard({
+  numberId,
+  huntTitle,
+  bonusCount,
+  kpiStart,
+  kpiWon,
+  kpiPL,
+  slots,
+}) {
+  const { profile } = React.useContext(AuthCtx) || {};
+  const [theme, setTheme] = React.useState(DEFAULT_THEME);
+  const [layout, setLayout] = React.useState(DEFAULT_LAYOUT);
+  const [opts, setOpts] = React.useState(DEFAULT_OPTS);
+  const [openDesigner, setOpenDesigner] = React.useState(false);
+  const { t } = useLang();
+
+  const overlayUrl = React.useMemo(() => {
+    const base = `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, "");
+    const token = profile?.public_token || profile?.widget_token || profile?.id || "";
+    if (!token || !numberId) return "";
+    return buildOverlayUrl(base, token, opts, numberId);
+  }, [profile?.public_token, profile?.widget_token, profile?.id, opts, numberId]);
+
+  const openOverlay = () => { if (overlayUrl) window.open(overlayUrl, "_blank", "noopener,noreferrer"); };
+  const copyOverlayUrl = async () => {
+    if (!overlayUrl) return;
+    try { await navigator.clipboard.writeText(overlayUrl); } catch { alert("Não consegui copiar o URL."); }
+  };
+
+  const previewProps = { huntTitle, numberId, bonusCount, kpiStart, kpiWon, kpiPL, slots };
+
+  React.useEffect(() => {
+    (async () => {
+      if (!numberId) return;
+      const { theme: t, layout: l, options: o } = await dbLoadWidgetSettings(numberId);
+      if (t) setTheme({ ...DEFAULT_THEME, ...t });
+      if (l) setLayout({ ...DEFAULT_LAYOUT, ...l });
+      if (o) setOpts({ ...DEFAULT_OPTS, ...o, overlay: { ...DEFAULT_OPTS.overlay, ...(o.overlay || {}) } });
+    })();
+  }, [numberId]);
+
+  const persist = React.useCallback(async () => {
+    if (!numberId) return;
+    await dbSaveWidgetSettings(numberId, theme, layout, opts);
+  }, [numberId, theme, layout, opts]);
+
+  return (
+    <>
+      <AccentCard title={t("widget")}>
+        <div className="mb-3 grid grid-cols-3 gap-2">
+          <Button type="button" onClick={copyOverlayUrl} disabled={!overlayUrl} className="h-9 w-full justify-center">
+            <CopyIcon className="h-4 w-4 mr-2" />
+            {t("copyUrl")}
+          </Button>
+          <Button type="button" variant="outline" className="h-9 w-full justify-center" disabled={!overlayUrl} onClick={openOverlay}>
+            <ExternalLink className="h-4 w-4 mr-2" />
+            {t("openOverlay")}
+          </Button>
+          <Button type="button" variant="secondary" className="h-9 w-full justify-center" onClick={() => setOpenDesigner(true)}>
+            <SlidersHorizontal className="h-4 w-4 mr-2" />
+            {t("openDesigner")}
+          </Button>
+        </div>
+
+        <div className="overflow-auto">
+          <HuntWidgetPreview theme={theme} opts={opts} {...previewProps} />
+        </div>
+
+        <div className="mt-3 flex justify-end">
+          <Button onClick={persist} className="h-9">
+            <Save className="h-4 w-4 mr-2" />
+            Save settings
+          </Button>
+        </div>
+      </AccentCard>
+
+      <HuntWidgetDesigner
+        open={openDesigner}
+        onClose={() => setOpenDesigner(false)}
+        numberId={numberId}
+        theme={theme}
+        setTheme={setTheme}
+        layout={layout}
+        setLayout={setLayout}
+        opts={opts}
+        setOpts={setOpts}
+        previewProps={previewProps}
+        persist={persist}
+      />
+    </>
+  );
 }
 
 /* ───────────────────────── Modais Auxiliares ───────────────────────── */
@@ -708,12 +1521,12 @@ function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart *
 
           <div className="grid md:grid-cols-6 gap-3 mb-5">
             {[
-              [t("pl"), renderPL(plNow), plNow >= 0 ? "text-emerald-400" : "text-red-400"],
-              [t("amountWon"), fmtMoney(amountWonNow)],
-              [t("startCost"), fmtMoney(startCost)],
-              [t("avgReqX"), avgRequiredX != null ? avgRequiredX.toFixed(2) : t("none")],
-              [t("currAvgX"), currAvgX != null ? currAvgX.toFixed(2) : t("none")],
-              [t("cumulativeX"), cumulativeX != null ? `${cumulativeX.toFixed(2)}x` : t("none")],
+              [DICT.pt.pl, renderPL(plNow), plNow >= 0 ? "text-emerald-400" : "text-red-400"],
+              [DICT.pt.amountWon, fmtMoney(amountWonNow)],
+              [DICT.pt.startCost, fmtMoney(startCost)],
+              [DICT.pt.avgReqX, avgRequiredX != null ? avgRequiredX.toFixed(2) : DICT.pt.none],
+              [DICT.pt.currAvgX, currAvgX != null ? currAvgX.toFixed(2) : DICT.pt.none],
+              [DICT.pt.cumulativeX, cumulativeX != null ? `${cumulativeX.toFixed(2)}x` : DICT.pt.none],
             ].map(([label, value, color], i) => (
               <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-3">
                 <div className="text-[11px] opacity-70">{label}</div>
@@ -761,18 +1574,18 @@ function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart *
                   variant="outline"
                   onClick={() => {
                     try { navigator.clipboard.writeText(s.name || ""); } catch {}
-                    showToast(`${t("copied")} ${s.name}`);
+                    // show toast below:
                   }}
                   className="h-9"
-                  title={t("copySlot")}
+                  title={DICT.pt.copySlot}
                 >
                   <CopyIcon className="h-4 w-4 mr-1" />
-                  {t("copySlot")}
+                  {DICT.pt.copySlot}
                 </Button>
               </div>
 
               <div>
-                <div className="text-xs mb-1 opacity-70">{t("payout")}</div>
+                <div className="text-xs mb-1 opacity-70">{DICT.pt.payout}</div>
                 <Input
                   type="text"
                   inputMode="decimal"
@@ -783,7 +1596,7 @@ function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart *
                 />
               </div>
               <div>
-                <div className="text-xs mb-1 opacity-70">{t("multiplier")}</div>
+                <div className="text-xs mb-1 opacity-70">{DICT.pt.multiplier}</div>
                 <Input
                   type="text"
                   inputMode="decimal"
@@ -794,7 +1607,7 @@ function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart *
                 />
               </div>
               <div>
-                <div className="text-xs mb-1 opacity-70">{t("betsizeReq")}</div>
+                <div className="text-xs mb-1 opacity-70">{DICT.pt.betsizeReq}</div>
                 <Input
                   type="text"
                   inputMode="decimal"
@@ -811,15 +1624,15 @@ function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart *
 
           <div className="flex items-center justify-end gap-2 mb-4">
             <Button variant="outline" onClick={askClose}>
-              {t("close")}
+              {DICT.pt.close}
             </Button>
             <Button onClick={handleSaveAndNext} disabled={!s || busy}>
               {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ChevronRight className="h-4 w-4 mr-2" />}
-              {t("saveContinue")}
+              {DICT.pt.saveContinue}
             </Button>
           </div>
 
-          {/* Galeria paginada: 8 colunas, até 3 linhas (24 por página) */}
+          {/* Galeria paginada */}
           {slots.length > 0 && (
             <>
               <div className="grid grid-cols-8 gap-3">
@@ -830,21 +1643,13 @@ function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart *
                   return (
                     <button
                       key={it.id}
-                      onClick={(e) => {
-                        if (e.ctrlKey) {
-                          try { navigator.clipboard.writeText(it.name || ""); } catch {}
-                          showToast(`${t("copied")} ${it.name}`);
-                          return;
-                        }
-                        setIdx(i);
-                      }}
+                      onClick={() => setIdx(i)}
                       className={cn(
                         "relative rounded-xl overflow-hidden border transition",
                         active ? "border-emerald-400 ring-2 ring-emerald-400/20" : "border-white/10 hover:border-white/20"
                       )}
-                      title={t("copyHint")}
+                      title={DICT.pt.copyHint}
                     >
-                      {/* tags por cima */}
                       <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">
                         #{i + 1}
                       </div>
@@ -875,32 +1680,8 @@ function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart *
               )}
             </>
           )}
-
-          {/* Toast pill com fade */}
-          {toastMsg && (
-            <div className={cn(
-              "pointer-events-none absolute right-4 bottom-4 transition-all",
-              toastOpen ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
-            )}>
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs text-white shadow-lg backdrop-blur-sm">
-                <Check className="h-3.5 w-3.5" />
-                {toastMsg}
-              </div>
-            </div>
-          )}
         </div>
       </div>
-
-      {/* confirmar fechar */}
-      <ConfirmDialog
-        open={confirmClose}
-        title={t("confirmCloseTitle")}
-        body={t("confirmCloseBody")}
-        confirmText={t("close")}
-        cancelText={t("cancel")}
-        onConfirm={closeNow}
-        onCancel={() => setConfirmClose(false)}
-      />
     </div>
   );
 }
@@ -943,7 +1724,6 @@ export default function HuntDetail({ numberId }) {
     const arr = [...slots];
 
     if (sortBy.key === "order") {
-      // respeita a ordem atual em memória
       return arr;
     }
 
@@ -1034,7 +1814,6 @@ export default function HuntDetail({ numberId }) {
       }
 
       setSlots(list);
-      // garantir que estamos no modo "order"
       setSortBy((s) => (s.key === "order" ? s : { key: "order", dir: 1 }));
     } catch {
       setSlots([]);
@@ -1058,11 +1837,10 @@ export default function HuntDetail({ numberId }) {
   }, [hunt, slots]);
 
   function goBack() {
-    // Sem truques de histórico: garante que vamos para a lista de hunts
     window.location.hash = "#/hunts";
   }
 
-  // abrir redeem (a baseline deixou de ser necessária para KPIs, mas mantemos o fluxo)
+  // abrir redeem
   const [openRedeem, setOpenRedeem] = React.useState(false);
   const [baselineAtStart, setBaselineAtStart] = React.useState(0);
   const [confirmStart, setConfirmStart] = React.useState(false);
@@ -1113,7 +1891,7 @@ export default function HuntDetail({ numberId }) {
       <div className="grid md:grid-cols-4 gap-3 mb-3">
         {[
           ["Profit/Loss +/-", renderPL(kpis.pl), kpis.pl >= 0 ? "text-emerald-400" : "text-red-400"],
-          ["Bonus Count", String(kpis.bonusCount), ""],
+          [t("bonusCount"), String(kpis.bonusCount), ""],
           [t("startCost"), fmtMoney(kpis.startCost), ""],
           [t("amountWon"), fmtMoney(kpis.amountWon), ""],
         ].map(([label, value, color], i) => (
@@ -1171,8 +1949,19 @@ export default function HuntDetail({ numberId }) {
         </div>
       </div>
 
+      {/* Widget Card (Preview + Designer + Overlay URL) */}
+      <HuntWidgetCard
+        numberId={hunt.number_id}
+        huntTitle={hunt.title}
+        bonusCount={kpis.bonusCount}
+        kpiStart={kpis.startCost}
+        kpiWon={kpis.amountWon}
+        kpiPL={kpis.pl}
+        slots={sortedSlots}
+      />
+
       {/* Tabela */}
-      <div className={cn("rounded-xl border overflow-hidden", isDark ? "border-white/10" : "border-zinc-200")}>
+      <div className={cn("rounded-xl border overflow-hidden mt-4", isDark ? "border-white/10" : "border-zinc-200")}>
         {/* Header */}
         <div
           className={cn(
