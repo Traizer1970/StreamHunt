@@ -1040,8 +1040,9 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
   );
 }
 
-function Designer({ open, onClose, opts, setOpts, title }) {
+function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
   if (!open) return null;
+
   return (
     <div className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-sm">
       {/* Topbar */}
@@ -1062,11 +1063,12 @@ function Designer({ open, onClose, opts, setOpts, title }) {
         </div>
       </div>
 
-      {/* Body: usar FLEX em vez de grid com colunas arbitrárias */}
+      {/* Body (flex) */}
       <div className="absolute inset-x-0 top-14 bottom-0 md:flex">
         {/* Sidebar */}
         <div className="border-r border-white/10 bg-zinc-950/70 overflow-auto w-full md:w-96">
           <div className="p-4 space-y-4">
+            {/* Canvas / OBS */}
             <div className="rounded-xl border border-white/10 bg-white/5 p-3">
               <div className="text-xs opacity-70 mb-1">Canvas / OBS</div>
               <div className="grid grid-cols-2 gap-2">
@@ -1147,19 +1149,95 @@ function Designer({ open, onClose, opts, setOpts, title }) {
               </div>
             </div>
 
+            {/* ----- CONTROLOS ESPECÍFICOS DO HUNT (o que pediste) ----- */}
+            {type === "hunt" && (
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
+                <div className="text-xs opacity-70">Cards</div>
+                <select
+                  value={opts.cardMode}
+                  onChange={(e) =>
+                    setOpts((o) => ({ ...o, cardMode: e.target.value }))
+                  }
+                  className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+                >
+                  <option value="grid">Grid (até 16)</option>
+                  <option value="focus3">Focus 3 (apenas 3 grandes)</option>
+                </select>
+
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <div>
+                    <div className="text-xs opacity-70 mb-1">KPI style</div>
+                    <select
+                      value={opts.kpiStyle}
+                      onChange={(e) =>
+                        setOpts((o) => ({ ...o, kpiStyle: e.target.value }))
+                      }
+                      className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+                    >
+                      <option value="minimal">Minimal</option>
+                      <option value="pill">Pills</option>
+                    </select>
+                  </div>
+                  <div>
+                    <div className="text-xs opacity-70 mb-1">Card height (px)</div>
+                    <Input
+                      type="number"
+                      value={opts.cardH}
+                      onChange={(e) =>
+                        setOpts((o) => ({
+                          ...o,
+                          cardH: Number(e.target.value) || 120,
+                        }))
+                      }
+                      className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-sm mt-2">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={!!opts.showIdx}
+                      onChange={(e) =>
+                        setOpts((o) => ({ ...o, showIdx: !!e.target.checked }))
+                      }
+                    />
+                    Mostrar número (#)
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={!!opts.showBet}
+                      onChange={(e) =>
+                        setOpts((o) => ({ ...o, showBet: !!e.target.checked }))
+                      }
+                    />
+                    Mostrar bet no card
+                  </label>
+                </div>
+
+                <div className="text-[11px] opacity-60">
+                  No <b>Focus 3</b> os cards ocupam grande parte da altura (destaque
+                  ao “SUPER”), e os KPIs ficam no estilo escolhido acima.
+                </div>
+              </div>
+            )}
+
             <div className="text-[11px] opacity-60">
-              Dica: em OBS, usa sempre o mesmo <b>Width/Height</b> do browser
-              source para evitar cortes.
+              Dica: em OBS usa sempre o mesmo <b>Width/Height</b> do browser source
+              para evitar cortes.
             </div>
           </div>
         </div>
 
-        {/* Preview / conteúdo da direita */}
+        {/* Preview / direita */}
         <div className="flex-1 p-6 overflow-auto">
-          <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-sm">
-            As opções são gravadas localmente (localStorage) para este
-            navegador/conta.
-          </div>
+          {type === "hunt" ? (
+            <HuntOverlayPreview hunt={hunt} slots={slots} opts={opts} />
+          ) : (
+            <OpeningOverlayPreview hunt={hunt} slots={slots} opts={opts} />
+          )}
         </div>
       </div>
     </div>
@@ -1174,16 +1252,12 @@ function OverlayCard({
   setOpts,
 }) {
   const { t } = useLang();
-  const { profile } = React.useContext(AuthCtx) || {};
   const [open, setOpen] = React.useState(false);
   const [openDesigner, setOpenDesigner] = React.useState(false);
 
   const base = React.useMemo(
     () =>
-      `${window.location.origin}${window.location.pathname}`.replace(
-        /\/+$/,
-        ""
-      ),
+      `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, ""),
     []
   );
   const url = React.useMemo(() => {
@@ -1201,14 +1275,11 @@ function OverlayCard({
       alert("Não consegui copiar o URL.");
     }
   };
-  const openOverlay = () => {
-    if (!url) return;
-    window.open(url, "_blank", "noopener,noreferrer");
-  };
+  const openOverlay = () => url && window.open(url, "_blank", "noopener,noreferrer");
 
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.03]">
-      {/* Cabeçalho compacto (abre/fecha) */}
+      {/* Cabeçalho (abre/fecha) */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -1221,24 +1292,20 @@ function OverlayCard({
           {type === "hunt" ? t("overlayHunt") : t("overlayOpening")}
         </div>
         <ChevronDown
-          className={cn(
-            "h-4 w-4 transition",
-            open ? "rotate-180 opacity-100" : "opacity-70"
-          )}
+          className={cn("h-4 w-4 transition", open ? "rotate-180 opacity-100" : "opacity-70")}
         />
       </button>
 
       {/* Conteúdo */}
       {open && (
         <div className="px-3 pb-3 space-y-3">
+          {/* Mantemos apenas controls rápidos genéricos */}
           <div className="grid md:grid-cols-3 gap-2">
             <div>
               <div className="text-xs opacity-70 mb-1">{t("preset")}</div>
               <select
                 value={opts.design}
-                onChange={(e) =>
-                  setOpts((o) => ({ ...o, design: e.target.value }))
-                }
+                onChange={(e) => setOpts((o) => ({ ...o, design: e.target.value }))}
                 className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
               >
                 {type === "hunt" ? (
@@ -1256,9 +1323,7 @@ function OverlayCard({
               <Input
                 type="number"
                 value={opts.pad}
-                onChange={(e) =>
-                  setOpts((o) => ({ ...o, pad: Number(e.target.value) || 0 }))
-                }
+                onChange={(e) => setOpts((o) => ({ ...o, pad: Number(e.target.value) || 0 }))}
                 className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
               />
             </div>
@@ -1266,9 +1331,7 @@ function OverlayCard({
               <div className="text-xs opacity-70 mb-1">{t("align")}</div>
               <select
                 value={opts.align}
-                onChange={(e) =>
-                  setOpts((o) => ({ ...o, align: e.target.value }))
-                }
+                onChange={(e) => setOpts((o) => ({ ...o, align: e.target.value }))}
                 className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
               >
                 <option value="left">{t("left")}</option>
@@ -1278,79 +1341,13 @@ function OverlayCard({
             </div>
           </div>
 
-          {/* NOVO — Controlo extra para Hunt */}
-          {type === "hunt" && (
-            <div className="grid md:grid-cols-3 gap-2">
-              <div>
-                <div className="text-xs opacity-70 mb-1">Cards</div>
-                <select
-                  value={opts.cardMode}
-                  onChange={(e) => setOpts(o => ({ ...o, cardMode: e.target.value }))}
-                  className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-                >
-                  <option value="grid">Grid (até 16)</option>
-                  <option value="focus3">Focus 3 (grandes)</option>
-                </select>
-              </div>
-
-              <div>
-                <div className="text-xs opacity-70 mb-1">KPI style</div>
-                <select
-                  value={opts.kpiStyle}
-                  onChange={(e) => setOpts(o => ({ ...o, kpiStyle: e.target.value }))}
-                  className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-                >
-                  <option value="minimal">Minimal</option>
-                  <option value="pill">Pills</option>
-                </select>
-              </div>
-
-              <div>
-                <div className="text-xs opacity-70 mb-1">Card height (px)</div>
-                <Input
-                  type="number"
-                  value={opts.cardH}
-                  onChange={(e) => setOpts(o => ({ ...o, cardH: Number(e.target.value) || 120 }))}
-                  className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-                />
-                <div className="text-[11px] opacity-60 mt-1">
-                  Usado no <b>grid</b>. No <b>Focus 3</b> a altura cresce automaticamente.
-                </div>
-              </div>
-
-              <div className="col-span-3 grid grid-cols-2 gap-2 text-sm mt-1">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={!!opts.showIdx}
-                    onChange={(e) => setOpts(o => ({ ...o, showIdx: !!e.target.checked }))}
-                  />
-                  Mostrar número (#)
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={!!opts.showBet}
-                    onChange={(e) => setOpts(o => ({ ...o, showBet: !!e.target.checked }))}
-                  />
-                  Mostrar bet no card
-                </label>
-              </div>
-            </div>
-          )}
-
-          {/* URL + ações */}
+          {/* Ações */}
           <div className="flex items-center gap-2">
             <Button type="button" className="h-9" onClick={copyUrl}>
               <CopyIcon className="h-4 w-4 mr-2" />
               {t("copyUrl")}
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-9"
-              onClick={openOverlay}
-            >
+            <Button type="button" variant="outline" className="h-9" onClick={openOverlay}>
               <ExternalLink className="h-4 w-4 mr-2" />
               {t("openLink")}
             </Button>
@@ -1374,12 +1371,16 @@ function OverlayCard({
             )}
           </div>
 
+          {/* Designer modal (agora recebe type/hunt/slots para preview) */}
           <Designer
             open={openDesigner}
             onClose={() => setOpenDesigner(false)}
             opts={opts}
             setOpts={setOpts}
             title={`${type === "hunt" ? "Hunt" : "Opening"} — Designer`}
+            type={type}
+            hunt={hunt}
+            slots={slots}
           />
         </div>
       )}
