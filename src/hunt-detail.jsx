@@ -1044,6 +1044,7 @@ function Designer({ open, onClose, opts, setOpts, title }) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-sm">
+      {/* Topbar */}
       <div className="absolute inset-x-0 top-0 h-14 px-4 flex items-center justify-between border-b border-white/10 bg-zinc-950/60">
         <div className="flex items-center gap-2">
           <Palette className="h-5 w-5 text-white/80" />
@@ -1061,8 +1062,10 @@ function Designer({ open, onClose, opts, setOpts, title }) {
         </div>
       </div>
 
-      <div className="absolute inset-x-0 top-14 bottom-0 grid md:grid-cols-[420px_1fr]">
-        <div className="border-r border-white/10 bg-zinc-950/70 overflow-auto">
+      {/* Body: usar FLEX em vez de grid com colunas arbitrárias */}
+      <div className="absolute inset-x-0 top-14 bottom-0 md:flex">
+        {/* Sidebar */}
+        <div className="border-r border-white/10 bg-zinc-950/70 overflow-auto w-full md:w-96">
           <div className="p-4 space-y-4">
             <div className="rounded-xl border border-white/10 bg-white/5 p-3">
               <div className="text-xs opacity-70 mb-1">Canvas / OBS</div>
@@ -1151,7 +1154,8 @@ function Designer({ open, onClose, opts, setOpts, title }) {
           </div>
         </div>
 
-        <div className="p-6 overflow-auto">
+        {/* Preview / conteúdo da direita */}
+        <div className="flex-1 p-6 overflow-auto">
           <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-sm">
             As opções são gravadas localmente (localStorage) para este
             navegador/conta.
