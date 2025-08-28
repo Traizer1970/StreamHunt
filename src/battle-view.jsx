@@ -1,1950 +1,2189 @@
-// src/battle-view.jsx
+// /src/hunt-detail.jsx
 import React from "react";
 import { useTheme, AuthCtx } from "@/contexts/auth-context";
-import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Search,
-  Coins,
-  Gamepad2,
-  TrendingUp,
-  Shield,
-  Users,
-  Copy,
-  ExternalLink,
+  ChevronLeft as IconBack,
+  Play,
+  Shuffle,
+  Calendar as CalendarIcon,
   SlidersHorizontal,
-  Palette,
+  Plus,
   X,
+  Search,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Copy as CopyIcon,
+  Star,
+  Pencil,
+  Trash2,
+  Check,
+  ExternalLink,
+  Palette,
   Save,
 } from "lucide-react";
 
-/* ───────────────────────── utils / style helpers ───────────────────────── */
-const cn = (...c) => c.filter(Boolean).join(" ");
-const LOCALE = "pt-PT";
-const fmtMoney = (n) =>
-  Number.isFinite(Number(n))
-    ? new Intl.NumberFormat(LOCALE, {
-        style: "currency",
-        currency: "EUR",
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(Number(n))
-    : "—";
+import { getHuntByNumberId } from "@/lib/hunts";
+import {
+  listHuntSlots,
+  searchCatalogSlots,
+  addHuntSlot,
+  updateHuntSlot,
+  deleteHuntSlot,
+} from "@/lib/slots";
+import { supabase } from "@/lib/supabase";
+import { cn as _cn } from "@/lib/utils";
 
-/* Theme (with border widths & typography) */
-const DEFAULT_THEME = {
-  bgStart: "#0b1020",
-  bgEnd: "#111827",
+const cn = (...c) => (_cn ? _cn(...c) : c.filter(Boolean).join(" "));
 
-  panelBorder: "rgba(255,255,255,0.12)",
-  panelBorderWidth: 1,
-
-  text: "#e5e7eb",
-  subtext: "#9ca3af",
-  accent: "#7dd3fc",
-
-  chipBg: "rgba(255,255,255,0.08)",
-  chipBorder: "rgba(255,255,255,0.18)",
-  chipBorderWidth: 1,
-  chipRadius: 12,
-
-  badgeBg: "rgba(255,255,255,0.08)",
-  badgeBorder: "rgba(255,255,255,0.18)",
-  badgeBorderWidth: 1,
-
-  totalBg: "rgba(255,255,255,0.10)",
-  totalBorder: "rgba(255,255,255,0.18)",
-  totalBorderWidth: 1,
-
-  pos: "#22c55e",
-  neg: "#ef4444",
-  vsBg: "rgba(99,102,241,0.35)",
-
-  radius: 18,      // boxes
-  pillRadius: 16,  // badges/total
-  fontFamily:
-    "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, 'Apple Color Emoji','Segoe UI Emoji'",
-  fontScale: 100,
-  fontWeight: 400,
-  strongWeight: 500,
-
-  showThumbs: true,
-  shine: true,
-  pulse: true,
-};
-
-/* Default layout + free drag positions */
-const DEFAULT_LAYOUT = {
-  mode: "default", // "default" | "free"
-  positions: {
-    badges: { x: 16, y: 12 },
-    playerA: { x: 40, y: 92 },
-    playerB: { x: 560, y: 92 },
-    chipsA: { x: 40, y: 180 },
-    chipsB: { x: 560, y: 180 },
-    total: { x: 360, y: 330 },
+/* ───────────────────────── i18n ───────────────────────── */
+const DICT = {
+  pt: {
+    back: "Voltar",
+    startRedeeming: "Start Redeeming!",
+    addBonus: "Add Bonus!",
+    betsize: "Betsize",
+    date: "Date",
+    random: "Random",
+    bonus: "Bonus",
+    payout: "Payout",
+    multiplier: "Multiplier",
+    actions: "Ações",
+    delete: "Eliminar",
+    edit: "Editar",
+    close: "Fechar",
+    saveContinue: "Guardar & seguinte",
+    copySlot: "Copiar nome da slot",
+    copied: "Copiado:",
+    editBonus: "Editar bonus",
+    chooseSlot: "Escolhe a slot *",
+    superBonus: "Super bonus",
+    betsizeReq: "Betsize *",
+    cancel: "Cancelar",
+    guardar: "Guardar",
+    eliminarBonus: "Eliminar bonus",
+    eliminarPerg:
+      "Tens a certeza que queres eliminar este bonus? Esta ação não pode ser anulada.",
+    confirmStartTitle: "Começar o Opening?",
+    confirmStartBody:
+      "Irás iniciar o redeeming das slots. Queres mesmo começar?",
+    confirmYes: "Começar",
+    confirmNo: "Cancelar",
+    confirmCloseTitle: "Sair do Opening?",
+    confirmCloseBody:
+      "Tens alterações ou progresso nesta sessão. Queres mesmo fechar?",
+    pl: "P/L",
+    amountWon: "Amount won",
+    startCost: "Start cost",
+    avgReqX: "Avg. Required X",
+    currAvgX: "Current Avg. X",
+    cumulativeX: "Cumulative X",
+    none: "—",
+    copyHint:
+      "Clique para selecionar • Ctrl+Clique para copiar o nome",
+    playResponsibly:
+      "Jogue com responsabilidade. 18+. Template UI.",
+    // overlays
+    overlays: "Widget compacto",
+    overlayHunt: "Overlay (Hunt)",
+    overlayOpening: "Overlay (Opening)",
+    preset: "Preset",
+    padding: "Padding (px)",
+    align: "Alinhamento",
+    openDesigner: "Open Designer",
+    copyUrl: "Copy URL",
+    openLink: "Open overlay",
+    center: "center",
+    left: "left",
+    right: "right",
+    kpiStart: "Start",
+    kpiBE: "B/E",
+    kpiBonus: "# Bonus",
+  },
+  en: {
+    back: "Back",
+    startRedeeming: "Start Redeeming!",
+    addBonus: "Add Bonus!",
+    betsize: "Betsize",
+    date: "Date",
+    random: "Random",
+    bonus: "Bonus",
+    payout: "Payout",
+    multiplier: "Multiplier",
+    actions: "Actions",
+    delete: "Delete",
+    edit: "Edit",
+    close: "Close",
+    saveContinue: "Save & continue",
+    copySlot: "Copy slot name",
+    copied: "Copied:",
+    editBonus: "Edit bonus",
+    chooseSlot: "Choose slot *",
+    superBonus: "Super bonus",
+    betsizeReq: "Betsize *",
+    cancel: "Cancel",
+    guardar: "Save",
+    eliminarBonus: "Delete bonus",
+    eliminarPerg:
+      "Are you sure you want to delete this bonus? This cannot be undone.",
+    confirmStartTitle: "Start Opening?",
+    confirmStartBody:
+      "You are about to begin redeeming the slots. Do you want to start?",
+    confirmYes: "Start",
+    confirmNo: "Cancel",
+    confirmCloseTitle: "Exit Opening?",
+    confirmCloseBody:
+      "You have progress in this session. Are you sure you want to close?",
+    pl: "P/L",
+    amountWon: "Amount won",
+    startCost: "Start cost",
+    avgReqX: "Avg. Required X",
+    currAvgX: "Current Avg. X",
+    cumulativeX: "Cumulative X",
+    none: "—",
+    copyHint: "Click to select • Ctrl+Click to copy name",
+    playResponsibly: "Play responsibly. 18+. Template UI.",
+    overlays: "Compact widget",
+    overlayHunt: "Overlay (Hunt)",
+    overlayOpening: "Overlay (Opening)",
+    preset: "Preset",
+    padding: "Padding (px)",
+    align: "Alignment",
+    openDesigner: "Open Designer",
+    copyUrl: "Copy URL",
+    openLink: "Open overlay",
+    center: "center",
+    left: "left",
+    right: "right",
+    kpiStart: "Start",
+    kpiBE: "B/E",
+    kpiBonus: "# Bonus",
   },
 };
-
-/* Widget options (+ OBS sizing) */
-const DEFAULT_OPTS = {
-  // badges
-  bonusLabelMode: "label+value",
-  bonusLabelText: "Bonus Buy",
-  bonusDock: "left",
-
-  // VS
-  vsStyle: "badge",                 // 'badge' | 'big'
-  vsPlacement: "center",            // 'left' | 'center' | 'right' | 'overlay'
-
-  // Subtotal
-  subtotalLabelMode: "label+value", // 'label+value' | 'value'
-  subtotalLabelText: "Subtotal",
-  subtotalAlign: "left",            // 'left' | 'center' | 'right' | 'split'
-
-  // Total
-  totalJustify: "center",           // left | center | right
-  totalLabelMode: "label+value",    // 'label+value' | 'value'
-  totalLabelText: "Total paid",
-
-  // Buys
-  buyStyle: "pill",                 // 'pill' | 'soft' | 'flat' | 'tag'
-  buyLayout: "wrap",                // 'wrap' | 'column'
-
-  // orientação
-  layoutKind: "horizontal",         // 'horizontal' | 'vertical'
-
-  // OBS overlay
-  overlay: {
-    mode: "auto",
-    width: 1920,
-    height: 1080,
-    baseW: 1100,
-    baseH: 420,
-    pad: 24,
-    align: "center",
-  },
-};
-
-/* Presets de cores */
-const PRESETS = [
-  { name: "Neon",    t: { bgStart: "#0f0c29", bgEnd: "#302b63", accent: "#22d3ee", pos: "#10b981", neg: "#ef4444", vsBg: "rgba(34,211,238,0.35)" } },
-  { name: "Sunset",  t: { bgStart: "#1f0a26", bgEnd: "#3a0b2e", accent: "#fb7185", pos: "#f59e0b", neg: "#ef4444", vsBg: "rgba(251,113,133,0.35)" } },
-  { name: "Emerald", t: { bgStart: "#06251f", bgEnd: "#0b3830", accent: "#34d399", pos: "#22c55e", neg: "#e11d48", vsBg: "rgba(52,211,153,0.28)" } },
-  { name: "Magenta", t: { bgStart: "#1e0031", bgEnd: "#2b0b3f", accent: "#c084fc", pos: "#a7f3d0", neg: "#fb7185", vsBg: "rgba(192,132,252,0.35)" } },
-  { name: "Carbon",  t: { bgStart: "#0b0b0b", bgEnd: "#171717", accent: "#93c5fd", pos: "#86efac", neg: "#fca5a5", vsBg: "rgba(147,197,253,0.25)" } },
-  { name: "Twilight",t: { bgStart: "#0b1b3a", bgEnd: "#112a46", accent: "#7dd3fc", pos: "#22c55e", neg: "#fb7185", vsBg: "rgba(125,211,252,0.30)" } },
-];
-
-/* Presets de tamanho — horizontais + verticais */
-const SIZE_PRESETS = [
-  { name: "Small",       dir: "h", o: { baseW: 880,  baseH: 360, pad: 20, align: "center" }, theme: { fontScale: 95 } },
-  { name: "Default",     dir: "h", o: { baseW: 1100, baseH: 420, pad: 24, align: "center" }, theme: { fontScale: 100 } },
-  { name: "Wide Bar",    dir: "h", o: { baseW: 1400, baseH: 360, pad: 20, align: "center" }, theme: { fontScale: 98, pillRadius: 14 } },
-  { name: "XL Showmatch",dir: "h", o: { baseW: 1500, baseH: 520, pad: 28, align: "center" }, theme: { fontScale: 108 } },
-  { name: "Vertical • Compact", dir: "v", o: { baseW: 440, baseH: 640, pad: 16, align: "center" }, theme: { fontScale: 96 } },
-  { name: "Vertical • Sidebar", dir: "v", o: { baseW: 480, baseH: 720, pad: 18, align: "center" }, theme: { fontScale: 96 } },
-  { name: "Vertical • Tall",    dir: "v", o: { baseW: 560, baseH: 860, pad: 20, align: "center" }, theme: { fontScale: 98 } },
-];
-
-/* Presets de organização/layout */
-const LAYOUT_PRESETS = [
-  {
-    name: "Default",
-    apply: (o,t) => ({
-      o: { bonusDock: "left", totalJustify: "center", vsPlacement: "center", subtotalAlign: "left", buyLayout: "wrap" },
-      t: { showThumbs: true }
-    })
-  },
-  {
-    // igual ao do print: chips em coluna, VS sobreposto, subtotais split
-    name: "Compact (columns)",
-    apply: (o,t) => ({
-      o: { bonusDock: "left", vsPlacement: "overlay", subtotalAlign: "split", totalJustify: "right", buyLayout: "column" },
-      t: { fontScale: Math.max(90,(t.fontScale||100)-6) }
-    })
-  },
-  {
-    name: "Bar",
-    apply: (o,t) => ({ o: { bonusDock: "right", totalJustify: "right", vsPlacement: "right", buyLayout: "wrap" }, t: { showThumbs: true } })
-  },
-  {
-    name: "Minimal",
-    apply: (o,t) => ({ o: { bonusDock: "left", totalJustify: "center", vsPlacement: "center", subtotalAlign: "center", buyLayout: "wrap" }, t: { showThumbs: false } })
-  },
-  {
-    // preset pedido: VS grande sobreposto
-    name: "Head-to-Head (overlay VS)",
-    apply: (o,t) => ({ o: { vsPlacement: "overlay", vsStyle: "big", subtotalAlign: "split", buyLayout: "wrap" }, t: {} })
-  },
-];
-
-// ---- URL builder para o overlay ----
-// ---- URL builder para o overlay ----
-function buildOverlayUrl(base, token, opts, battleId) {
-  const o = (opts && opts.overlay) || {};
-  const qs = new URLSearchParams();
-
-  // amarra o overlay a ESTA battle
-  if (battleId) qs.set("id", String(battleId));
-
-  if (typeof o.baseW === "number") qs.set("bw", String(o.baseW));
-  if (typeof o.baseH === "number") qs.set("bh", String(o.baseH));
-  if (typeof o.pad === "number")   qs.set("pad", String(o.pad));
-  if (o.align) qs.set("align", String(o.align));
-  if (o.mode === "fixed") {
-    qs.set("pinsize", "1");
-    if (o.width)  qs.set("w", String(o.width));
-    if (o.height) qs.set("h", String(o.height));
-  }
-
-  // orientação e estilo do VS (opcional)
-  qs.set("dir", opts?.layoutKind === "vertical" ? "v" : "h");
-  if (opts?.vsStyle) qs.set("vs", opts.vsStyle);
-
-  const q = qs.toString();
-  return `${base}#/overlay/battle/${token}${q ? `?${q}` : ""}`;
-}
-
-
-/* ----------------------------- DB helpers ----------------------------- */
-async function dbLoadWidgetSettings(battleId) {
-  const { data } = await supabase
-    .from("battle_widget_settings")
-    .select("theme, layout, options")
-    .eq("battle_id", battleId)
-    .maybeSingle();
-  return {
-    theme: data?.theme || null,
-    layout: data?.layout || null,
-    options: data?.options || null,
-  };
-}
-async function dbSaveWidgetSettings(battleId, theme, layout, options) {
-  await supabase.from("battle_widget_settings").upsert([
-    { battle_id: battleId, theme, layout, options },
-  ]);
-}
-
-/* Enrich slot */
-async function enrichSlotInfo(slot) {
-  if (!slot) return slot;
-  if (slot.thumbnail && slot.provider) return slot;
-  try {
-    let q = supabase.from("slots_catalog").select('id, "NAME", "PROVIDER", "THUMBNAIL"').limit(1);
-    if (slot.id) q = q.eq("id", slot.id);
-    else if (slot.name) q = q.ilike("NAME", `%${slot.name}%`);
-    const { data } = await q.maybeSingle();
-    if (data) return { id: data.id, name: data["NAME"], provider: data["PROVIDER"], thumbnail: data["THUMBNAIL"] };
-  } catch {}
-  return slot;
-}
-
-/* ───────────────── UI blocks ───────────────── */
-function AccentCard({ title, children, className }) {
-  const { isDark } = useTheme();
-  return (
-    <div className={cn("relative rounded-xl", isDark ? "bg-white/5 border border-white/10" : "bg-white border border-zinc-200", className)}>
-      <div className="absolute inset-x-0 top-0 h-[2px] bg-sky-500/70 shadow-[0_0_12px_2px_rgba(56,189,248,0.35)]" />
-      {title && <div className="px-4 pt-4 pb-1 text-xs opacity-80">{title}</div>}
-      <div className="px-4 pt-5 pb-4">{children}</div>
-    </div>
+function useLang() {
+  const [lang, setLang] = React.useState(() => {
+    const ls =
+      (typeof localStorage !== "undefined" &&
+        localStorage.getItem("lang")) ||
+      "";
+    const html =
+      (typeof document !== "undefined" &&
+        document.documentElement.lang) ||
+      "";
+    const nav =
+      (typeof navigator !== "undefined" && navigator.language) ||
+      "pt-PT";
+    const pick = (ls || html || nav)
+      .toLowerCase()
+      .startsWith("pt")
+      ? "pt"
+      : "en";
+    return pick;
+  });
+  const t = React.useCallback(
+    (k) => (DICT[lang] && DICT[lang][k]) || DICT.en[k] || k,
+    [lang]
   );
+  return { lang, t, setLang };
 }
-function Kpi({ icon, label, value, tone = "neutral" }) {
-  const toneCls = tone === "positive" ? "text-emerald-400" : tone === "negative" ? "text-rose-400" : "text-white";
+// ── colunas possíveis para a ordem no DB
+const ORDER_COLS = ["order_index", "order", "position", "sort", "order_idx"];
+const readOrderFromRow = (row) => {
+  const raw = row?._raw || row || {};
+  for (const c of ORDER_COLS) {
+    const v = Number(raw[c]);
+    if (Number.isFinite(v)) return v;
+  }
+  return null;
+};
+
+/* ───────────────────────── números/formatters ───────────────────────── */
+const LOCALE = "pt-PT";
+const CURRENCY = "EUR";
+const numCls = "tabular-nums whitespace-nowrap";
+function fmtMoney(n) {
+  const num = Number(n);
+  if (!Number.isFinite(num)) return "—";
+  return new Intl.NumberFormat(LOCALE, {
+    style: "currency",
+    currency: CURRENCY,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(num);
+}
+function renderPL(value) {
+  const n = Number(value) || 0;
+  const sign = n >= 0 ? "" : "-";
+  return `€${sign}${Math.abs(n).toLocaleString(LOCALE, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+// aceita vírgulas decimais e valores vazios
+const toNum = (v) => {
+  if (v == null || v === "") return 0;
+  if (typeof v === "string") v = v.replace(",", ".");
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
+/* ───────────────────────── helpers ───────────────────────── */
+async function updateSuperFlag(rowId, value) {
+  const tryFns = [
+    () =>
+      supabase
+        .from("hunt_slots")
+        .update({ is_super: !!value })
+        .eq("id", rowId),
+    () =>
+      supabase
+        .from("hunt_slots")
+        .update({ super: !!value })
+        .eq("id", rowId),
+    () =>
+      supabase.from("hunt_slots").update({ is_super: !!value }).eq("ID", rowId),
+    () =>
+      supabase.from("hunt_slots").update({ super: !!value }).eq("ID", rowId),
+  ];
+  let last;
+  for (const fn of tryFns) {
+    const out = await fn();
+    if (!out.error) return;
+    last = out.error;
+  }
+  throw last || new Error("Falha a atualizar o estado Super.");
+}
+const getIsSuper = (s) =>
+  !!(s?.is_super ?? s?.super ?? s?._raw?.is_super ?? s?._raw?.super);
+
+/* tentar persistir order_index (com fallbacks de coluna/ID) */
+async function persistOrder(slots) {
+  const colCandidates = [
+    "order_index",
+    "order",
+    "position",
+    "sort",
+    "order_idx",
+  ];
+  for (let i = 0; i < slots.length; i++) {
+    const rowId = slots[i].id;
+    let ok = false;
+    for (const col of colCandidates) {
+      const r1 = await supabase
+        .from("hunt_slots")
+        .update({ [col]: i + 1 })
+        .eq("id", rowId);
+      if (!r1.error) {
+        ok = true;
+        break;
+      }
+      const r2 = await supabase
+        .from("hunt_slots")
+        .update({ [col]: i + 1 })
+        .eq("ID", rowId);
+      if (!r2.error) {
+        ok = true;
+        break;
+      }
+    }
+    if (!ok) {
+      // se não houver nenhuma coluna, ignoramos silenciosamente
+    }
+  }
+}
+
+/* debounce genérico */
+function useDebounced(value, delay = 250) {
+  const [v, setV] = React.useState(value);
+  React.useEffect(() => {
+    const id = setTimeout(() => setV(value), delay);
+    return () => clearTimeout(id);
+  }, [value, delay]);
+  return v;
+}
+
+/* ───────────────────────── Modais Auxiliares ───────────────────────── */
+function ConfirmDialog({
+  open,
+  title,
+  body,
+  confirmText,
+  cancelText,
+  onConfirm,
+  onCancel,
+}) {
+  if (!open) return null;
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 p-3 flex items-center gap-3">
-      <div className="rounded-lg bg-black/40 p-2 border border-white/10">{icon}</div>
-      <div>
-        <div className="text-xs opacity-70">{label}</div>
-        <div className={cn("text-lg", toneCls)}>{value}</div>
+    <div className="fixed inset-0 z-[95]">
+      <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
+      <div className="absolute left-1/2 top-1/2 w-[92vw] max-w-[520px] -translate-x-1/2 -translate-y-1/2">
+        <div className="rounded-2xl border border-white/10 bg-zinc-950 text-white shadow-2xl p-5">
+          <div className="text-lg font-semibold mb-2">{title}</div>
+          <div className="text-sm opacity-80 mb-5">{body}</div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onCancel}>
+              {cancelText}
+            </Button>
+            <Button onClick={onConfirm}>{confirmText}</Button>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
-function useDebounced(v, delay) {
-  const [s, setS] = React.useState(v);
-  React.useEffect(() => {
-    const id = setTimeout(() => setS(v), delay || 300);
-    return () => clearTimeout(id);
-  }, [v, delay]);
-  return s;
-}
 
-/* ───────────────── SlotsAutocomplete ───────────────── */
-function SlotsAutocomplete({ value, onSelect, placeholder = "Add a Slot" }) {
-  const { isDark } = useTheme();
-  const [open, setOpen] = React.useState(false);
-  const [query, setQuery] = React.useState(typeof value === "object" && value !== null ? value.name ?? "" : typeof value === "string" ? value : "");
-  const [items, setItems] = React.useState([]);
-  const [errorMsg, setErrorMsg] = React.useState("");
-  const boxRef = React.useRef(null);
-  const dQuery = useDebounced(query, 250);
-
-  const currentValueName = React.useMemo(
-    () => (typeof value === "object" && value !== null ? value.name ?? "" : typeof value === "string" ? value : ""),
-    [value]
-  );
-  React.useEffect(() => setQuery(currentValueName), [currentValueName]);
-
-  const commitFreeText = React.useCallback(() => {
-    const q = (query || "").trim();
-    const cur = (currentValueName || "").trim();
-    if (!q || q === cur) {
-      setOpen(false);
-      return;
-    }
-    onSelect && onSelect({ id: null, name: q });
-    setOpen(false);
-  }, [onSelect, query, currentValueName]);
+/* ───────────────────────── Add Bonus ───────────────────────── */
+function AddBonusModal({ open, onClose, numberId, onAdded }) {
+  const { t } = useLang();
+  const [query, setQuery] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [results, setResults] = React.useState([]);
+  const [selected, setSelected] = React.useState(null);
+  const [betSize, setBetSize] = React.useState("");
+  const [isSuper, setIsSuper] = React.useState(false);
+  const [err, setErr] = React.useState("");
+  const dQuery = useDebounced(query, 300);
 
   React.useEffect(() => {
-    const onDoc = (e) => {
-      if (boxRef.current && !boxRef.current.contains(e.target)) {
-        setOpen(false);
-        commitFreeText();
-      }
-    };
-    const onEsc = (e) => {
-      if (e.key === "Escape") {
-        setOpen(false);
-        commitFreeText();
-      }
-    };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onEsc);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onEsc);
-    };
-  }, [commitFreeText]);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    (async function run() {
-      const q = (dQuery || "").trim();
-      setErrorMsg("");
-      if (q.length < 3) {
-        if (!cancelled) setItems([]);
+    let active = true;
+    (async () => {
+      if (!open) return;
+      if (!dQuery.trim()) {
+        setResults([]);
         return;
       }
       try {
-        const { data, error } = await supabase
-          .from("slots_catalog")
-          .select('id, "NAME", "PROVIDER", "THUMBNAIL"')
-          .or(`NAME.ilike.%${q}%,PROVIDER.ilike.%${q}%`)
-          .order("NAME", { ascending: true })
-          .limit(12);
-        if (error) throw error;
-        if (!cancelled) setItems(data || []);
+        setBusy(true);
+        const { slots } = await searchCatalogSlots(dQuery, { limit: 20 });
+        if (active) setResults(slots);
       } catch (e) {
-        if (!cancelled) {
-          setErrorMsg(e?.message || "Search error.");
-          setItems([]);
-        }
+        if (active) setErr(e.message || "Falha na pesquisa.");
+      } finally {
+        if (active) setBusy(false);
       }
     })();
     return () => {
-      cancelled = true;
+      active = false;
     };
-  }, [dQuery]);
+  }, [open, dQuery]);
 
-  return (
-    <div ref={boxRef} className="relative">
-      <div className="relative">
-        <Input
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setOpen(true);
-          }}
-          onFocus={() => setOpen(true)}
-          placeholder={placeholder}
-          className="h-11 rounded-xl bg-zinc-900/60 border-white/10 text-white pl-9 focus-visible:ring-1 focus-visible:ring-sky-400 placeholder:text-white/40"
-        />
-        <Search className="h-4 w-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-white/60" />
-      </div>
-      {open && (
-        <div
-          className={cn(
-            "absolute z-40 mt-2 w-full rounded-xl overflow-hidden border",
-            isDark ? "bg-zinc-950/95 border-white/10 shadow-2xl" : "bg-white border-zinc-200 shadow-xl"
-          )}
-        >
-          {errorMsg && <div className="px-3 py-2 text-sm text-red-400">{errorMsg}</div>}
-          {!errorMsg && items.length === 0 ? (
-            <div className="px-3 py-2 text-sm opacity-70">No results. Type the name and click outside to use free text.</div>
-          ) : (
-            <ul className="max-h-72 overflow-auto divide-y divide-white/5">
-              {items.map((it) => (
-                <li key={it.id}>
-                  <button
-                    className="w-full text-left px-3 py-2 hover:bg-white/5 transition flex items-center gap-3"
-                    onClick={() => {
-                      onSelect &&
-                        onSelect({
-                          id: it.id,
-                          name: it["NAME"],
-                          provider: it["PROVIDER"],
-                          thumbnail: it["THUMBNAIL"],
-                        });
-                      setQuery(it["NAME"]);
-                      setOpen(false);
-                    }}
-                  >
-                    {it["THUMBNAIL"] ? (
-                      <img src={it["THUMBNAIL"]} alt="" className="h-6 w-6 rounded object-contain" />
-                    ) : (
-                      <div className="h-6 w-6 rounded bg-white/10" />
-                    )}
-                    <div className="min-w-0">
-                      <div className="truncate text-sm">{it["NAME"]}</div>
-                      <div className="text-[11px] opacity-60 truncate">{it["PROVIDER"] || "—"}</div>
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ───────── Free-drag helper ───────── */
-function useDrag(containerRef, id, layout, setLayout) {
-  const onMouseDown = (e) => {
-    if (layout?.mode !== "free") return;
-    e.preventDefault();
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const rect = containerRef.current?.getBoundingClientRect();
-    const cur = layout.positions?.[id] || { x: 0, y: 0 };
-
-    const onMove = (ev) => {
-      if (!rect) return;
-      const dx = ev.clientX - startX;
-      const dy = ev.clientY - startY;
-      const nx = Math.max(0, Math.min((rect.width || 0) - 40, cur.x + dx));
-      const ny = Math.max(0, Math.min((rect.height || 0) - 40, cur.y + dy));
-      setLayout((l) => ({
-        ...l,
-        positions: { ...l.positions, [id]: { x: nx, y: ny } },
-      }));
-    };
-    const onUp = () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+  const resetForm = () => {
+    setQuery("");
+    setResults([]);
+    setSelected(null);
+    setBetSize("");
+    setIsSuper(false);
+    setErr("");
   };
-  return onMouseDown;
-}
+  const handleClose = () => {
+    resetForm();
+    onClose && onClose();
+  };
 
-/* ───────── Preview Panel ───────── */
-function WidgetPreviewPanel({
-  theme,
-  layout,
-  setLayout,
-  opts,
-  bestOf,
-  buyCost,
-  totalPay,
-  sideA,
-  sideB,
-  playerA,
-  playerB,
-  aPays,
-  bPays,
-}) {
-  const aTotal = aPays.reduce((s, r) => s + Number(r?.amount || 0), 0);
-  const bTotal = bPays.reduce((s, r) => s + Number(r?.amount || 0), 0);
-  const containerRef = React.useRef(null);
-
-  const baseW = Number(opts?.overlay?.baseW) || 1100;
-  const baseH = Number(opts?.overlay?.baseH) || 420;
-
-  const isVertical = opts?.layoutKind === "vertical";
-  const vsBig = opts?.vsStyle === "big";
-
-  // ── Buy chip renderer (multi-design)
-  const Chip = ({ amount, ok, i, stacked }) => {
-    const common = {
-      borderRadius: theme.chipRadius,
-      color: ok ? theme.pos : theme.neg,
-      fontSize: `calc(12px * ${theme.fontScale / 100})`,
-      fontFamily: theme.fontFamily,
-      fontWeight: theme.strongWeight,
-      animation: theme.pulse ? `pop .16s ease-out both` : "none",
-      animationDelay: `${i * 45}ms`,
-    };
-    const space = stacked ? "mb-2" : "mr-2 mb-2";
-
-    if (opts.buyStyle === "flat") {
-      return (
-        <span
-          className={`inline-flex items-center gap-2 px-2.5 py-1 ${space}`}
-          style={{
-            ...common,
-            background: "transparent",
-            border: `1px solid ${ok ? theme.pos : theme.neg}55`,
-            boxShadow: "none",
-          }}
-          title={ok ? "Covers buy" : "Below buy"}
-        >
-          <span className="h-1.5 w-1.5 rounded-full" style={{ background: ok ? theme.pos : theme.neg }} />
-          {fmtMoney(Number(amount || 0))}
-        </span>
-      );
+  async function handleAdd() {
+    try {
+      setErr("");
+      if (!selected) return setErr("Escolhe uma slot.");
+      const bs = toNum(betSize);
+      if (!Number.isFinite(bs) || bs <= 0)
+        return setErr("Betsize inválida.");
+      const payload = {
+        slot_id: selected.id,
+        bet_size: bs,
+        super: isSuper,
+      };
+      setBusy(true);
+      await addHuntSlot(numberId, payload);
+      onAdded && onAdded();
+      handleClose();
+    } catch (e) {
+      setErr(e.message || "Falha ao adicionar bonus.");
+    } finally {
+      setBusy(false);
     }
+  }
 
-    if (opts.buyStyle === "soft") {
-      return (
-        <span
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 ${space}`}
-          style={{
-            ...common,
-            background: ok ? `${theme.pos}18` : `${theme.neg}18`,
-            border: `1px solid ${ok ? theme.pos : theme.neg}66`,
-            boxShadow: `0 8px 22px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06)`,
-            backdropFilter: "blur(2px)",
-          }}
-          title={ok ? "Covers buy" : "Below buy"}
-        >
-          <span className="h-1.5 w-1.5 rounded-full" style={{ background: ok ? theme.pos : theme.neg }} />
-          {fmtMoney(Number(amount || 0))}
-        </span>
-      );
-    }
-
-    if (opts.buyStyle === "tag") {
-      return (
-        <span
-          className={`inline-flex items-center gap-2 px-3 py-1 ${space}`}
-          style={{
-            ...common,
-            background: "rgba(0,0,0,.25)",
-            border: `1px solid ${theme.chipBorder}`,
-            boxShadow: "0 6px 18px rgba(0,0,0,.36)",
-            position: "relative",
-          }}
-          title={ok ? "Covers buy" : "Below buy"}
-        >
-          <span
-            className="h-2 w-2 rounded-full"
-            style={{ background: ok ? theme.pos : theme.neg, boxShadow: `0 0 0 2px ${ok ? theme.pos : theme.neg}33` }}
-          />
-          {fmtMoney(Number(amount || 0))}
-        </span>
-      );
-    }
-
-    // default: pill
-    return (
-      <span
-        className={`inline-flex items-center gap-1.5 px-3 py-1 ${space} shadow-[0_0_0_1px_rgba(0,0,0,0.25)_inset,0_6px_18px_rgba(0,0,0,.36)]`}
-        style={{
-          ...common,
-          background: ok ? `${theme.pos}1F` : `${theme.neg}1F`,
-          border: `${theme.chipBorderWidth}px solid ${ok ? theme.pos : theme.neg}`,
-        }}
-        title={ok ? "Covers buy" : "Below buy"}
-      >
-        <span
-          className="h-1.5 w-1.5 rounded-full"
-          style={{ background: ok ? theme.pos : theme.neg, boxShadow: `0 0 0 2px ${ok ? theme.pos : theme.neg}26` }}
-        />
-        {fmtMoney(Number(amount || 0))}
-      </span>
-    );
-  };
-
-  const DragBox = ({ id, children }) => {
-    if (layout?.mode !== "free") return children;
-    const pos = layout?.positions?.[id] || { x: 0, y: 0 };
-    const onMouseDown = useDrag(containerRef, id, layout, setLayout);
-    return (
-      <div onMouseDown={onMouseDown} style={{ position: "absolute", left: pos.x, top: pos.y, cursor: "grab" }}>
-        {children}
-      </div>
-    );
-  };
-
-  const BadgeBest = (
-    <div
-      className="px-3 py-1.5"
-      style={{
-        background: theme.badgeBg,
-        border: `${theme.badgeBorderWidth}px solid ${theme.badgeBorder}`,
-        borderRadius: theme.pillRadius,
-        color: theme.text,
-        fontWeight: theme.fontWeight,
-      }}
-    >
-      <span>Best of</span>
-      <span style={{ marginLeft: 6, fontWeight: theme.strongWeight }}>{bestOf}</span>
-    </div>
-  );
-
-  const badgeBonusValue = fmtMoney(buyCost);
-  const BadgeBonus =
-    opts?.bonusLabelMode === "value" ? (
-      <div
-        className="px-3 py-1.5"
-        style={{
-          background: theme.badgeBg,
-          border: `${theme.badgeBorderWidth}px solid ${theme.badgeBorder}`,
-          borderRadius: theme.pillRadius,
-          color: theme.accent,
-          fontWeight: theme.strongWeight,
-        }}
-      >
-        {badgeBonusValue}
-      </div>
-    ) : (
-      <div
-        className="px-3 py-1.5"
-        style={{
-          background: theme.badgeBg,
-          border: `${theme.badgeBorderWidth}px solid ${theme.badgeBorder}`,
-          borderRadius: theme.pillRadius,
-          color: theme.text,
-          fontWeight: theme.fontWeight,
-        }}
-      >
-        <span>{opts?.bonusLabelText || "Bonus Buy"}</span>
-        <span style={{ marginLeft: 8, color: theme.accent, fontWeight: theme.strongWeight }}>
-          {badgeBonusValue}
-        </span>
-      </div>
-    );
-
-  // TOTAL badge helper
-  const TotalBadge = ({ value }) => {
-    const showOnlyValue = opts?.totalLabelMode === "value";
-    const label = (opts?.totalLabelText ?? "").trim();
-    return (
-      <div
-        className="px-4 py-2 shadow-[0_10px_30px_rgba(0,0,0,.35)]"
-        style={{
-          background: theme.totalBg,
-          border: `${theme.totalBorderWidth}px solid ${theme.totalBorder}`,
-          borderRadius: theme.pillRadius,
-          color: theme.accent,
-          fontWeight: theme.strongWeight,
-        }}
-      >
-        {showOnlyValue ? fmtMoney(value) : (label ? `${label}: ${fmtMoney(value)}` : fmtMoney(value))}
-      </div>
-    );
-  };
-
-  // SUBTOTAL helper
-  const Subtotal = ({ value, align = "left" }) => {
-    const showOnlyValue = opts?.subtotalLabelMode === "value";
-    const label = (opts?.subtotalLabelText ?? "Subtotal").trim();
-    const txt = showOnlyValue ? fmtMoney(value) : `${label} ${fmtMoney(value)}`;
-    const jc =
-      align === "center" ? "justify-center" : align === "right" ? "justify-end" : "justify-start";
-    return (
-      <div className={cn("mt-3 flex", jc)}>
-        <div
-          className="inline-flex items-center gap-2 px-3 py-1.5 text-[12px]"
-          style={{
-            background: theme.chipBg,
-            border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`,
-            borderRadius: theme.radius,
-            color: theme.subtext,
-            fontWeight: theme.fontWeight,
-          }}
-        >
-          <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{txt}</span>
-        </div>
-      </div>
-    );
-  };
-
-  const stacked = opts.buyLayout === "column";
-
-  return (
-    <>
-      <style>{`
-        @keyframes sweep { 0% { transform: translateX(-120%);} 100% { transform: translateX(120%);} }
-        @keyframes pop { 0% { transform: scale(.96); opacity: 0;} 100% { transform: scale(1); opacity: 1;} }
-        @keyframes vsPulse { 0%{ transform:scale(1); opacity:1 } 50%{ transform:scale(1.04); opacity:.92 } 100%{ transform:scale(1); opacity:1 } }
-      `}</style>
-
-      <div
-        ref={containerRef}
-        className="relative overflow-hidden"
-        style={{
-          width: baseW,
-          height: baseH,
-          padding: isVertical ? 18 : 24,
-          background: `linear-gradient(135deg, ${theme.bgStart}, ${theme.bgEnd})`,
-          border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
-          borderRadius: theme.radius,
-          color: theme.text,
-          fontFamily: theme.fontFamily,
-          fontSize: `${theme.fontScale}%`,
-          isolation: "isolate",
-          contain: "paint",
-        }}
-      >
-        {theme.shine && (
-          <div
-            className="pointer-events-none absolute inset-y-0 left-0 w-1/3 bg-gradient-to-r from-transparent via-white/10 to-transparent"
-            style={{ animation: "sweep 4.8s linear infinite" }}
-          />
-        )}
-
-        {/* HORIZONTAL */}
-        {opts?.layoutKind !== "vertical" && (
-          <>
-            {/* badges topo */}
-            {opts?.bonusDock === "right" ? (
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">{BadgeBest}</div>
-                <div>{BadgeBonus}</div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">{BadgeBest}{BadgeBonus}</div>
-            )}
-
-            {/* players */}
-            <div className="mt-5 grid grid-cols-[1fr_auto_1fr] items-center gap-5 relative">
-              {/* A */}
-              <div className="flex items-center justify-end gap-3">
-                <div className="min-w-0 text-right">
-                  <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
-                    {playerA || "—"}
-                  </div>
-                  <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>
-                    {sideA?.name || "—"}
-                  </div>
-                </div>
-                {theme.showThumbs && (
-                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
-                    {sideA?.thumbnail ? <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
-                  </div>
-                )}
-              </div>
-
-              {/* VS (normal) */}
-              {opts.vsPlacement !== "overlay" && (
-                <div className={cn(
-                  "flex",
-                  opts.vsPlacement === "left" ? "justify-start" : opts.vsPlacement === "right" ? "justify-end" : "justify-center"
-                )}>
-                  <div
-                    className={vsBig ? "px-4 py-3 text-sm" : "px-3 py-1 text-xs"}
-                    style={{
-                      background: theme.vsBg,
-                      border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
-                      borderRadius: vsBig ? 999 : 10,
-                      fontWeight: theme.strongWeight,
-                      animation: theme.pulse ? "vsPulse 1.8s ease-in-out infinite" : "none",
-                    }}
-                  >
-                    VS
-                  </div>
-                </div>
-              )}
-
-              {/* B */}
-              <div className="flex items-center gap-3">
-                {theme.showThumbs && (
-                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
-                    {sideB?.thumbnail ? <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
-                  </div>
-                )}
-                <div className="min-w-0 text-left">
-                  <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
-                    {playerB || "—"}
-                  </div>
-                  <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>
-                    {sideB?.name || "—"}
-                  </div>
-                </div>
-              </div>
-
-              {/* VS overlay */}
-              {opts.vsPlacement === "overlay" && (
-                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                  <div
-                    className={vsBig ? "px-4 py-3 text-sm" : "px-3 py-1 text-xs"}
-                    style={{
-                      background: theme.vsBg,
-                      border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
-                      borderRadius: vsBig ? 999 : 10,
-                      fontWeight: theme.strongWeight,
-                      animation: theme.pulse ? "vsPulse 1.8s ease-in-out infinite" : "none",
-                    }}
-                  >
-                    VS
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* chips & subtotais */}
-            <div className="mt-6 grid grid-cols-2 gap-6">
-              {/* A */}
-              <div>
-                <div className={stacked ? "flex flex-col items-start" : "flex flex-wrap"}>
-                  {aPays.map((p, i) => (
-                    <Chip key={`a-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} stacked={stacked} />
-                  ))}
-                </div>
-                <Subtotal
-                  value={aTotal}
-                  align={opts.subtotalAlign === "split" ? "left" : opts.subtotalAlign}
-                />
-              </div>
-
-              {/* B */}
-              <div>
-                <div className={stacked ? "flex flex-col items-start" : "flex flex-wrap"}>
-                  {bPays.map((p, i) => (
-                    <Chip key={`b-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} stacked={stacked} />
-                  ))}
-                </div>
-                <Subtotal
-                  value={bTotal}
-                  align={opts.subtotalAlign === "split" ? "right" : opts.subtotalAlign}
-                />
-              </div>
-            </div>
-
-            {/* total */}
-            <div
-              className={cn(
-                "mt-6 flex",
-                opts?.totalJustify === "left" ? "justify-start" : opts?.totalJustify === "right" ? "justify-end" : "justify-center"
-              )}
-            >
-              <TotalBadge value={aTotal + bTotal} />
-            </div>
-          </>
-        )}
-
-        {/* VERTICAL (inalterado) */}
-        {opts?.layoutKind === "vertical" && (
-          <div className="h-full flex flex-col gap-3">
-            {opts?.bonusDock === "right" ? (
-              <div className="flex items-center justify-between">{BadgeBest}{BadgeBonus}</div>
-            ) : (
-              <div className="flex items-center gap-2">{BadgeBest}{BadgeBonus}</div>
-            )}
-
-            <div className="flex items-center gap-3">
-              {theme.showThumbs && (
-                <div className="h-12 w-12 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
-                  {sideA?.thumbnail ? <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
-                </div>
-              )}
-              <div className="min-w-0">
-                <div className="truncate" style={{ fontSize: "20px", color: theme.text, fontWeight: theme.strongWeight }}>{playerA || "—"}</div>
-                <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>{sideA?.name || "—"}</div>
-              </div>
-            </div>
-
-            <div className={stacked ? "flex flex-col items-start" : "flex flex-wrap"}>
-              {aPays.map((p,i)=>(<Chip key={`va-${i}`} amount={p.amount} ok={Number(p.amount||0)>=Number(buyCost||0)} i={i} stacked={stacked}/>))}
-            </div>
-            <Subtotal value={aTotal} align="left" />
-
-            <div className="w-full flex justify-center py-1">
-              <div
-                className={vsBig ? "px-5 py-3 text-sm" : "px-3 py-1 text-xs"}
-                style={{
-                  background: theme.vsBg, border: `${theme.panelBorderWidth}px solid ${theme.panelBorder}`,
-                  borderRadius: vsBig ? 999 : 10, fontWeight: theme.strongWeight,
-                  animation: theme.pulse ? "vsPulse 1.8s ease-in-out infinite" : "none",
-                }}
-              >
-                VS
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {theme.showThumbs && (
-                <div className="h-12 w-12 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
-                  {sideB?.thumbnail ? <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
-                </div>
-              )}
-              <div className="min-w-0">
-                <div className="truncate" style={{ fontSize: "20px", color: theme.text, fontWeight: theme.strongWeight }}>{playerB || "—"}</div>
-                <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>{sideB?.name || "—"}</div>
-              </div>
-            </div>
-
-            <div className={stacked ? "flex flex-col items-start" : "flex flex-wrap"}>
-              {bPays.map((p,i)=>(<Chip key={`vb-${i}`} amount={p.amount} ok={Number(p.amount||0)>=Number(buyCost||0)} i={i} stacked={stacked}/>))}
-            </div>
-            <Subtotal value={bTotal} align="left" />
-
-            <div
-              className={cn(
-                "mt-auto flex pt-1",
-                opts?.totalJustify === "left" ? "justify-start" : opts?.totalJustify === "right" ? "justify-end" : "justify-center"
-              )}
-            >
-              <TotalBadge value={aTotal + bTotal} />
-            </div>
-          </div>
-        )}
-
-        {/* FREE LAYOUT (drag & drop) */}
-        {layout?.mode === "free" && (
-          <>
-            <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: "linear-gradient(transparent 95%, rgba(255,255,255,.05) 95%)", backgroundSize: "100% 40px" }} />
-
-            <DragBox id="badges">
-              <div className="flex items-center gap-2">
-                {BadgeBest}
-                {BadgeBonus}
-              </div>
-            </DragBox>
-
-            <DragBox id="playerA">
-              <div className="flex items-center justify-end gap-3">
-                <div className="min-w-0 text-right">
-                  <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
-                    {playerA || "—"}
-                  </div>
-                  <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>
-                    {sideA?.name || "—"}
-                  </div>
-                </div>
-                {theme.showThumbs && (
-                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
-                    {sideA?.thumbnail ? <img src={sideA.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
-                  </div>
-                )}
-              </div>
-            </DragBox>
-
-            <DragBox id="playerB">
-              <div className="flex items-center gap-3">
-                {theme.showThumbs && (
-                  <div className="h-14 w-14 overflow-hidden ring-1 bg-white/5" style={{ borderColor: theme.panelBorder, borderRadius: theme.radius }}>
-                    {sideB?.thumbnail ? <img src={sideB.thumbnail} alt="" className="h-full w-full object-cover" /> : <div className="h-full w-full" />}
-                  </div>
-                )}
-                <div className="min-w-0 text-left">
-                  <div className="truncate" style={{ fontSize: "22px", color: theme.text, fontWeight: theme.strongWeight }}>
-                    {playerB || "—"}
-                  </div>
-                  <div className="text-[12px] truncate" style={{ color: theme.subtext, fontWeight: theme.fontWeight }}>
-                    {sideB?.name || "—"}
-                  </div>
-                </div>
-              </div>
-            </DragBox>
-
-            <DragBox id="chipsA">
-              <div>
-                <div className={stacked ? "flex flex-col items-start" : "flex flex-wrap"}>
-                  {aPays.map((p, i) => (
-                    <Chip key={`fa-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} stacked={stacked} />
-                  ))}
-                </div>
-                <div
-                  className="inline-flex mt-2 items-center gap-2 px-3 py-1.5 text-[12px]"
-                  style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}
-                >
-                  <span>Subtotal</span>
-                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(aTotal)}</span>
-                </div>
-              </div>
-            </DragBox>
-
-            <DragBox id="chipsB">
-              <div>
-                <div className={stacked ? "flex flex-col items-start" : "flex flex-wrap"}>
-                  {bPays.map((p, i) => (
-                    <Chip key={`fb-${i}`} amount={p.amount} ok={Number(p.amount || 0) >= Number(buyCost || 0)} i={i} stacked={stacked} />
-                  ))}
-                </div>
-                <div
-                  className="inline-flex mt-2 items-center gap-2 px-3 py-1.5 text-[12px]"
-                  style={{ background: theme.chipBg, border: `${theme.chipBorderWidth}px solid ${theme.chipBorder}`, borderRadius: theme.radius, color: theme.subtext, fontWeight: theme.fontWeight }}
-                >
-                  <span>Subtotal</span>
-                  <span style={{ color: theme.text, fontWeight: theme.strongWeight }}>{fmtMoney(bTotal)}</span>
-                </div>
-              </div>
-            </DragBox>
-
-            <DragBox id="total">
-              <TotalBadge value={aTotal + bTotal} />
-            </DragBox>
-          </>
-        )}
-      </div>
-    </>
-  );
-}
-
-/* ───────── ColorField (fixo) ───────── */
-function ColorField({ label, value, onChange }) {
-  const swatchRef = React.useRef(null);
-  const [open, setOpen] = React.useState(false);
-  const [anchor, setAnchor] = React.useState({ left: 0, top: 0 });
-  const [tempHex, setTempHex] = React.useState("#ffffff");
-  const [textValue, setTextValue] = React.useState(value || "");
-
-  React.useEffect(() => setTextValue(value || ""), [value]);
-
-  const toHex = React.useCallback((v) => {
-    if (!v) return "#ffffff";
-    v = String(v).trim();
-    if (v.startsWith("#")) {
-      if (v.length === 4) {
-        const r = v[1], g = v[2], b = v[3];
-        return `#${r}${r}${g}${g}${b}${b}`;
-      }
-      return v.slice(0, 7);
-    }
-    const m = v.match(/rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
-    if (m) {
-      const clamp = (n) => Math.max(0, Math.min(255, n | 0));
-      const [r, g, b] = [clamp(+m[1]), clamp(+m[2]), clamp(+m[3])];
-      return "#" + [r, g, b].map((x) => x.toString(16).padStart(2, "0")).join("").slice(0, 6);
-    }
-    return "#ffffff";
-  }, []);
-
-  const openPicker = () => {
-    const rect = swatchRef.current?.getBoundingClientRect();
-    const panelW = 260, panelH = 220, pad = 8;
-    let left = rect?.left ?? 0;
-    let top = rect ? rect.bottom + pad : 0;
-    left = Math.max(pad, Math.min(window.innerWidth - panelW - pad, left));
-    top = Math.max(pad, Math.min(window.innerHeight - panelH - pad, top));
-    setAnchor({ left, top });
-    setTempHex(toHex(textValue || value));
-    setOpen(true);
-  };
-
-  const applyAndClose = () => {
-    onChange?.(tempHex);
-    setTextValue(tempHex);
-    setOpen(false);
-  };
-
-  return (
-    <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-      <div className="text-xs opacity-70 mb-1">{label}</div>
-      <div className="flex items-center gap-3">
-        <button
-          ref={swatchRef}
-          type="button"
-          onClick={openPicker}
-          className="h-9 w-9 rounded-lg border border-white/10 shadow-inner"
-          style={{ background: textValue || value || "#ffffff" }}
-          title="Pick color"
-        />
-        <Input
-          value={textValue}
-          onChange={(e) => {
-            setTextValue(e.target.value);
-            onChange?.(e.target.value);
-          }}
-          className="h-9 bg-zinc-900 border-white/10 text-white"
-        />
-      </div>
-
-      {open && (
-        <div className="fixed inset-0 z-[9999]" onMouseDown={() => setOpen(false)}>
-          <div
-            onMouseDown={(e) => e.stopPropagation()}
-            className="rounded-xl border border-white/10 bg-zinc-900/95 p-3 shadow-2xl"
-            style={{ position: "fixed", left: anchor.left, top: anchor.top, width: 260, height: 220, backdropFilter: "blur(6px)" }}
-          >
-            <div className="text-xs opacity-70 mb-2">Pick a color</div>
-            <input
-              type="color"
-              value={tempHex}
-              onChange={(e) => setTempHex(e.target.value)}
-              className="block w-full h-40 rounded-lg border border-white/10 p-0 cursor-pointer bg-transparent"
-            />
-            <div className="mt-2 flex items-center gap-2">
-              <Input value={tempHex} onChange={(e) => setTempHex(e.target.value)} className="h-9 bg-zinc-800 border-white/10 text-white" />
-              <Button type="button" className="h-9" onClick={applyAndClose}>OK</Button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ───────── Designer ───────── */
-function WidgetDesigner({ open, onClose, battleId, theme, setTheme, layout, setLayout, opts, setOpts, previewProps, persist }) {
   if (!open) return null;
 
-  const applySizePreset = (p) => {
-    setOpts((o)=>({ ...o, layoutKind: p.dir==="v" ? "vertical" : "horizontal", overlay: { ...o.overlay, ...p.o } }));
-    if (p.theme) setTheme((t)=>({ ...t, ...p.theme }));
-  };
-  const applyLayoutPreset = (preset) => {
-    const r = preset.apply(opts, theme);
-    setOpts((o)=>({ ...o, ...(r.o||{}) }));
-    setTheme((t)=>({ ...t, ...(r.t||{}) }));
-  };
+  return (
+    <div className="fixed inset-0 z-[70]">
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={handleClose}
+      />
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-[680px]">
+        <div className="rounded-2xl border border-white/10 bg-zinc-950 text-white shadow-2xl p-4 md:p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-lg font-semibold">Add bonus</div>
+            <button
+              type="button"
+              onClick={handleClose}
+              className="p-2 rounded-lg hover:bg-white/10 transition"
+              aria-label="Fechar"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {!selected ? (
+            <div className="space-y-2">
+              <div className="text-xs opacity-70">{t("chooseSlot")}</div>
+              <div className="relative">
+                <Input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Escreve o nome…"
+                  className="pl-8 h-11 rounded-xl bg-zinc-900 border-white/10 text-white placeholder:text-white/40"
+                  autoFocus
+                />
+                <Search className="h-4 w-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-white/60" />
+              </div>
+
+              <div className="max-h[320px] max-h-[320px] overflow-auto rounded-xl border border-white/10 bg-zinc-900">
+                {busy && (
+                  <div className="px-3 py-3 text-sm flex items-center gap-2 opacity-80">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    A pesquisar…
+                  </div>
+                )}
+                {!busy && results.length === 0 && dQuery && (
+                  <div className="px-3 py-3 text-sm opacity-60">
+                    Sem resultados.
+                  </div>
+                )}
+                {!busy &&
+                  results.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => setSelected(s)}
+                      className="w-full text-left px-3 py-2.5 hover:bg-white/5 flex items-center gap-3"
+                    >
+                      {s.thumbnail ? (
+                        <img
+                          src={s.thumbnail}
+                          alt=""
+                          className="h-8 w-8 rounded object-cover bg-black/30"
+                        />
+                      ) : (
+                        <div className="h-8 w-8 rounded bg-white/10" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">{s.name}</div>
+                        <div className="text-xs opacity-70 truncate">
+                          {s.provider}
+                        </div>
+                      </div>
+                      <ChevronDown className="h-4 w-4 opacity-60" />
+                    </button>
+                  ))}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="text-xs opacity-70">{t("chooseSlot")}</div>
+
+              <div className="flex items-center gap-3 p-3 rounded-xl border border-white/10 bg-zinc-900">
+                {selected.thumbnail ? (
+                  <img
+                    src={selected.thumbnail}
+                    alt=""
+                    className="h-12 w-12 rounded object-cover bg-black/30"
+                  />
+                ) : (
+                  <div className="h-12 w-12 rounded bg-white/10" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold truncate">{selected.name}</div>
+                  <div className="text-xs opacity-70 truncate">
+                    {selected.provider}
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setSelected(null);
+                    setQuery("");
+                    setResults([]);
+                    setIsSuper(false);
+                    setBetSize("");
+                  }}
+                  className="h-9"
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  Trocar
+                </Button>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-3 items-end">
+                <div>
+                  <div className="text-xs mb-1 opacity-70">
+                    {t("betsizeReq")}
+                  </div>
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    value={betSize}
+                    onChange={(e) => setBetSize(e.target.value)}
+                    placeholder="ex.: 2,00"
+                    className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white placeholder:text-white/40 pl-4"
+                  />
+                </div>
+
+                <div className="flex items-end justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsSuper((v) => !v)}
+                    className={cn(
+                      "h-11 px-4 rounded-xl border text-sm font-medium transition inline-flex items-center gap-2",
+                      isSuper
+                        ? "bg-fuchsia-600/20 border-fuchsia-500 text-fuchsia-200"
+                        : "bg-zinc-900 border-white/10 text-white/70 hover:text-white"
+                    )}
+                    title="Marcar como Super bonus"
+                  >
+                    <Star className="h-4 w-4" />
+                    {t("superBonus")}
+                  </button>
+
+                  <Button
+                    type="button"
+                    onClick={handleAdd}
+                    disabled={busy || !selected || !betSize}
+                    className="h-11 px-5"
+                  >
+                    {busy ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : null}
+                    Adicionar
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {err && <div className="mt-3 text-sm text-red-400">{err}</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ───────────────────────── Edit Bonus ───────────────────────── */
+function EditBonusModal({ open, row, onClose, onSaved }) {
+  const [bet, setBet] = React.useState("");
+  const [isSuper, setIsSuper] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+
+  React.useEffect(() => {
+    setBet(row ? row.bet_size ?? "" : "");
+    setIsSuper(
+      row
+        ? !!(
+            row?.is_super ??
+            row?.super ??
+            row?._raw?.is_super ??
+            row?._raw?.super
+          )
+        : false
+    );
+  }, [row]);
+
+  if (!open || !row) return null;
+
+  async function save() {
+    try {
+      setBusy(true);
+      const n = bet === "" ? null : toNum(bet);
+      await updateHuntSlot(row.id, { bet_size: n });
+      await updateSuperFlag(row.id, isSuper);
+      onSaved && onSaved();
+      onClose && onClose();
+    } catch (e) {
+      alert(e.message || "Falha ao guardar.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
-    <div className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[75]">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-[540px]">
+        <div className="rounded-2xl border border-white/10 bg-zinc-950 text-white shadow-2xl p-4 md:p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-lg font-semibold">Editar bonus</div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 rounded-lg hover:bg-white/10 transition"
+              aria-label="Fechar"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-3 mb-3">
+            {row?.thumbnail ? (
+              <img
+                src={row.thumbnail}
+                alt=""
+                className="h-10 w-10 rounded object-cover"
+              />
+            ) : null}
+            <div className="min-w-0">
+              <div className="text-sm font-medium truncate">{row?.name}</div>
+              <div className="text-xs opacity-70 truncate">{row?.provider}</div>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-3 items-end">
+            <div>
+              <div className="text-xs mb-1 opacity-70">Betsize</div>
+              <Input
+                type="text"
+                inputMode="decimal"
+                value={bet ?? ""}
+                onChange={(e) => setBet(e.target.value)}
+                placeholder="ex.: 2,00"
+                className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white placeholder:text-white/40 pl-4"
+              />
+            </div>
+
+            <div>
+              <div className="text-xs mb-1 opacity-0 select-none">.</div>
+              <button
+                type="button"
+                onClick={() => setIsSuper((v) => !v)}
+                className={cn(
+                  "w-full h-11 rounded-xl border inline-flex items-center justify-center gap-2 transition",
+                  isSuper
+                    ? "border-fuchsia-400 bg-fuchsia-500/10 text-fuchsia-200 hover:bg-fuchsia-500/20"
+                    : "border-white/10 text-white/70 hover:bg-white/10"
+                )}
+              >
+                <Star
+                  className={cn("h-4 w-4", isSuper ? "fill-fuchsia-400" : "")}
+                />
+                <span className="font-medium">Super bonus</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4 flex items-center justify-end gap-2">
+            <Button type="button" onClick={save} disabled={busy}>
+              {busy ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : null}
+              Guardar
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ───────────────────────── Confirm Delete ───────────────────────── */
+function ConfirmDeleteModal({ open, slot, onCancel, onConfirm }) {
+  const { t } = useLang();
+  if (!open || !slot) return null;
+  return (
+    <div className="fixed inset-0 z-[76]">
+      <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-[520px]">
+        <div className="rounded-2xl border border-white/10 bg-zinc-950 text-white shadow-2xl p-5">
+          <div className="text-lg font-semibold mb-3">
+            {t("eliminarBonus")}
+          </div>
+          <div className="flex items-center gap-3 mb-4">
+            {slot?.thumbnail ? (
+              <img
+                src={slot.thumbnail}
+                alt=""
+                className="h-10 w-10 rounded object-cover"
+              />
+            ) : null}
+            <div className="min-w-0">
+              <div className="text-sm font-medium truncate">{slot?.name}</div>
+              <div className="text-xs opacity-70 truncate">
+                {slot?.provider}
+              </div>
+            </div>
+          </div>
+          <div className="text-sm opacity-80 mb-5">{t("eliminarPerg")}</div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onCancel}>
+              {t("cancel")}
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={onConfirm}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              {t("delete")}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ───────────────────────── Overlays — helpers & previews ───────────────────────── */
+
+// opções rápidas (guardadas só em memória/localStorage)
+const DEFAULT_HUNT_OVERLAY = {
+  design: "cards",
+  pad: 16,
+  align: "center",
+  shine: true,
+  pulse: true,
+  thumbs: true,
+  baseW: 560,
+  baseH: 280,
+};
+const DEFAULT_OPENING_OVERLAY = {
+  design: "default",
+  pad: 16,
+  align: "center",
+  shine: true,
+  pulse: true,
+  baseW: 560,
+  baseH: 320,
+};
+
+function useLocalState(key, initial) {
+  const [s, setS] = React.useState(() => {
+    try {
+      const str =
+        typeof localStorage !== "undefined" && localStorage.getItem(key);
+      return str ? { ...initial, ...JSON.parse(str) } : initial;
+    } catch {
+      return initial;
+    }
+  });
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(key, JSON.stringify(s));
+    } catch {}
+  }, [key, s]);
+  return [s, setS];
+}
+
+function buildHuntOverlayUrl(base, huntNumberId, opts) {
+  const qs = new URLSearchParams();
+  qs.set("design", "cards");
+  qs.set("kpi", "start,be,count"); // Start • B/E • #Bonus
+  if (opts.thumbs) qs.set("thumbs", "1");
+  if (opts.shine) qs.set("shine", "1");
+  if (opts.pulse) qs.set("pulse", "1");
+  qs.set("align", String(opts.align || "center"));
+  qs.set("pad", String(opts.pad || 0));
+  qs.set("bw", String(opts.baseW || 560));
+  qs.set("bh", String(opts.baseH || 280));
+  return `${base}#/overlay/hunt/${huntNumberId}?${qs.toString()}`;
+}
+function buildOpeningOverlayUrl(base, huntNumberId, opts) {
+  const qs = new URLSearchParams();
+  qs.set("design", "opening");
+  if (opts.shine) qs.set("shine", "1");
+  if (opts.pulse) qs.set("pulse", "1");
+  qs.set("align", String(opts.align || "center"));
+  qs.set("pad", String(opts.pad || 0));
+  qs.set("bw", String(opts.baseW || 560));
+  qs.set("bh", String(opts.baseH || 320));
+  return `${base}#/overlay/opening/${huntNumberId}?${qs.toString()}`;
+}
+
+/* Preview compacto estilo battle */
+function HuntOverlayPreview({ hunt, slots, opts }) {
+  const { t } = useLang();
+  const start = Number(hunt?.start_cost) || slots.reduce((a, s) => a + toNum(s.bet_size), 0);
+  const won = slots.reduce((a, s) => a + toNum(s.payout), 0);
+  const beLeft = Math.max(0, start - won);
+  const baseW = Number(opts.baseW || 560);
+  const baseH = Number(opts.baseH || 280);
+
+  return (
+    <div
+      className="rounded-xl border border-white/10 overflow-hidden relative"
+      style={{
+        width: baseW,
+        height: baseH,
+        background:
+          "linear-gradient(135deg, rgba(14,22,42,1) 0%, rgba(28,26,49,1) 100%)",
+      }}
+    >
+      {/* topo KPIs */}
+      <div className="p-3" style={{ paddingBottom: 8 + (opts.pad || 0) }}>
+        <div className="flex items-center justify-between gap-2 text-[12px]">
+          <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10">
+            {hunt?.title || "Hunt"}
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10">
+              {t("kpiStart")}:{" "}
+              <b className={numCls}>{fmtMoney(start)}</b>
+            </div>
+            <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10">
+              {t("kpiBE")}:{" "}
+              <b className={numCls}>{fmtMoney(beLeft)}</b>
+            </div>
+            <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10">
+              {t("kpiBonus")}: <b>{slots.length}</b>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* grelha de thumbs */}
+      <div
+        className="px-3"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(8,minmax(0,1fr))",
+          gap: 8,
+        }}
+      >
+        {slots.slice(0, 16).map((s, i) => (
+          <div
+            key={s.id}
+            className={cn(
+              "relative rounded-lg overflow-hidden border border-white/10",
+              getIsSuper(s) ? "ring-1 ring-fuchsia-400/30" : ""
+            )}
+            title={s.name}
+          >
+            {/* index tag */}
+            <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">
+              #{i + 1}
+            </div>
+            {getIsSuper(s) && (
+              <div className="absolute right-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-fuchsia-600/80">
+                SUPER
+              </div>
+            )}
+            {s.thumbnail ? (
+              <img
+                src={s.thumbnail}
+                alt=""
+                className="h-14 w-full object-cover object-bottom"
+              />
+            ) : (
+              <div className="h-14 w-full bg-white/10" />
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* pill P/L discreto */}
+      <div className="absolute left-1/2 -translate-x-1/2 bottom-3">
+        <div className="px-3 py-1.5 rounded-full border border-white/20 bg-white/10 text-[12px] shadow-[0_10px_30px_rgba(0,0,0,.35)]">
+          P/L:{" "}
+          <b className={cn(numCls, won - start >= 0 ? "text-emerald-300" : "text-rose-300")}>
+            {renderPL(won - start)}
+          </b>
+        </div>
+      </div>
+    </div>
+  );
+}
+function OpeningOverlayPreview({ hunt, slots, opts }) {
+  const current = slots[0] || null;
+  const baseW = Number(opts.baseW || 560);
+  const baseH = Number(opts.baseH || 320);
+
+  return (
+    <div
+      className="rounded-xl border border-white/10 overflow-hidden relative"
+      style={{
+        width: baseW,
+        height: baseH,
+        background:
+          "linear-gradient(135deg, rgba(15,16,33,1) 0%, rgba(24,16,40,1) 100%)",
+      }}
+    >
+      <div className="px-3 pt-3 pb-2 flex items-center justify-between">
+        <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
+          {hunt?.title || "Hunt"} — Opening
+        </div>
+        <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
+          {current ? current.name : "—"}
+        </div>
+      </div>
+
+      {/* thumbs paginados de exemplo */}
+      <div
+        className="px-3"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(8,minmax(0,1fr))",
+          gap: 8,
+        }}
+      >
+        {slots.slice(0, 24).map((s, i) => (
+          <div
+            key={s.id}
+            className="relative rounded-lg overflow-hidden border border-white/10"
+            title={s.name}
+          >
+            <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">
+              #{i + 1}
+            </div>
+            {s.thumbnail ? (
+              <img
+                src={s.thumbnail}
+                alt=""
+                className="h-14 w-full object-cover object-bottom"
+              />
+            ) : (
+              <div className="h-14 w-full bg-white/10" />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Designer({ open, onClose, opts, setOpts, title }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-sm">
       <div className="absolute inset-x-0 top-0 h-14 px-4 flex items-center justify-between border-b border-white/10 bg-zinc-950/60">
         <div className="flex items-center gap-2">
           <Palette className="h-5 w-5 text-white/80" />
-          <div>Widget Designer</div>
-          <div className="text-xs opacity-60">Battle #{battleId}</div>
+          <div>{title}</div>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={() => { persist(); onClose(); }} className="h-9">
+          <Button className="h-9" onClick={onClose}>
             <Save className="h-4 w-4 mr-2" />
             Save & Close
           </Button>
-          <Button variant="outline" onClick={onClose} className="h-9">
+          <Button variant="outline" className="h-9" onClick={onClose}>
             <X className="h-4 w-4 mr-2" />
             Cancel
           </Button>
         </div>
       </div>
 
-      <div className="absolute inset-x-0 top-14 bottom-0 grid xl:grid-cols-[520px_1fr]">
-        {/* Controls */}
+      <div className="absolute inset-x-0 top-14 bottom-0 grid md:grid-cols-[420px_1fr]">
         <div className="border-r border-white/10 bg-zinc-950/70 overflow-auto">
           <div className="p-4 space-y-4">
-            {/* Orientação / VS */}
             <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-              <div className="text-xs opacity-70 mb-2">Orientation</div>
-              <div className="flex items-center gap-4 text-sm">
-                <label className="flex items-center gap-2">
-                  <input type="radio" checked={opts.layoutKind === "horizontal"}
-                         onChange={() => setOpts(o => ({...o, layoutKind: "horizontal"}))} />
-                  Horizontal
-                </label>
-                <label className="flex items-center gap-2">
-                  <input type="radio" checked={opts.layoutKind === "vertical"}
-                         onChange={() => setOpts(o => ({...o, layoutKind: "vertical"}))} />
-                  Vertical
-                </label>
-              </div>
-              <div className="mt-3 text-xs opacity-70">VS style</div>
-              <div className="flex items-center gap-4 text-sm">
-                <label className="flex items-center gap-2">
-                  <input type="radio" checked={opts.vsStyle === "badge"}
-                         onChange={() => setOpts(o => ({...o, vsStyle: "badge"}))} />
-                  Badge
-                </label>
-                <label className="flex items-center gap-2">
-                  <input type="radio" checked={opts.vsStyle === "big"}
-                         onChange={() => setOpts(o => ({...o, vsStyle: "big"}))} />
-                  Big
-                </label>
-              </div>
-              <div className="mt-3 text-xs opacity-70">VS placement</div>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                {["left","center","right","overlay"].map(v=>(
-                  <label key={v} className="flex items-center gap-2">
-                    <input type="radio" checked={opts.vsPlacement===v}
-                      onChange={()=>setOpts(o=>({...o, vsPlacement:v}))} />
-                    {v[0].toUpperCase()+v.slice(1)}
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Size presets */}
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-              <div className="text-xs opacity-70 mb-2">Size presets</div>
+              <div className="text-xs opacity-70 mb-1">Canvas / OBS</div>
               <div className="grid grid-cols-2 gap-2">
-                {SIZE_PRESETS.map((p) => (
-                  <button
-                    key={p.name}
-                    onClick={()=>applySizePreset(p)}
-                    className="rounded-lg border border-white/10 px-3 py-2 text-sm hover:ring-2 hover:ring-sky-400">
-                    {p.name}
-                  </button>
-                ))}
+                <div>
+                  <div className="text-xs opacity-70 mb-1">Base width</div>
+                  <Input
+                    type="number"
+                    value={opts.baseW}
+                    onChange={(e) =>
+                      setOpts((o) => ({ ...o, baseW: Number(e.target.value) || 0 }))
+                    }
+                    className="h-9 bg-zinc-900 border-white/10 text-white"
+                  />
+                </div>
+                <div>
+                  <div className="text-xs opacity-70 mb-1">Base height</div>
+                  <Input
+                    type="number"
+                    value={opts.baseH}
+                    onChange={(e) =>
+                      setOpts((o) => ({ ...o, baseH: Number(e.target.value) || 0 }))
+                    }
+                    className="h-9 bg-zinc-900 border-white/10 text-white"
+                  />
+                </div>
               </div>
-            </div>
 
-            {/* Layout presets */}
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-              <div className="text-xs opacity-70 mb-2">Layout presets</div>
-              <div className="grid grid-cols-2 gap-2">
-                {LAYOUT_PRESETS.map((p)=>(
-                  <button key={p.name} onClick={()=>applyLayoutPreset(p)}
-                          className="rounded-lg border border-white/10 px-3 py-2 text-sm hover:ring-2 hover:ring-sky-400">
-                    {p.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Presets de cor */}
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-              <div className="text-xs opacity-70 mb-2">Color presets</div>
-              <div className="grid grid-cols-2 gap-2">
-                {PRESETS.map((p) => (
-                  <button
-                    key={p.name}
-                    onClick={() => setTheme((t) => ({ ...t, ...p.t }))}
-                    className="rounded-lg overflow-hidden border border-white/10 hover:ring-2 hover:ring-sky-400 transition"
-                    title={p.name}
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <div>
+                  <div className="text-xs opacity-70 mb-1">Padding</div>
+                  <Input
+                    type="number"
+                    value={opts.pad}
+                    onChange={(e) =>
+                      setOpts((o) => ({ ...o, pad: Number(e.target.value) || 0 }))
+                    }
+                    className="h-9 bg-zinc-900 border-white/10 text-white"
+                  />
+                </div>
+                <div>
+                  <div className="text-xs opacity-70 mb-1">Align</div>
+                  <select
+                    value={opts.align}
+                    onChange={(e) =>
+                      setOpts((o) => ({ ...o, align: e.target.value }))
+                    }
+                    className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white px-3"
                   >
-                    <div className="h-10" style={{ background: `linear-gradient(135deg, ${p.t.bgStart || theme.bgStart}, ${p.t.bgEnd || theme.bgEnd})` }} />
-                    <div className="px-2 py-1 text-[11px] opacity-80">{p.name}</div>
-                  </button>
-                ))}
+                    <option value="left">Left</option>
+                    <option value="center">Center</option>
+                    <option value="right">Right</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="mt-3 text-xs opacity-70">Effects</div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={!!opts.shine}
+                    onChange={(e) =>
+                      setOpts((o) => ({ ...o, shine: !!e.target.checked }))
+                    }
+                  />
+                  Shine
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={!!opts.pulse}
+                    onChange={(e) =>
+                      setOpts((o) => ({ ...o, pulse: !!e.target.checked }))
+                    }
+                  />
+                  Pulse
+                </label>
               </div>
             </div>
 
-            {/* Colors */}
-            <div className="grid grid-cols-1 gap-4">
-              {[
-                ["Background start", "bgStart"],
-                ["Background end", "bgEnd"],
-                ["Panel/Line border", "panelBorder"],
-                ["Text", "text"],
-                ["Subtext", "subtext"],
-                ["Accent", "accent"],
-                ["Chip bg", "chipBg"],
-                ["Chip border", "chipBorder"],
-                ["OK (green)", "pos"],
-                ["NOK (red)", "neg"],
-                ["Badge bg", "badgeBg"],
-                ["Badge border", "badgeBorder"],
-                ["Total bg", "totalBg"],
-                ["Total border", "totalBorder"],
-                ["VS bg", "vsBg"],
-              ].map(([lbl, key]) => (
-                <ColorField key={key} label={lbl} value={theme[key]} onChange={(v) => setTheme((t) => ({ ...t, [key]: v }))} />
-              ))}
-            </div>
-
-            {/* Layout / Typography */}
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
-              <div className="text-xs opacity-70 mb-1">Layout</div>
-
-              {[
-                ["Panel border width", "panelBorderWidth", 0, 4],
-                ["Badge border width", "badgeBorderWidth", 0, 4],
-                ["Total border width", "totalBorderWidth", 0, 4],
-                ["Chip border width", "chipBorderWidth", 0, 4],
-              ].map(([lbl, key, min, max]) => (
-                <div key={key}>
-                  <label className="block text-sm">{lbl}: {theme[key]}px</label>
-                  <input type="range" min={min} max={max} step={1} value={theme[key]} onChange={(e) => setTheme((t) => ({ ...t, [key]: Number(e.target.value) }))} className="w-full" />
-                </div>
-              ))}
-
-              {[
-                ["Border radius (boxes)", "radius", 8, 28],
-                ["Pill radius (Best/Bonus/Total)", "pillRadius", 8, 30],
-                ["Chip radius", "chipRadius", 8, 20],
-                ["Font size", "fontScale", 80, 130],
-                ["Font weight (normal)", "fontWeight", 300, 700],
-                ["Font weight (strong)", "strongWeight", 300, 800],
-              ].map(([lbl, key, min, max]) => (
-                <div key={key}>
-                  <label className="block text-sm">{lbl}: {theme[key]}{key==="fontScale"?"%":"px"}</label>
-                  <input type="range" min={min} max={max} step={key.includes("Weight")?50:1} value={theme[key]} onChange={(e) => setTheme((t) => ({ ...t, [key]: Number(e.target.value) }))} className="w-full" />
-                </div>
-              ))}
-
-              <label className="block text-sm">Font family</label>
-              <Input value={theme.fontFamily} onChange={(e) => setTheme((t) => ({ ...t, fontFamily: e.target.value }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
-
-              {/* Canvas / OBS */}
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3 mt-3">
-                <div className="text-xs opacity-70 mb-1">Canvas / OBS</div>
-
-                <div className="flex items-center gap-3">
-                  <div className="text-sm w-36">Output</div>
-                  <label className="text-sm flex items-center gap-1">
-                    <input type="radio" checked={opts.overlay.mode === "auto"} onChange={() => setOpts(o => ({ ...o, overlay: { ...o.overlay, mode: "auto" } }))} />
-                    Auto-fit (preenche Browser Source)
-                  </label>
-                  <label className="text-sm flex items-center gap-1">
-                    <input type="radio" checked={opts.overlay.mode === "fixed"} onChange={() => setOpts(o => ({ ...o, overlay: { ...o.overlay, mode: "fixed" } }))} />
-                    Fixed (px)
-                  </label>
-                </div>
-
-                {opts.overlay.mode === "fixed" && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">Width (px)</div>
-                      <Input type="number" value={opts.overlay.width} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, width: Number(e.target.value) || 0 } }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
-                    </div>
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">Height (px)</div>
-                      <Input type="number" value={opts.overlay.height} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, height: Number(e.target.value) || 0 } }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <div className="text-xs opacity-70 mb-1">Panel base width</div>
-                    <Input type="number" value={opts.overlay.baseW} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, baseW: Number(e.target.value) || 0 } }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
-                  </div>
-                  <div>
-                    <div className="text-xs opacity-70 mb-1">Panel base height</div>
-                    <Input type="number" value={opts.overlay.baseH} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, baseH: Number(e.target.value) || 0 } }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <div className="text-xs opacity-70 mb-1">Padding (px)</div>
-                    <Input type="number" value={opts.overlay.pad} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, pad: Number(e.target.value) || 0 } }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
-                  </div>
-                  <div>
-                    <div className="text-xs opacity-70 mb-1">Vertical align</div>
-                    <select value={opts.overlay.align} onChange={(e) => setOpts(o => ({ ...o, overlay: { ...o.overlay, align: e.target.value } }))} className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white px-3">
-                      <option value="top">Top</option>
-                      <option value="center">Center</option>
-                      <option value="bottom">Bottom</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="text-[11px] opacity-70">
-                  Em <b>Fixed</b>, usa o mesmo Width/Height no “Browser Source” do OBS. O overlay faz letterbox e nunca corta conteúdo.
-                </div>
-              </div>
-
-              {/* Auto placement */}
-              <div className="border-t border-white/10 pt-3 mt-2 space-y-2">
-                <div className="text-xs opacity-70">Auto placement (default layout)</div>
-
-                <div className="flex items-center gap-3">
-                  <div className="text-sm w-36">Bonus badge:</div>
-                  <label className="text-sm flex items-center gap-1">
-                    <input type="radio" checked={opts.bonusDock === "left"} onChange={() => setOpts((o) => ({ ...o, bonusDock: "left" }))} />
-                    Left
-                  </label>
-                  <label className="text-sm flex items-center gap-1">
-                    <input type="radio" checked={opts.bonusDock === "right"} onChange={() => setOpts((o) => ({ ...o, bonusDock: "right" }))} />
-                    Right
-                  </label>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="text-sm w-36">Total badge:</div>
-                  <label className="text-sm flex items-center gap-1">
-                    <input type="radio" checked={opts.totalJustify === "left"} onChange={() => setOpts((o) => ({ ...o, totalJustify: "left" }))} />
-                    Left
-                  </label>
-                  <label className="text-sm flex items-center gap-1">
-                    <input type="radio" checked={opts.totalJustify === "center"} onChange={() => setOpts((o) => ({ ...o, totalJustify: "center" }))} />
-                    Center
-                  </label>
-                  <label className="text-sm flex items-center gap-1">
-                    <input type="radio" checked={opts.totalJustify === "right"} onChange={() => setOpts((o) => ({ ...o, totalJustify: "right" }))} />
-                    Right
-                  </label>
-                </div>
-              </div>
-
-              {/* Buys design + layout */}
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
-                <div className="text-xs opacity-70">Buy style</div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  {["pill","soft","flat","tag"].map(v=>(
-                    <label key={v} className="flex items-center gap-2">
-                      <input type="radio" checked={opts.buyStyle===v} onChange={()=>setOpts(o=>({...o, buyStyle:v}))}/>
-                      {v}
-                    </label>
-                  ))}
-                </div>
-                <div className="text-xs opacity-70 mt-2">Buy layout</div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  {[
-                    ["wrap","Rows/Wrap"],
-                    ["column","Column (stack)"],
-                  ].map(([v,lab])=>(
-                    <label key={v} className="flex items-center gap-2">
-                      <input type="radio" checked={opts.buyLayout===v} onChange={()=>setOpts(o=>({...o, buyLayout:v}))}/>
-                      {lab}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Bonus Buy label */}
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
-                <div className="text-xs opacity-70">Bonus Buy</div>
-                <div className="flex flex-col gap-2 text-sm">
-                  <label className="flex items-center gap-2">
-                    <input type="radio" name="bonuslabel" checked={opts.bonusLabelMode === "label+value"} onChange={() => setOpts((o) => ({ ...o, bonusLabelMode: "label+value" }))} />
-                    Label + Value
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input type="radio" name="bonuslabel" checked={opts.bonusLabelMode === "value"} onChange={() => setOpts((o) => ({ ...o, bonusLabelMode: "value" }))} />
-                    Value only
-                  </label>
-                </div>
-                <div>
-                  <div className="text-xs opacity-70 mb-1">Label text</div>
-                  <Input value={opts.bonusLabelText} onChange={(e) => setOpts((o) => ({ ...o, bonusLabelText: e.target.value }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
-                </div>
-              </div>
-
-              {/* Subtotal options */}
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
-                <div className="text-xs opacity-70">Subtotal</div>
-                <div className="flex flex-col gap-2 text-sm">
-                  <label className="flex items-center gap-2">
-                    <input type="radio" name="sublabel" checked={opts.subtotalLabelMode === "label+value"} onChange={() => setOpts((o) => ({ ...o, subtotalLabelMode: "label+value" }))} />
-                    Label + Value
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input type="radio" name="sublabel" checked={opts.subtotalLabelMode === "value"} onChange={() => setOpts((o) => ({ ...o, subtotalLabelMode: "value" }))} />
-                    Value only
-                  </label>
-                </div>
-                <div>
-                  <div className="text-xs opacity-70 mb-1">Label text</div>
-                  <Input value={opts.subtotalLabelText} onChange={(e) => setOpts((o) => ({ ...o, subtotalLabelText: e.target.value }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
-                </div>
-                <div className="mt-2 text-xs opacity-70">Alignment</div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  {[
-                    ["left","Left"],["center","Center"],["right","Right"],["split","Split (A left / B right)"]
-                  ].map(([v,lab])=>(
-                    <label key={v} className="flex items-center gap-2">
-                      <input type="radio" checked={opts.subtotalAlign===v} onChange={()=>setOpts(o=>({...o, subtotalAlign:v}))}/>
-                      {lab}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Total label */}
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
-                <div className="text-xs opacity-70">Total</div>
-                <div className="flex flex-col gap-2 text-sm">
-                  <label className="flex items-center gap-2">
-                    <input type="radio" name="totallabel" checked={opts.totalLabelMode === "label+value"} onChange={() => setOpts((o) => ({ ...o, totalLabelMode: "label+value" }))} />
-                    Label + Value
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input type="radio" name="totallabel" checked={opts.totalLabelMode === "value"} onChange={() => setOpts((o) => ({ ...o, totalLabelMode: "value" }))} />
-                    Value only
-                  </label>
-                </div>
-                <div>
-                  <div className="text-xs opacity-70 mb-1">Label text</div>
-                  <Input value={opts.totalLabelText} onChange={(e) => setOpts((o) => ({ ...o, totalLabelText: e.target.value }))} className="h-9 bg-zinc-900 border-white/10 text-white" />
-                  <div className="text-[11px] opacity-60 mt-1">Deixa vazio para mostrar só o valor quando estiver em “Label + Value”.</div>
-                </div>
-              </div>
-
-              {/* Save */}
-              <div className="flex gap-2 sticky bottom-3">
-                <Button onClick={persist} className="h-10">
-                  <Save className="h-4 w-4 mr-2" />
-                  Save
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setTheme({ ...DEFAULT_THEME });
-                    setLayout({ ...DEFAULT_LAYOUT, mode: layout.mode });
-                    setOpts({ ...DEFAULT_OPTS });
-                  }}
-                  className="h-10"
-                >
-                  Restore defaults
-                </Button>
-              </div>
+            <div className="text-[11px] opacity-60">
+              Dica: em OBS, usa sempre o mesmo <b>Width/Height</b> do browser
+              source para evitar cortes.
             </div>
           </div>
         </div>
 
-        {/* Live preview */}
         <div className="p-6 overflow-auto">
-          <WidgetPreviewPanel theme={theme} layout={layout} setLayout={setLayout} opts={opts} {...previewProps} />
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-sm">
+            As opções são gravadas localmente (localStorage) para este
+            navegador/conta.
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-/* ───────── Widget Card ───────── */
-function WidgetCard({
-  battleId,
-  sideA,
-  sideB,
-  playerA,
-  playerB,
-  bestOf,
-  buyCost,
-  totalPay,
-  aPays = [],
-  bPays = [],
+function OverlayCard({
+  type, // "hunt" | "opening"
+  hunt,
+  slots,
+  opts,
+  setOpts,
 }) {
+  const { t } = useLang();
   const { profile } = React.useContext(AuthCtx) || {};
-
-  const [theme, setTheme] = React.useState(DEFAULT_THEME);
-  const [layout, setLayout] = React.useState(DEFAULT_LAYOUT);
-  const [opts, setOpts] = React.useState(DEFAULT_OPTS);
+  const [open, setOpen] = React.useState(false);
   const [openDesigner, setOpenDesigner] = React.useState(false);
 
-const overlayUrl = React.useMemo(() => {
-  const base = `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, "");
-  const token = profile?.public_token || profile?.widget_token || profile?.id || "";
-  if (!token || !battleId) return "";
-  return buildOverlayUrl(base, token, opts, battleId); // <— agora com battleId
-}, [profile?.public_token, profile?.widget_token, profile?.id, opts, battleId]);
+  const base = React.useMemo(
+    () =>
+      `${window.location.origin}${window.location.pathname}`.replace(
+        /\/+$/,
+        ""
+      ),
+    []
+  );
+  const url = React.useMemo(() => {
+    if (!hunt?.number_id) return "";
+    return type === "hunt"
+      ? buildHuntOverlayUrl(base, hunt.number_id, opts)
+      : buildOpeningOverlayUrl(base, hunt.number_id, opts);
+  }, [type, hunt?.number_id, base, opts]);
 
-
-  const openOverlay = () => {
-    if (!overlayUrl) return;
-    window.open(overlayUrl, "_blank", "noopener,noreferrer");
-  };
-
-  const copyOverlayUrl = async () => {
-    if (!overlayUrl) return;
+  const copyUrl = async () => {
+    if (!url) return;
     try {
-      await navigator.clipboard.writeText(overlayUrl);
+      await navigator.clipboard.writeText(url);
     } catch {
       alert("Não consegui copiar o URL.");
     }
   };
-
-  const previewProps = { bestOf, buyCost, totalPay, sideA, sideB, playerA, playerB, aPays, bPays };
-
-  React.useEffect(() => {
-    (async () => {
-      if (!battleId) return;
-      const { theme: t, layout: l, options: o } = await dbLoadWidgetSettings(battleId);
-      if (t) setTheme({ ...DEFAULT_THEME, ...t });
-      if (l) setLayout({ ...DEFAULT_LAYOUT, ...l });
-      if (o) setOpts({ ...DEFAULT_OPTS, ...o, overlay: { ...DEFAULT_OPTS.overlay, ...(o.overlay || {}) } });
-    })();
-  }, [battleId]);
-
-  const persist = React.useCallback(async () => {
-    if (!battleId) return;
-    await supabase.from("battle_widget_settings").upsert([
-      { battle_id: battleId, theme, layout, options: opts },
-    ]);
-  }, [battleId, theme, layout, opts]);
+  const openOverlay = () => {
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
 
   return (
-    <>
-      <AccentCard title="Widget">
-        <div className="mb-3 grid grid-cols-3 gap-2">
-          <Button type="button" onClick={copyOverlayUrl} disabled={!overlayUrl} className="h-9 w-full justify-center">
-            <Copy className="h-4 w-4 mr-2" />
-            Copy URL
-          </Button>
-          <Button type="button" variant="outline" className="h-9 w-full justify-center" disabled={!overlayUrl} onClick={openOverlay}>
-            <ExternalLink className="h-4 w-4 mr-2" />
-            Open overlay
-          </Button>
-          <Button type="button" variant="secondary" className="h-9 w-full justify-center" onClick={() => setOpenDesigner(true)}>
-            <SlidersHorizontal className="h-4 w-4 mr-2" />
-            Open Designer
-          </Button>
+    <div className="rounded-xl border border-white/10 bg-white/[0.03]">
+      {/* Cabeçalho compacto (abre/fecha) */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full px-3 py-2 text-left flex items-center gap-2"
+      >
+        <div className="h-8 w-8 rounded-lg bg-white/10 flex items-center justify-center">
+          <SlidersHorizontal className="h-4 w-4" />
         </div>
-
-        <div className="overflow-auto">
-          <WidgetPreviewPanel theme={theme} layout={layout} setLayout={setLayout} opts={opts} {...previewProps} />
+        <div className="font-medium flex-1">
+          {type === "hunt" ? t("overlayHunt") : t("overlayOpening")}
         </div>
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 transition",
+            open ? "rotate-180 opacity-100" : "opacity-70"
+          )}
+        />
+      </button>
 
-        <div className="mt-3 flex justify-end">
-          <Button onClick={persist} className="h-9">
-            <Save className="h-4 w-4 mr-2" />
-            Save settings
-          </Button>
+      {/* Conteúdo */}
+      {open && (
+        <div className="px-3 pb-3 space-y-3">
+          <div className="grid md:grid-cols-3 gap-2">
+            <div>
+              <div className="text-xs opacity-70 mb-1">{t("preset")}</div>
+              <select
+                value={opts.design}
+                onChange={(e) =>
+                  setOpts((o) => ({ ...o, design: e.target.value }))
+                }
+                className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+              >
+                {type === "hunt" ? (
+                  <option value="cards">Cards (Start • B/E • #Bonus)</option>
+                ) : (
+                  <>
+                    <option value="default">Default</option>
+                    <option value="minimal">Minimal</option>
+                  </>
+                )}
+              </select>
+            </div>
+            <div>
+              <div className="text-xs opacity-70 mb-1">{t("padding")}</div>
+              <Input
+                type="number"
+                value={opts.pad}
+                onChange={(e) =>
+                  setOpts((o) => ({ ...o, pad: Number(e.target.value) || 0 }))
+                }
+                className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+              />
+            </div>
+            <div>
+              <div className="text-xs opacity-70 mb-1">{t("align")}</div>
+              <select
+                value={opts.align}
+                onChange={(e) =>
+                  setOpts((o) => ({ ...o, align: e.target.value }))
+                }
+                className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+              >
+                <option value="left">{t("left")}</option>
+                <option value="center">{t("center")}</option>
+                <option value="right">{t("right")}</option>
+              </select>
+            </div>
+          </div>
+
+          {/* URL + ações */}
+          <div className="flex items-center gap-2">
+            <Button type="button" className="h-9" onClick={copyUrl}>
+              <CopyIcon className="h-4 w-4 mr-2" />
+              {t("copyUrl")}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9"
+              onClick={openOverlay}
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              {t("openLink")}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-9"
+              onClick={() => setOpenDesigner(true)}
+            >
+              <SlidersHorizontal className="h-4 w-4 mr-2" />
+              {t("openDesigner")}
+            </Button>
+          </div>
+
+          {/* Preview ao vivo (estilo battle) */}
+          <div className="overflow-auto">
+            {type === "hunt" ? (
+              <HuntOverlayPreview hunt={hunt} slots={slots} opts={opts} />
+            ) : (
+              <OpeningOverlayPreview hunt={hunt} slots={slots} opts={opts} />
+            )}
+          </div>
+
+          <Designer
+            open={openDesigner}
+            onClose={() => setOpenDesigner(false)}
+            opts={opts}
+            setOpts={setOpts}
+            title={`${type === "hunt" ? "Hunt" : "Opening"} — Designer`}
+          />
         </div>
-      </AccentCard>
-
-      <WidgetDesigner
-        open={openDesigner}
-        onClose={() => setOpenDesigner(false)}
-        battleId={battleId}
-        theme={theme}
-        setTheme={setTheme}
-        layout={layout}
-        setLayout={setLayout}
-        opts={opts}
-        setOpts={setOpts}
-        previewProps={previewProps}
-        persist={persist}
-      />
-    </>
+      )}
+    </div>
   );
 }
 
-/* ───────────────────────── Page ───────────────────────── */
-export default function BattleView() {
-  const { isDark } = useTheme();
+/* ───────────────────────── Redeem Drawer ───────────────────────── */
+function RedeemDrawer({
+  open,
+  onClose,
+  hunt,
+  slots,
+  onSaved /* baselineAtStart */,
+}) {
+  const { t } = useLang();
+  const [idx, setIdx] = React.useState(0);
+  const [busy, setBusy] = React.useState(false);
 
-  const [battleId, setBattleId] = React.useState(null);
-  React.useEffect(function () {
-    function read() {
-      const h = String(window.location.hash || "");
-      const parts = h.replace(/^#\//, "").split("/");
-      const id = Number(parts[1] || parts[0]);
-      setBattleId(Number.isFinite(id) ? id : null);
+  // ESC fecha (fix)
+  React.useEffect(() => {
+    if (!open) return;
+    const onEsc = (e) => e.key === "Escape" && askClose();
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [open]);
+
+  // paginação thumbs: 24 por página
+  const PER_PAGE = 24;
+  const [page, setPage] = React.useState(0);
+  React.useEffect(() => setPage(Math.floor(idx / PER_PAGE)), [idx]);
+  const pageCount = Math.ceil(slots.length / PER_PAGE);
+
+  const s = slots[idx] || null;
+  const isSuper = React.useMemo(() => getIsSuper(s), [s]);
+
+  const [payout, setPayout] = React.useState("");
+  const [multiplier, setMultiplier] = React.useState("");
+  const [bet, setBet] = React.useState("");
+
+  React.useEffect(() => {
+    if (!s) return;
+    setPayout(s.payout ?? "");
+    setMultiplier(s.multiplier ?? "");
+    setBet(s.bet_size ?? "");
+  }, [idx, s]);
+
+  // recalcula multiplier aceitando vírgulas
+  React.useEffect(() => {
+    const p = toNum(payout);
+    const b = toNum(bet);
+    if (Number.isFinite(p) && Number.isFinite(b) && b > 0) {
+      setMultiplier((p / b).toFixed(2));
     }
-    read();
-    window.addEventListener("hashchange", read);
-    return function () { window.removeEventListener("hashchange", read); };
+  }, [payout, bet]);
+
+  // toast suave (fade)
+  const [toastMsg, setToastMsg] = React.useState("");
+  const [toastOpen, setToastOpen] = React.useState(false);
+  const hideTimer = React.useRef(null);
+  const removeTimer = React.useRef(null);
+  const showToast = React.useCallback((msg) => {
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    if (removeTimer.current) clearTimeout(removeTimer.current);
+    setToastMsg(msg);
+    setToastOpen(true);
+    hideTimer.current = setTimeout(() => {
+      setToastOpen(false);
+      removeTimer.current = setTimeout(() => setToastMsg(""), 320);
+    }, 1200);
   }, []);
+  React.useEffect(
+    () => () => {
+      clearTimeout(hideTimer.current);
+      clearTimeout(removeTimer.current);
+    },
+    []
+  );
 
-  const [busy, setBusy] = React.useState(true);
-  const [row, setRow] = React.useState(null);
-  const [err, setErr] = React.useState("");
+  const [confirmClose, setConfirmClose] = React.useState(false);
+  function askClose() {
+    setConfirmClose(true);
+  }
+  function closeNow() {
+    setConfirmClose(false);
+    onClose && onClose();
+  }
 
-  const [bestOf, setBestOf] = React.useState(1);
-  const [buyCost, setBuyCost] = React.useState(0);
-
-  const [sideA, setSideA] = React.useState(null);
-  const [sideB, setSideB] = React.useState(null);
-  const [playerA, setPlayerA] = React.useState("");
-  const [playerB, setPlayerB] = React.useState("");
-
-  const [pays, setPays] = React.useState([]);
-
-  const [histA, setHistA] = React.useState(null);
-  const [histB, setHistB] = React.useState(null);
-
-  const plannedBuys = Math.max(1, Number(bestOf) || 1) * 2;
-  const totalPay = (pays || []).reduce((s, r) => s + Number(r.amount || 0), 0);
-  const totalCost = Number(buyCost || 0) * plannedBuys;
-  const profit = totalPay - totalCost;
-  const profitTone = profit > 0 ? "positive" : profit < 0 ? "negative" : "neutral";
-
-  const aPays = (pays || []).filter((r) => String(r.side || "").toUpperCase() === "L");
-  const bPays = (pays || []).filter((r) => String(r.side || "").toUpperCase() === "R");
-
-  const aStats = {
-    count: aPays.length,
-    total: aPays.reduce((s, r) => s + Number(r.amount || 0), 0),
-    best: aPays.length ? Math.max(...aPays.map((r) => Number(r.amount || 0))) : 0,
-    worst: aPays.length ? Math.min(...aPays.map((r) => Number(r.amount || 0))) : 0,
-  };
-  const bStats = {
-    count: bPays.length,
-    total: bPays.reduce((s, r) => s + Number(r.amount || 0), 0),
-    best: bPays.length ? Math.max(...bPays.map((r) => Number(r.amount || 0))) : 0,
-    worst: bPays.length ? Math.min(...bPays.map((r) => Number(r.amount || 0))) : 0,
-  };
-
-  const load = React.useCallback(async function (id) {
-    if (!id) return;
+  async function handleSaveAndNext() {
+    if (!s) return;
     try {
-      setBusy(true); setErr("");
+      setBusy(true);
+      const numOrNull = (v) => {
+        if (v === "" || v == null) return null;
+        const n = toNum(v);
+        return Number.isFinite(n) ? n : null;
+      };
+      const patch = {
+        payout: numOrNull(payout),
+        multiplier: numOrNull(multiplier),
+        bet_size: numOrNull(bet),
+      };
+      await updateHuntSlot(s.id, patch);
+      onSaved && onSaved();
 
-      const { data: battle } = await supabase.from("battles").select("*").eq("id", id).maybeSingle();
-      setRow(battle);
-      setBestOf(Number(battle?.best_of) || 1);
-      setBuyCost(Number(battle?.buy_cost) || 0);
-
-      const { data: es } = await supabase.from("battle_entries").select("seed, slot_name, slot_id, player_name").eq("battle_id", id);
-
-      const A = (es || []).find((e) => String(e.seed).toUpperCase() === "A");
-      const B = (es || []).find((e) => String(e.seed).toUpperCase() === "B");
-
-      let aBase = A ? { id: A.slot_id ?? null, name: A.slot_name || "" } : null;
-      let bBase = B ? { id: B.slot_id ?? null, name: B.slot_name || "" } : null;
-      if (aBase) aBase = await enrichSlotInfo(aBase);
-      if (bBase) bBase = await enrichSlotInfo(bBase);
-
-      setSideA(aBase);
-      setPlayerA(A?.player_name || "");
-      setSideB(bBase);
-      setPlayerB(B?.player_name || "");
-
-      const { data: ps } = await supabase.from("battle_payments").select("*").eq("battle_id", id).order("buy_idx", { ascending: true });
-      setPays(ps || []);
-
-      async function fetchSlotHistory(slotEntry) {
-        try {
-          let q = supabase.from("battle_entries").select("battle_id, slot_id, slot_name");
-          if (slotEntry?.slot_id) q = q.eq("slot_id", slotEntry.slot_id);
-          else if (slotEntry?.slot_name) q = q.ilike("slot_name", `%${slotEntry.slot_name}%`);
-          const { data: ents } = await q.limit(200);
-          if (!ents?.length) return { times: 0, total: 0, best: 0, worst: 0, last: "—" };
-
-          const battleIds = [...new Set(ents.map((e) => e.battle_id))];
-          const { data: paysRows } = await supabase.from("battle_payments").select("*").in("battle_id", battleIds);
-          const am = (paysRows || []).map((p) => Number(p.amount || 0));
-          const total = am.reduce((a, b) => a + b, 0);
-          const best = am.length ? Math.max(...am) : 0;
-          const worst = am.length ? Math.min(...am) : 0;
-
-          const { data: battles } = await supabase
-            .from("battles")
-            .select("id, created_at")
-            .in("id", battleIds)
-            .order("created_at", { ascending: false })
-            .limit(1);
-          const last = battles?.[0]?.created_at
-            ? new Intl.DateTimeFormat(LOCALE, { dateStyle: "medium" }).format(new Date(battles[0].created_at))
-            : "—";
-
-          return { times: am.length, total, best, worst, last };
-        } catch {
-          return { times: 0, total: 0, best: 0, worst: 0, last: "—" };
-        }
-      }
-
-      if (A?.slot_id || A?.slot_name) setHistA(await fetchSlotHistory(A)); else setHistA(null);
-      if (B?.slot_id || B?.slot_name) setHistB(await fetchSlotHistory(B)); else setHistB(null);
+      if (idx < slots.length - 1) setIdx((i) => i + 1);
+      else closeNow();
     } catch (e) {
-      setErr(e.message || "Failed to load battle");
-      setRow(null); setPays([]);
+      alert(e.message || "Falha ao guardar.");
     } finally {
       setBusy(false);
     }
-  }, []);
-
-  React.useEffect(() => { if (battleId) load(battleId); }, [battleId, load]);
-
-  async function saveSettings() {
-    if (!battleId) return;
-    try {
-      await supabase.from("battles").update({ best_of: Number(bestOf) || 1, buy_cost: Number(buyCost) || 0 }).eq("id", battleId);
-      await load(battleId);
-    } catch (e) {
-      alert(e.message || "Failed to save settings");
-    }
   }
 
-  async function saveSides() {
-    if (!battleId) return;
-    try {
-      const rows = [];
-      if (sideA?.name)
-        rows.push({ battle_id: battleId, seed: "A", player_name: playerA || null, slot_name: sideA.name, slot_id: sideA.id ?? null });
-      if (sideB?.name)
-        rows.push({ battle_id: battleId, seed: "B", player_name: playerB || null, slot_name: sideB.name, slot_id: sideB.id ?? null });
-      if (!rows.length) return;
+  if (!open) return null;
 
-      await supabase.from("battle_entries").upsert(rows, { onConflict: "battle_id,seed" });
-      await load(battleId);
-    } catch (e) {
-      alert(e?.message || "Failed to save sides");
-    }
-  }
+  /* KPIs (REAIS) para o redeem — somam todos os payouts, incluindo o atual */
+  const sumPayoutsNow = slots.reduce((acc, it, i) => {
+    return acc + (i === idx ? toNum(payout) : toNum(it.payout));
+  }, 0);
 
-  async function setBuy(side, idx, amount) {
-    if (!battleId) return;
-    const payload = { battle_id: battleId, round_idx: 0, match_idx: 0, side, buy_idx: idx, amount: Number(amount) || 0 };
-    try {
-      await supabase.from("battle_payments").upsert([payload], { onConflict: "battle_id,round_idx,match_idx,side,buy_idx" });
-      const { data: ps } = await supabase.from("battle_payments").select("*").eq("battle_id", battleId).order("buy_idx", { ascending: true });
-      setPays(ps || []);
-    } catch (e) {
-      alert(e.message || "Failed to save buy");
-    }
-  }
+  const startCost = toNum(hunt?.start_cost);
+  const amountWonNow = sumPayoutsNow;
+  const plNow = amountWonNow - startCost;
 
-  function BuysEditor({ side, stats, player }) {
-    const isLeft = side === "L";
-    const label = isLeft ? "Side A" : "Side B";
-    const buys = (pays || []).filter((p) => String(p.side || "").toUpperCase() === side);
+  // média necessária nas restantes para chegar ao startCost
+  const remaining = slots.slice(idx + 1);
+  const sumRemainingBets = remaining.reduce(
+    (a, it) => a + toNum(it.bet_size),
+    0
+  );
+  const requiredNet = Math.max(0, startCost - amountWonNow);
+  const avgRequiredX =
+    sumRemainingBets > 0 ? requiredNet / sumRemainingBets : null;
 
-    const inputs = [];
-    const maxN = Math.max(plannedBuys / 2, buys.length, 3);
-    for (let i = 1; i <= maxN; i++) {
-      const r = buys.find((x) => Number(x.buy_idx) === i);
-      inputs.push(
-        <div key={`${side}-${i}`} className="flex items-center gap-2">
-          <div className="w-12 text-xs opacity-70">Buy {i}</div>
-          <Input
-            type="number"
-            step="0.01"
-            defaultValue={r ? r.amount : ""}
-            onBlur={(e) => setBuy(side, i, e.target.value)}
-            className="h-9 rounded-lg bg-zinc-900 border-white/10 text-white"
-          />
+  // current avg X / cumulative X considerando as já processadas + a atual (se tiver números)
+  const processedMultipliers = slots
+    .slice(0, idx + 1)
+    .map((it, i) => {
+      const b = toNum(i === idx ? bet : it.bet_size);
+      const p = toNum(i === idx ? payout : it.payout);
+      return b > 0 && Number.isFinite(p) ? p / b : null;
+    })
+    .filter((v) => v != null);
+
+  const currAvgX = processedMultipliers.length
+    ? processedMultipliers.reduce((a, v) => a + v, 0) /
+      processedMultipliers.length
+    : null;
+  const cumulativeX = processedMultipliers.length
+    ? processedMultipliers.reduce((a, v) => a + v, 0)
+    : null;
+
+  return (
+    <div className="fixed inset-0 z-[80]">
+      <div className="absolute inset-0 bg-black/70" onClick={askClose} />
+      <div className="absolute left-1/2 top-1/2 w-[96vw] max-w-6xl -translate-x-1/2 -translate-y-1/2">
+        <div className="relative rounded-2xl border border-white/10 bg-zinc-950 text-white shadow-2xl p-4 md:p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-lg font-semibold">
+              Start Redeeming —{" "}
+              {s ? (
+                <span className="opacity-90">
+                  {s.name}{" "}
+                  <span className="opacity-60">
+                    ({idx + 1}/{slots.length})
+                  </span>
+                </span>
+              ) : (
+                "Sem slots"
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={askClose}
+              className="p-2 rounded-lg hover:bg-white/10 transition"
+              aria-label="Fechar"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="grid md:grid-cols-6 gap-3 mb-5">
+            {[
+              [
+                t("pl"),
+                renderPL(plNow),
+                plNow >= 0 ? "text-emerald-400" : "text-red-400",
+              ],
+              [t("amountWon"), fmtMoney(amountWonNow)],
+              [t("startCost"), fmtMoney(startCost)],
+              [
+                t("avgReqX"),
+                avgRequiredX != null ? avgRequiredX.toFixed(2) : t("none"),
+              ],
+              [t("currAvgX"), currAvgX != null ? currAvgX.toFixed(2) : t("none")],
+              [
+                t("cumulativeX"),
+                cumulativeX != null ? `${cumulativeX.toFixed(2)}x` : t("none"),
+              ],
+            ].map(([label, value, color], i) => (
+              <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <div className="text-[11px] opacity-70">{label}</div>
+                <div className={cn("font-semibold", numCls, color)}>{value}</div>
+              </div>
+            ))}
+          </div>
+
+          {s ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+              {/* header card com estilo SUPER */}
+              <div
+                className={cn(
+                  "md:col-span-3 flex items-center gap-3 p-3 rounded-xl border",
+                  isSuper
+                    ? "bg-fuchsia-500/10 border-fuchsia-400/40 ring-1 ring-fuchsia-400/20"
+                    : "bg-white/5 border-white/10"
+                )}
+              >
+                {s.thumbnail ? (
+                  <img
+                    src={s.thumbnail}
+                    alt=""
+                    className={cn(
+                      "h-14 w-14 rounded object-cover object-bottom bg-black/30",
+                      isSuper && "ring-2 ring-fuchsia-400/60"
+                    )}
+                  />
+                ) : (
+                  <div className="h-14 w-14 rounded bg-white/10" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold truncate flex items-center gap-2">
+                    <span className="truncate">{s.name}</span>
+                    {isSuper && (
+                      <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full border bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-400/40 inline-flex items-center gap-1">
+                        <Star className="h-3 w-3 fill-fuchsia-300" />
+                        Super
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs opacity-70 truncate">
+                    {s.provider}
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    try {
+                      navigator.clipboard.writeText(s.name || "");
+                    } catch {}
+                    showToast(`${t("copied")} ${s.name}`);
+                  }}
+                  className="h-9"
+                  title={t("copySlot")}
+                >
+                  <CopyIcon className="h-4 w-4 mr-1" />
+                  {t("copySlot")}
+                </Button>
+              </div>
+
+              <div>
+                <div className="text-xs mb-1 opacity-70">{t("payout")}</div>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={payout ?? ""}
+                  onChange={(e) => setPayout(e.target.value)}
+                  placeholder="ex.: 125,00"
+                  className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white placeholder:text-white/40 pl-3"
+                />
+              </div>
+              <div>
+                <div className="text-xs mb-1 opacity-70">{t("multiplier")}</div>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={multiplier ?? ""}
+                  onChange={(e) => setMultiplier(e.target.value)}
+                  placeholder="ex.: 127,00"
+                  className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white placeholder:text-white/40 pl-3"
+                />
+              </div>
+              <div>
+                <div className="text-xs mb-1 opacity-70">{t("betsizeReq")}</div>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={bet ?? ""}
+                  onChange={(e) => setBet(e.target.value)}
+                  placeholder="ex.: 2"
+                  className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white placeholder:text-white/40 pl-3"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="opacity-70 text-sm mb-6">
+              Ainda sem slots neste hunt.
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2 mb-4">
+            <Button type="button" variant="outline" onClick={askClose}>
+              {t("close")}
+            </Button>
+            <Button type="button" onClick={handleSaveAndNext} disabled={!s || busy}>
+              {busy ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <ChevronRight className="h-4 w-4 mr-2" />
+              )}
+              {t("saveContinue")}
+            </Button>
+          </div>
+
+          {/* Galeria paginada */}
+          {slots.length > 0 && (
+            <>
+              <div className="grid grid-cols-8 gap-3">
+                {slots
+                  .slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE)
+                  .map((it, localIdx) => {
+                    const i = page * PER_PAGE + localIdx;
+                    const active = i === idx;
+                    const superB = getIsSuper(it);
+                    return (
+                      <button
+                        key={it.id}
+                        type="button"
+                        onClick={(e) => {
+                          if (e.ctrlKey) {
+                            try {
+                              navigator.clipboard.writeText(it.name || "");
+                            } catch {}
+                            showToast(`${t("copied")} ${it.name}`);
+                            return;
+                          }
+                          setIdx(i);
+                        }}
+                        className={cn(
+                          "relative rounded-xl overflow-hidden border transition",
+                          active
+                            ? "border-emerald-400 ring-2 ring-emerald-400/20"
+                            : "border-white/10 hover:border-white/20"
+                        )}
+                        title={t("copyHint")}
+                      >
+                        <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">
+                          #{i + 1}
+                        </div>
+                        {superB && (
+                          <div className="absolute right-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-fuchsia-600/80">
+                            SUPER
+                          </div>
+                        )}
+                        {it.thumbnail ? (
+                          <img
+                            src={it.thumbnail}
+                            alt=""
+                            className="h-20 w-full object-cover object-bottom"
+                          />
+                        ) : (
+                          <div className="h-20 w-full bg-white/10" />
+                        )}
+                      </button>
+                    );
+                  })}
+              </div>
+              {pageCount > 1 && (
+                <div className="mt-3 flex items-center justify-center gap-2 text-sm">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 px-3"
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
+                    disabled={page === 0}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <div className="opacity-70">
+                    {page + 1} / {pageCount}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 px-3"
+                    onClick={() =>
+                      setPage((p) => Math.min(pageCount - 1, p + 1))
+                    }
+                    disabled={page === pageCount - 1}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Toast */}
+          {toastMsg && (
+            <div
+              className={cn(
+                "pointer-events-none absolute right-4 bottom-4 transition-all",
+                toastOpen ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
+              )}
+            >
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs text-white shadow-lg backdrop-blur-sm">
+                <Check className="h-3.5 w-3.5" />
+                {toastMsg}
+              </div>
+            </div>
+          )}
         </div>
+      </div>
+
+      {/* confirmar fechar */}
+      <ConfirmDialog
+        open={confirmClose}
+        title={t("confirmCloseTitle")}
+        body={t("confirmCloseBody")}
+        confirmText={t("close")}
+        cancelText={t("cancel")}
+        onConfirm={closeNow}
+        onCancel={() => setConfirmClose(false)}
+      />
+    </div>
+  );
+}
+
+/* ───────────────────────── Página ───────────────────────── */
+export default function HuntDetail({ numberId }) {
+  const { isDark } = useTheme();
+  const { t } = useLang();
+
+  const [nId, setNId] = React.useState(() => {
+    const m =
+      (typeof location !== "undefined" && location.hash) ||
+      "";
+    const mm = m.match(/#\/hunts\/(\d+)/i);
+    return Number(numberId ?? (mm && mm[1])) || 0;
+  });
+  React.useEffect(() => {
+    const onHash = () => {
+      const m = (location.hash || "").match(/#\/hunts\/(\d+)/i);
+      const v = Number(numberId ?? (m && m[1])) || 0;
+      setNId(v);
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, [numberId]);
+
+  const [busy, setBusy] = React.useState(true);
+  const [hunt, setHunt] = React.useState(null);
+  const [slots, setSlots] = React.useState([]);
+  const [errSlots, setErrSlots] = React.useState("");
+
+  const [openAdd, setOpenAdd] = React.useState(false);
+
+  const [editRow, setEditRow] = React.useState(null);
+  const [editOpen, setEditOpen] = React.useState(false);
+
+  const [delOpen, setDelOpen] = React.useState(false);
+  const [delRow, setDelRow] = React.useState(null);
+
+  const [sortBy, setSortBy] = React.useState({ key: "order", dir: 1 });
+
+  // overlays – estados guardados localmente (compacto e não ocupa o ecrã todo)
+  const [huntOpts, setHuntOpts] = useLocalState(
+    "overlay.hunt.opts",
+    DEFAULT_HUNT_OVERLAY
+  );
+  const [openingOpts, setOpeningOpts] = useLocalState(
+    "overlay.opening.opts",
+    DEFAULT_OPENING_OVERLAY
+  );
+
+  const sortedSlots = React.useMemo(() => {
+    const arr = [...slots];
+
+    if (sortBy.key === "order") return arr;
+
+    if (sortBy.key === "betsize") {
+      arr.sort(
+        (a, b) =>
+          (toNum(a.bet_size) - toNum(b.bet_size)) * sortBy.dir ||
+          a.name.localeCompare(b.name)
       );
+      return arr;
     }
 
+    if (sortBy.key === "date") {
+      const getTime = (r) => {
+        const raw = r?._raw || {};
+        const c1 =
+          raw.created_at ||
+          raw.createdAt ||
+          raw.timestamp ||
+          r.created_at;
+        return c1 ? new Date(c1).getTime() : 0;
+      };
+      arr.sort(
+        (a, b) => (getTime(a) - getTime(b)) * sortBy.dir || a.id - b.id
+      );
+      return arr;
+    }
+
+    if (sortBy.key === "random") {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    return arr;
+  }, [slots, sortBy]);
+
+  // drag & drop
+  const dragIndex = React.useRef(null);
+  function onDragStart(i) {
+    dragIndex.current = i;
+  }
+  function onDragOver(e) {
+    e.preventDefault();
+  }
+  async function onDrop(i) {
+    const from = dragIndex.current;
+    if (from == null || from === i) return;
+
+    const arr = [...sortedSlots];
+    const [moved] = arr.splice(from, 1);
+    arr.splice(i, 0, moved);
+
+    // Atualiza os índices locais
+    arr.forEach((row, idx) => {
+      row._raw = { ...(row._raw || {}) };
+      for (const c of ORDER_COLS) row._raw[c] = idx + 1;
+    });
+
+    setSlots(arr);
+    dragIndex.current = null;
+
+    try {
+      await persistOrder(arr);
+    } catch {}
+  }
+
+  React.useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        setBusy(true);
+        const { hunt } = await getHuntByNumberId(nId);
+        if (active) setHunt(hunt || null);
+      } catch {
+        if (active) setHunt(null);
+      } finally {
+        if (active) setBusy(false);
+      }
+    })();
+    return () => (active = false);
+  }, [nId]);
+
+  const refreshSlots = React.useCallback(async () => {
+    if (!nId) return;
+    try {
+      setErrSlots("");
+      const { slots: apiSlots } = await listHuntSlots({ numberId: nId });
+      let list = apiSlots || [];
+
+      const haveOrder = list.some((s) => readOrderFromRow(s) != null);
+      if (haveOrder) {
+        list = [...list].sort((a, b) => {
+          const aa = readOrderFromRow(a);
+          const bb = readOrderFromRow(b);
+          const A = Number.isFinite(aa) ? aa : Number.MAX_SAFE_INTEGER;
+          const B = Number.isFinite(bb) ? bb : Number.MAX_SAFE_INTEGER;
+          return A - B || a.id - b.id;
+        });
+      }
+
+      setSlots(list);
+      setSortBy((s) => (s.key === "order" ? s : { key: "order", dir: 1 }));
+    } catch {
+      setSlots([]);
+      setErrSlots("Falha a carregar as slots deste hunt.");
+    }
+  }, [nId]);
+
+  React.useEffect(() => {
+    refreshSlots();
+  }, [refreshSlots]);
+
+  // KPIs topo
+  const kpis = React.useMemo(() => {
+    const startFromHunt = Number(hunt?.start_cost);
+    const startFromSlots = slots.reduce(
+      (a, s) => a + (toNum(s.bet_size) || 0),
+      0
+    );
+    const start = Number.isFinite(startFromHunt) ? startFromHunt : startFromSlots;
+
+    const amountWon = slots.reduce(
+      (a, s) => a + (toNum(s.payout) || 0),
+      0
+    );
+    const bonusCount = slots.length;
+    const pl = amountWon - start;
+
+    return { pl, amountWon, bonusCount, startCost: start };
+  }, [hunt, slots]);
+
+  function goBack() {
+    window.location.hash = "#/hunts";
+  }
+
+  // abrir redeem
+  const [openRedeem, setOpenRedeem] = React.useState(false);
+  const [baselineAtStart, setBaselineAtStart] = React.useState(0);
+  const [confirmStart, setConfirmStart] = React.useState(false);
+
+  const openStart = () => setConfirmStart(true);
+  const confirmStartYes = () => {
+    setConfirmStart(false);
+    const base = slots.reduce((a, s) => a + (toNum(s.payout) || 0), 0);
+    setBaselineAtStart(base);
+    setOpenRedeem(true);
+  };
+
+  if (busy) {
     return (
-      <div className="rounded-xl border border-white/10 p-3">
-        <div className="mb-2 text-xs opacity-70">{label}</div>
-        <div className="grid md:grid-cols-2 gap-2">
-          <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-            <div className="text-xs opacity-70">Slot</div>
-            <div>{isLeft ? sideA?.name || "—" : sideB?.name || "—"}</div>
-          </div>
-          <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-            <div className="text-xs opacity-70">Player</div>
-            <div>{player || "—"}</div>
-          </div>
-          <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-            <div className="text-xs opacity-70">Recorded buys</div>
-            <div>{stats.count}</div>
-          </div>
-          <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-            <div className="text-xs opacity-70">Total paid</div>
-            <div>{fmtMoney(stats.total)}</div>
-          </div>
-          <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-            <div className="text-xs opacity-70">Best</div>
-            <div>{fmtMoney(stats.best)}</div>
-          </div>
-          <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-            <div className="text-xs opacity-70">Worst</div>
-            <div>{fmtMoney(stats.worst)}</div>
-          </div>
+      <div className="max-w-7xl mx-auto px-4 py-10 text-sm opacity-70">
+        A carregar…
+      </div>
+    );
+  }
+  if (!hunt) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-10">
+        <div className="mb-4">
+          <Button variant="outline" onClick={goBack}>
+            <IconBack className="mr-2 h-4 w-4" />
+            {t("back")}
+          </Button>
         </div>
-        <div className="mt-3 grid gap-2">{inputs}</div>
+        <div className="text-sm opacity-70">Hunt não encontrado.</div>
       </div>
     );
   }
 
   return (
-    <section className="py-8 md:py-10">
-      <div className="max-w-7xl mx-auto px-4">
-        {/* header */}
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl">Battle {row ? `#${row.id}` : ""}</h1>
-            {row?.status ? <span className="ml-2 text-xs rounded-lg border border-white/10 bg-white/5 px-2 py-0.5">{row.status}</span> : null}
-          </div>
-          <div className="text-sm opacity-70">{row?.created_at ? new Date(row.created_at).toLocaleDateString() : ""}</div>
-        </div>
-
-        {err ? <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{err}</div> : null}
-
-        {/* grid */}
-        <div className="grid lg:grid-cols-[520px_1fr] gap-6">
-          {/* LEFT: overview + stats + widget */}
-          <div className="space-y-4">
-            <AccentCard>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <div className="text-xs opacity-70 mb-1">Best Of</div>
-                  <select value={bestOf} onChange={(e) => setBestOf(e.target.value)} className="h-11 w-full rounded-xl bg-zinc-900 border border-white/10 px-3 text-sm">
-                    {[1, 3, 5, 7, 9].map((n) => (
-                      <option key={n} value={n}>{n}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <div className="text-xs opacity-70 mb-1">Buy cost</div>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">€</span>
-                    <Input inputMode="decimal" type="number" step="0.01" value={buyCost} onChange={(e) => setBuyCost(e.target.value)} className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white pl-7" />
-                  </div>
-                </div>
-              </div>
-              <div className="mt-3 flex justify-end">
-                <Button onClick={saveSettings} className="h-10">Save settings</Button>
-              </div>
-            </AccentCard>
-
-            <AccentCard>
-              <div className="grid grid-cols-3 gap-3">
-                <Kpi icon={<Coins className="h-5 w-5" />} label="Total paid" value={fmtMoney(totalPay)} />
-                <Kpi icon={<Gamepad2 className="h-5 w-5" />} label="Score" value={aPays.length + bPays.length} />
-                <Kpi icon={<TrendingUp className="h-5 w-5" />} label="Profit" value={fmtMoney(profit)} tone={profitTone} />
-              </div>
-            </AccentCard>
-
-            <WidgetCard
-              battleId={battleId}
-              sideA={sideA}
-              sideB={sideB}
-              playerA={playerA}
-              playerB={playerB}
-              bestOf={bestOf}
-              buyCost={buyCost}
-              totalPay={totalPay}
-              aPays={aPays}
-              bPays={bPays}
-            />
-          </div>
-
-          {/* RIGHT: sides + history + buys */}
-          <div className="space-y-4">
-            <AccentCard title="Battle">
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <div className="text-xs opacity-70 mb-2 flex items-center gap-2">
-                    <Shield className="h-4 w-4" /> Side A
-                  </div>
-                  <div className="space-y-2">
-                    <SlotsAutocomplete value={sideA} onSelect={(v) => setSideA(v)} placeholder="Add a Slot" />
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">Player</div>
-                      <Input value={playerA} onChange={(e) => setPlayerA(e.target.value)} placeholder="Player name" className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white" />
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-xs opacity-70 mb-2 flex items-center gap-2">
-                    <Users className="h-4 w-4" /> Side B
-                  </div>
-                  <div className="space-y-2">
-                    <SlotsAutocomplete value={sideB} onSelect={(v) => setSideB(v)} placeholder="Add a Slot" />
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">Player</div>
-                      <Input value={playerB} onChange={(e) => setPlayerB(e.target.value)} placeholder="Player name" className="h-11 rounded-xl bg-zinc-900 border-white/10 text-white" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 flex justify-end">
-                <Button onClick={saveSides} className="h-10">Save sides</Button>
-              </div>
-            </AccentCard>
-
-            {/* slot history */}
-            <div className="grid md:grid-cols-2 gap-4">
-              {[histA, histB].map((h, i) => (
-                <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-                      <div className="text-xs opacity-70">Times</div><div>{h?.times ?? 0}</div>
-                    </div>
-                    <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-                      <div className="text-xs opacity-70">Total</div><div>{fmtMoney(h?.total ?? 0)}</div>
-                    </div>
-                    <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-                      <div className="text-xs opacity-70">Best</div><div>{fmtMoney(h?.best ?? 0)}</div>
-                    </div>
-                    <div className="rounded-lg border border-white/10 bg-white/5 p-2">
-                      <div className="text-xs opacity-70">Worst</div><div>{fmtMoney(h?.worst ?? 0)}</div>
-                    </div>
-                    <div className="rounded-lg border border-white/10 bg-white/5 p-2 col-span-2">
-                      <div className="text-xs opacity-70">Last</div><div>{h?.last ?? "—"}</div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="grid md:grid-cols-2 gap-4">
-              <BuysEditor side="L" stats={aStats} player={playerA} />
-              <BuysEditor side="R" stats={bStats} player={playerB} />
-            </div>
-          </div>
+    <div className="max-w-7xl mx-auto px-4 py-6">
+      {/* Top bar */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <Button variant="outline" onClick={goBack}>
+            <IconBack className="mr-2 h-4 w-4" />
+            {t("back")}
+          </Button>
+          <h1 className="text-xl font-semibold">{hunt.title}</h1>
         </div>
       </div>
-    </section>
+
+      {/* KPIs topo — mais compacto */}
+      <div className="grid md:grid-cols-4 gap-2 mb-3">
+        {[
+          [
+            "Profit/Loss +/-",
+            renderPL(kpis.pl),
+            kpis.pl >= 0 ? "text-emerald-400" : "text-red-400",
+          ],
+          ["Bonus Count", String(kpis.bonusCount), ""],
+          [t("startCost"), fmtMoney(kpis.startCost), ""],
+          [t("amountWon"), fmtMoney(kpis.amountWon), ""],
+        ].map(([label, value, color], i) => (
+          <div
+            key={i}
+            className={cn(
+              "rounded-xl border p-3",
+              isDark
+                ? "border-white/10 bg-white/5"
+                : "border-zinc-200 bg-white"
+            )}
+          >
+            <div
+              className={cn(
+                "text-[11px] leading-none mb-1",
+                isDark ? "text-white/60" : "text-zinc-600"
+              )}
+            >
+              {label}
+            </div>
+            <div className={cn("font-semibold", numCls, color)}>{value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Ações rápidas */}
+      <div className="grid md:grid-cols-4 gap-2 mb-3">
+        <Button
+          variant="outline"
+          className="h-10"
+          onClick={() =>
+            setSortBy((s) => ({
+              key: "betsize",
+              dir: s.key === "betsize" ? -s.dir : -1,
+            }))
+          }
+        >
+          <SlidersHorizontal className="mr-2 h-4 w-4" />
+          {t("betsize")}
+        </Button>
+        <Button
+          variant="outline"
+          className="h-10"
+          onClick={() =>
+            setSortBy((s) => ({ key: "date", dir: s.key === "date" ? -s.dir : -1 }))
+          }
+        >
+          <CalendarIcon className="mr-2 h-4 w-4" />
+          {t("date")}
+        </Button>
+        <Button
+          variant="outline"
+          className="h-10"
+          onClick={() => setSortBy({ key: "random", dir: 1 })}
+        >
+          <Shuffle className="mr-2 h-4 w-4" />
+          {t("random")}
+        </Button>
+
+        <div className="flex items-center justify-end">
+          <Button className="h-10" onClick={openStart}>
+            <Play className="mr-2 h-4 w-4" />
+            {t("startRedeeming")}
+          </Button>
+          <div className="w-2" />
+          <Button variant="outline" onClick={() => setOpenAdd(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            {t("addBonus")}
+          </Button>
+        </div>
+      </div>
+
+      {/* Widget compacto (discreto) com 2 overlays */}
+      <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 mb-4">
+        <div className="text-sm font-medium mb-2">{t("overlays")}</div>
+        <div className="grid lg:grid-cols-2 gap-3">
+          <OverlayCard
+            type="hunt"
+            hunt={hunt}
+            slots={sortedSlots}
+            opts={huntOpts}
+            setOpts={setHuntOpts}
+          />
+          <OverlayCard
+            type="opening"
+            hunt={hunt}
+            slots={sortedSlots}
+            opts={openingOpts}
+            setOpts={setOpeningOpts}
+          />
+        </div>
+      </div>
+
+      {/* Tabela */}
+      <div
+        className={cn(
+          "rounded-xl border overflow-hidden",
+          isDark ? "border-white/10" : "border-zinc-200"
+        )}
+      >
+        {/* Header */}
+        <div
+          className={cn(
+            "grid grid-cols-12 items-center px-4 py-3 text-xs font-semibold",
+            isDark ? "bg-white/[0.04]" : "bg-zinc-50"
+          )}
+        >
+          <div className="col-span-7">{t("bonus")}</div>
+          <div className="col-span-1 text-center">{t("betsize")}</div>
+          <div className="col-span-2 text-center">{t("payout")}</div>
+          <div className="col-span-1 text-center">{t("multiplier")}</div>
+          <div className="col-span-1 text-right">{t("actions")}</div>
+        </div>
+
+        {errSlots && (
+          <div className="px-4 py-3 text-sm text-red-400">{errSlots}</div>
+        )}
+
+        {sortedSlots.length === 0 && !errSlots && (
+          <div className="px-4 py-6 text-sm opacity-70">
+            Ainda sem slots neste hunt.
+          </div>
+        )}
+
+        {sortedSlots.map((s, i) => {
+          const isSuper = getIsSuper(s);
+          return (
+            <div
+              key={s.id}
+              className={cn(
+                "grid grid-cols-12 items-center px-4 py-4 min-h-[56px] border-t",
+                isDark ? "border-white/10" : "border-zinc-200",
+                isSuper
+                  ? "bg-fuchsia-500/5 border-l-4 border-l-fuchsia-400/70"
+                  : ""
+              )}
+              draggable
+              onDragStart={() => onDragStart(i)}
+              onDragOver={onDragOver}
+              onDrop={() => onDrop(i)}
+            >
+              {/* BONUS */}
+              <div className="col-span-7 flex items-center gap-3 min-w-0">
+                <div className="text-[11px] opacity-60 w-6">#{i + 1}</div>
+                {s.thumbnail ? (
+                  <img
+                    src={s.thumbnail}
+                    alt=""
+                    className="h-8 w-8 rounded object-cover"
+                  />
+                ) : (
+                  <div className="h-8 w-8 rounded bg-white/10" />
+                )}
+                <div className="min-w-0">
+                  <div className="truncate font-medium flex items-center gap-2">
+                    <span className="truncate">{s.name}</span>
+                    {isSuper && (
+                      <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full border bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-400/40 inline-flex items-center gap-1">
+                        <Star className="h-3 w-3 fill-fuchsia-300" />
+                        Super
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs opacity-70 truncate">
+                    {s.provider || "—"}
+                  </div>
+                </div>
+              </div>
+
+              {/* Colunas numéricas */}
+              <div
+                className={cn(
+                  "col-span-1 text-center flex items-center justify-center",
+                  numCls
+                )}
+              >
+                {s.bet_size ?? "—"}
+              </div>
+              <div
+                className={cn(
+                  "col-span-2 text-center flex items-center justify-center",
+                  numCls
+                )}
+              >
+                {s.payout != null ? fmtMoney(s.payout) : "—"}
+              </div>
+              <div
+                className={cn(
+                  "col-span-1 text-center flex items-center justify-center",
+                  numCls
+                )}
+              >
+                {s.multiplier != null
+                  ? Number(s.multiplier).toFixed(2)
+                  : "—"}
+              </div>
+
+              {/* Ações */}
+              <div className="col-span-1 flex items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  title={t("edit")}
+                  className="h-7 w-7"
+                  onClick={() => {
+                    setEditRow(s);
+                    setEditOpen(true);
+                  }}
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon"
+                  title={t("delete")}
+                  className="h-7 w-7 text-white"
+                  onClick={() => {
+                    setDelRow(s);
+                    setDelOpen(true);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="text-[11px] mt-8 opacity-60 text-center">
+        {t("playResponsibly")}
+      </div>
+
+      {/* Modais */}
+      <AddBonusModal
+        open={openAdd}
+        onClose={() => setOpenAdd(false)}
+        numberId={hunt.number_id}
+        onAdded={refreshSlots}
+      />
+
+      <RedeemDrawer
+        open={openRedeem}
+        onClose={() => setOpenRedeem(false)}
+        hunt={hunt}
+        slots={sortedSlots}
+        onSaved={refreshSlots}
+        baselineAtStart={baselineAtStart}
+      />
+
+      <EditBonusModal
+        open={editOpen}
+        row={editRow}
+        onClose={() => setEditOpen(false)}
+        onSaved={refreshSlots}
+      />
+
+      <ConfirmDeleteModal
+        open={delOpen}
+        slot={delRow}
+        onCancel={() => setDelOpen(false)}
+        onConfirm={async () => {
+          try {
+            await deleteHuntSlot(delRow.id);
+            setDelOpen(false);
+            setDelRow(null);
+            await refreshSlots();
+          } catch (e) {
+            alert(e.message || "Falha ao eliminar.");
+          }
+        }}
+      />
+
+      {/* Confirmar início do redeem */}
+      <ConfirmDialog
+        open={confirmStart}
+        title={t("confirmStartTitle")}
+        body={t("confirmStartBody")}
+        confirmText={t("confirmYes")}
+        cancelText={t("confirmNo")}
+        onConfirm={confirmStartYes}
+        onCancel={() => setConfirmStart(false)}
+      />
+    </div>
   );
 }
