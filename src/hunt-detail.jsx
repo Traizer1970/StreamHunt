@@ -738,7 +738,7 @@ const DEFAULT_HUNT_OVERLAY = {
   design: "cards",
 
   // NOVO — controlo de apresentação
-  cardMode: "grid",        // 'grid' | 'focus3'
+  cardMode: "focus3",        // 'grid' | 'focus3'
   kpiStyle: "minimal",     // 'minimal' | 'pill'
   cardH: 140,              // altura em px no modo grid
   showIdx: true,
