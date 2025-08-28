@@ -1,6 +1,6 @@
 // /src/hunt-detail.jsx
 import React from "react";
-import { useTheme } from "@/contexts/auth-context";
+import { useTheme, AuthCtx } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -22,7 +22,8 @@ import {
   Trash2,
   Check,
   ExternalLink,
-  Wand2,
+  Palette,
+  Save,
 } from "lucide-react";
 
 import { getHuntByNumberId } from "@/lib/hunts";
@@ -54,11 +55,11 @@ const DICT = {
     delete: "Eliminar",
     edit: "Editar",
     close: "Fechar",
-    saveContinue: "Save & continue",
-    copySlot: "Copy slot name",
+    saveContinue: "Guardar & seguinte",
+    copySlot: "Copiar nome da slot",
     copied: "Copiado:",
     editBonus: "Editar bonus",
-    chooseSlot: "Choose slot *",
+    chooseSlot: "Escolhe a slot *",
     superBonus: "Super bonus",
     betsizeReq: "Betsize *",
     cancel: "Cancelar",
@@ -81,18 +82,26 @@ const DICT = {
     currAvgX: "Current Avg. X",
     cumulativeX: "Cumulative X",
     none: "—",
-    copyHint: "Clique para selecionar • Ctrl+Clique para copiar o nome",
-    playResponsibly: "Jogue com responsabilidade. 18+. Template UI.",
-    widgets: "Widgets",
+    copyHint:
+      "Clique para selecionar • Ctrl+Clique para copiar o nome",
+    playResponsibly:
+      "Jogue com responsabilidade. 18+. Template UI.",
+    // overlays
+    overlays: "Widget compacto",
     overlayHunt: "Overlay (Hunt)",
     overlayOpening: "Overlay (Opening)",
-    copyURL: "Copiar URL",
-    openDesigner: "Abrir Designer",
-    smallWidget: "Widget compacto",
     preset: "Preset",
-    designCards: "Cards (Start • B/E • #Bonus)",
-    designClassic: "Clássico (KPIs + thumbs + chip)",
-    openLink: "Abrir link",
+    padding: "Padding (px)",
+    align: "Alinhamento",
+    openDesigner: "Open Designer",
+    copyUrl: "Copy URL",
+    openLink: "Open overlay",
+    center: "center",
+    left: "left",
+    right: "right",
+    kpiStart: "Start",
+    kpiBE: "B/E",
+    kpiBonus: "# Bonus",
   },
   en: {
     back: "Back",
@@ -137,28 +146,39 @@ const DICT = {
     none: "—",
     copyHint: "Click to select • Ctrl+Click to copy name",
     playResponsibly: "Play responsibly. 18+. Template UI.",
-    widgets: "Widgets",
+    overlays: "Compact widget",
     overlayHunt: "Overlay (Hunt)",
     overlayOpening: "Overlay (Opening)",
-    copyURL: "Copy URL",
-    openDesigner: "Open Designer",
-    smallWidget: "Compact widget",
     preset: "Preset",
-    designCards: "Cards (Start • B/E • #Bonus)",
-    designClassic: "Classic (KPIs + thumbs + chip)",
-    openLink: "Open link",
+    padding: "Padding (px)",
+    align: "Alignment",
+    openDesigner: "Open Designer",
+    copyUrl: "Copy URL",
+    openLink: "Open overlay",
+    center: "center",
+    left: "left",
+    right: "right",
+    kpiStart: "Start",
+    kpiBE: "B/E",
+    kpiBonus: "# Bonus",
   },
 };
 function useLang() {
   const [lang, setLang] = React.useState(() => {
     const ls =
-      (typeof localStorage !== "undefined" && localStorage.getItem("lang")) ||
+      (typeof localStorage !== "undefined" &&
+        localStorage.getItem("lang")) ||
       "";
     const html =
-      (typeof document !== "undefined" && document.documentElement.lang) || "";
+      (typeof document !== "undefined" &&
+        document.documentElement.lang) ||
+      "";
     const nav =
-      (typeof navigator !== "undefined" && navigator.language) || "pt-PT";
-    const pick = (ls || html || nav).toLowerCase().startsWith("pt")
+      (typeof navigator !== "undefined" && navigator.language) ||
+      "pt-PT";
+    const pick = (ls || html || nav)
+      .toLowerCase()
+      .startsWith("pt")
       ? "pt"
       : "en";
     return pick;
@@ -169,18 +189,16 @@ function useLang() {
   );
   return { lang, t, setLang };
 }
-
 // ── colunas possíveis para a ordem no DB
 const ORDER_COLS = ["order_index", "order", "position", "sort", "order_idx"];
-
-function readOrderFromRow(row) {
+const readOrderFromRow = (row) => {
   const raw = row?._raw || row || {};
   for (const c of ORDER_COLS) {
     const v = Number(raw[c]);
     if (Number.isFinite(v)) return v;
   }
   return null;
-}
+};
 
 /* ───────────────────────── números/formatters ───────────────────────── */
 const LOCALE = "pt-PT";
@@ -216,11 +234,19 @@ const toNum = (v) => {
 async function updateSuperFlag(rowId, value) {
   const tryFns = [
     () =>
-      supabase.from("hunt_slots").update({ is_super: !!value }).eq("id", rowId),
-    () => supabase.from("hunt_slots").update({ super: !!value }).eq("id", rowId),
+      supabase
+        .from("hunt_slots")
+        .update({ is_super: !!value })
+        .eq("id", rowId),
+    () =>
+      supabase
+        .from("hunt_slots")
+        .update({ super: !!value })
+        .eq("id", rowId),
     () =>
       supabase.from("hunt_slots").update({ is_super: !!value }).eq("ID", rowId),
-    () => supabase.from("hunt_slots").update({ super: !!value }).eq("ID", rowId),
+    () =>
+      supabase.from("hunt_slots").update({ super: !!value }).eq("ID", rowId),
   ];
   let last;
   for (const fn of tryFns) {
@@ -235,7 +261,13 @@ const getIsSuper = (s) =>
 
 /* tentar persistir order_index (com fallbacks de coluna/ID) */
 async function persistOrder(slots) {
-  const colCandidates = ["order_index", "order", "position", "sort", "order_idx"];
+  const colCandidates = [
+    "order_index",
+    "order",
+    "position",
+    "sort",
+    "order_idx",
+  ];
   for (let i = 0; i < slots.length; i++) {
     const rowId = slots[i].id;
     let ok = false;
@@ -356,8 +388,13 @@ function AddBonusModal({ open, onClose, numberId, onAdded }) {
       setErr("");
       if (!selected) return setErr("Escolhe uma slot.");
       const bs = toNum(betSize);
-      if (!Number.isFinite(bs) || bs <= 0) return setErr("Betsize inválida.");
-      const payload = { slot_id: selected.id, bet_size: bs, super: isSuper };
+      if (!Number.isFinite(bs) || bs <= 0)
+        return setErr("Betsize inválida.");
+      const payload = {
+        slot_id: selected.id,
+        bet_size: bs,
+        super: isSuper,
+      };
       setBusy(true);
       await addHuntSlot(numberId, payload);
       onAdded && onAdded();
@@ -382,6 +419,7 @@ function AddBonusModal({ open, onClose, numberId, onAdded }) {
           <div className="flex items-center justify-between mb-3">
             <div className="text-lg font-semibold">Add bonus</div>
             <button
+              type="button"
               onClick={handleClose}
               className="p-2 rounded-lg hover:bg-white/10 transition"
               aria-label="Fechar"
@@ -464,6 +502,7 @@ function AddBonusModal({ open, onClose, numberId, onAdded }) {
                   </div>
                 </div>
                 <Button
+                  type="button"
                   variant="outline"
                   onClick={() => {
                     setSelected(null);
@@ -481,7 +520,9 @@ function AddBonusModal({ open, onClose, numberId, onAdded }) {
 
               <div className="grid md:grid-cols-2 gap-3 items-end">
                 <div>
-                  <div className="text-xs mb-1 opacity-70">{t("betsizeReq")}</div>
+                  <div className="text-xs mb-1 opacity-70">
+                    {t("betsizeReq")}
+                  </div>
                   <Input
                     type="text"
                     inputMode="decimal"
@@ -509,6 +550,7 @@ function AddBonusModal({ open, onClose, numberId, onAdded }) {
                   </button>
 
                   <Button
+                    type="button"
                     onClick={handleAdd}
                     disabled={busy || !selected || !betSize}
                     className="h-11 px-5"
@@ -575,6 +617,7 @@ function EditBonusModal({ open, row, onClose, onSaved }) {
           <div className="flex items-center justify-between mb-3">
             <div className="text-lg font-semibold">Editar bonus</div>
             <button
+              type="button"
               onClick={onClose}
               className="p-2 rounded-lg hover:bg-white/10 transition"
               aria-label="Fechar"
@@ -631,8 +674,10 @@ function EditBonusModal({ open, row, onClose, onSaved }) {
           </div>
 
           <div className="mt-4 flex items-center justify-end gap-2">
-            <Button onClick={save} disabled={busy}>
-              {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+            <Button type="button" onClick={save} disabled={busy}>
+              {busy ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : null}
               Guardar
             </Button>
           </div>
@@ -651,7 +696,9 @@ function ConfirmDeleteModal({ open, slot, onCancel, onConfirm }) {
       <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-[520px]">
         <div className="rounded-2xl border border-white/10 bg-zinc-950 text-white shadow-2xl p-5">
-          <div className="text-lg font-semibold mb-3">{t("eliminarBonus")}</div>
+          <div className="text-lg font-semibold mb-3">
+            {t("eliminarBonus")}
+          </div>
           <div className="flex items-center gap-3 mb-4">
             {slot?.thumbnail ? (
               <img
@@ -662,7 +709,9 @@ function ConfirmDeleteModal({ open, slot, onCancel, onConfirm }) {
             ) : null}
             <div className="min-w-0">
               <div className="text-sm font-medium truncate">{slot?.name}</div>
-              <div className="text-xs opacity-70 truncate">{slot?.provider}</div>
+              <div className="text-xs opacity-70 truncate">
+                {slot?.provider}
+              </div>
             </div>
           </div>
           <div className="text-sm opacity-80 mb-5">{t("eliminarPerg")}</div>
@@ -684,6 +733,505 @@ function ConfirmDeleteModal({ open, slot, onCancel, onConfirm }) {
   );
 }
 
+/* ───────────────────────── Overlays — helpers & previews ───────────────────────── */
+
+// opções rápidas (guardadas só em memória/localStorage)
+const DEFAULT_HUNT_OVERLAY = {
+  design: "cards",
+  pad: 16,
+  align: "center",
+  shine: true,
+  pulse: true,
+  thumbs: true,
+  baseW: 560,
+  baseH: 280,
+};
+const DEFAULT_OPENING_OVERLAY = {
+  design: "default",
+  pad: 16,
+  align: "center",
+  shine: true,
+  pulse: true,
+  baseW: 560,
+  baseH: 320,
+};
+
+function useLocalState(key, initial) {
+  const [s, setS] = React.useState(() => {
+    try {
+      const str =
+        typeof localStorage !== "undefined" && localStorage.getItem(key);
+      return str ? { ...initial, ...JSON.parse(str) } : initial;
+    } catch {
+      return initial;
+    }
+  });
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(key, JSON.stringify(s));
+    } catch {}
+  }, [key, s]);
+  return [s, setS];
+}
+
+function buildHuntOverlayUrl(base, huntNumberId, opts) {
+  const qs = new URLSearchParams();
+  qs.set("design", "cards");
+  qs.set("kpi", "start,be,count"); // Start • B/E • #Bonus
+  if (opts.thumbs) qs.set("thumbs", "1");
+  if (opts.shine) qs.set("shine", "1");
+  if (opts.pulse) qs.set("pulse", "1");
+  qs.set("align", String(opts.align || "center"));
+  qs.set("pad", String(opts.pad || 0));
+  qs.set("bw", String(opts.baseW || 560));
+  qs.set("bh", String(opts.baseH || 280));
+  return `${base}#/overlay/hunt/${huntNumberId}?${qs.toString()}`;
+}
+function buildOpeningOverlayUrl(base, huntNumberId, opts) {
+  const qs = new URLSearchParams();
+  qs.set("design", "opening");
+  if (opts.shine) qs.set("shine", "1");
+  if (opts.pulse) qs.set("pulse", "1");
+  qs.set("align", String(opts.align || "center"));
+  qs.set("pad", String(opts.pad || 0));
+  qs.set("bw", String(opts.baseW || 560));
+  qs.set("bh", String(opts.baseH || 320));
+  return `${base}#/overlay/opening/${huntNumberId}?${qs.toString()}`;
+}
+
+/* Preview compacto estilo battle */
+function HuntOverlayPreview({ hunt, slots, opts }) {
+  const { t } = useLang();
+  const start = Number(hunt?.start_cost) || slots.reduce((a, s) => a + toNum(s.bet_size), 0);
+  const won = slots.reduce((a, s) => a + toNum(s.payout), 0);
+  const beLeft = Math.max(0, start - won);
+  const baseW = Number(opts.baseW || 560);
+  const baseH = Number(opts.baseH || 280);
+
+  return (
+    <div
+      className="rounded-xl border border-white/10 overflow-hidden relative"
+      style={{
+        width: baseW,
+        height: baseH,
+        background:
+          "linear-gradient(135deg, rgba(14,22,42,1) 0%, rgba(28,26,49,1) 100%)",
+      }}
+    >
+      {/* topo KPIs */}
+      <div className="p-3" style={{ paddingBottom: 8 + (opts.pad || 0) }}>
+        <div className="flex items-center justify-between gap-2 text-[12px]">
+          <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10">
+            {hunt?.title || "Hunt"}
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10">
+              {t("kpiStart")}:{" "}
+              <b className={numCls}>{fmtMoney(start)}</b>
+            </div>
+            <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10">
+              {t("kpiBE")}:{" "}
+              <b className={numCls}>{fmtMoney(beLeft)}</b>
+            </div>
+            <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10">
+              {t("kpiBonus")}: <b>{slots.length}</b>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* grelha de thumbs */}
+      <div
+        className="px-3"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(8,minmax(0,1fr))",
+          gap: 8,
+        }}
+      >
+        {slots.slice(0, 16).map((s, i) => (
+          <div
+            key={s.id}
+            className={cn(
+              "relative rounded-lg overflow-hidden border border-white/10",
+              getIsSuper(s) ? "ring-1 ring-fuchsia-400/30" : ""
+            )}
+            title={s.name}
+          >
+            {/* index tag */}
+            <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">
+              #{i + 1}
+            </div>
+            {getIsSuper(s) && (
+              <div className="absolute right-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-fuchsia-600/80">
+                SUPER
+              </div>
+            )}
+            {s.thumbnail ? (
+              <img
+                src={s.thumbnail}
+                alt=""
+                className="h-14 w-full object-cover object-bottom"
+              />
+            ) : (
+              <div className="h-14 w-full bg-white/10" />
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* pill P/L discreto */}
+      <div className="absolute left-1/2 -translate-x-1/2 bottom-3">
+        <div className="px-3 py-1.5 rounded-full border border-white/20 bg-white/10 text-[12px] shadow-[0_10px_30px_rgba(0,0,0,.35)]">
+          P/L:{" "}
+          <b className={cn(numCls, won - start >= 0 ? "text-emerald-300" : "text-rose-300")}>
+            {renderPL(won - start)}
+          </b>
+        </div>
+      </div>
+    </div>
+  );
+}
+function OpeningOverlayPreview({ hunt, slots, opts }) {
+  const current = slots[0] || null;
+  const baseW = Number(opts.baseW || 560);
+  const baseH = Number(opts.baseH || 320);
+
+  return (
+    <div
+      className="rounded-xl border border-white/10 overflow-hidden relative"
+      style={{
+        width: baseW,
+        height: baseH,
+        background:
+          "linear-gradient(135deg, rgba(15,16,33,1) 0%, rgba(24,16,40,1) 100%)",
+      }}
+    >
+      <div className="px-3 pt-3 pb-2 flex items-center justify-between">
+        <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
+          {hunt?.title || "Hunt"} — Opening
+        </div>
+        <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
+          {current ? current.name : "—"}
+        </div>
+      </div>
+
+      {/* thumbs paginados de exemplo */}
+      <div
+        className="px-3"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(8,minmax(0,1fr))",
+          gap: 8,
+        }}
+      >
+        {slots.slice(0, 24).map((s, i) => (
+          <div
+            key={s.id}
+            className="relative rounded-lg overflow-hidden border border-white/10"
+            title={s.name}
+          >
+            <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">
+              #{i + 1}
+            </div>
+            {s.thumbnail ? (
+              <img
+                src={s.thumbnail}
+                alt=""
+                className="h-14 w-full object-cover object-bottom"
+              />
+            ) : (
+              <div className="h-14 w-full bg-white/10" />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Designer({ open, onClose, opts, setOpts, title }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-sm">
+      <div className="absolute inset-x-0 top-0 h-14 px-4 flex items-center justify-between border-b border-white/10 bg-zinc-950/60">
+        <div className="flex items-center gap-2">
+          <Palette className="h-5 w-5 text-white/80" />
+          <div>{title}</div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button className="h-9" onClick={onClose}>
+            <Save className="h-4 w-4 mr-2" />
+            Save & Close
+          </Button>
+          <Button variant="outline" className="h-9" onClick={onClose}>
+            <X className="h-4 w-4 mr-2" />
+            Cancel
+          </Button>
+        </div>
+      </div>
+
+      <div className="absolute inset-x-0 top-14 bottom-0 grid md:grid-cols-[420px_1fr]">
+        <div className="border-r border-white/10 bg-zinc-950/70 overflow-auto">
+          <div className="p-4 space-y-4">
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <div className="text-xs opacity-70 mb-1">Canvas / OBS</div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <div className="text-xs opacity-70 mb-1">Base width</div>
+                  <Input
+                    type="number"
+                    value={opts.baseW}
+                    onChange={(e) =>
+                      setOpts((o) => ({ ...o, baseW: Number(e.target.value) || 0 }))
+                    }
+                    className="h-9 bg-zinc-900 border-white/10 text-white"
+                  />
+                </div>
+                <div>
+                  <div className="text-xs opacity-70 mb-1">Base height</div>
+                  <Input
+                    type="number"
+                    value={opts.baseH}
+                    onChange={(e) =>
+                      setOpts((o) => ({ ...o, baseH: Number(e.target.value) || 0 }))
+                    }
+                    className="h-9 bg-zinc-900 border-white/10 text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <div>
+                  <div className="text-xs opacity-70 mb-1">Padding</div>
+                  <Input
+                    type="number"
+                    value={opts.pad}
+                    onChange={(e) =>
+                      setOpts((o) => ({ ...o, pad: Number(e.target.value) || 0 }))
+                    }
+                    className="h-9 bg-zinc-900 border-white/10 text-white"
+                  />
+                </div>
+                <div>
+                  <div className="text-xs opacity-70 mb-1">Align</div>
+                  <select
+                    value={opts.align}
+                    onChange={(e) =>
+                      setOpts((o) => ({ ...o, align: e.target.value }))
+                    }
+                    className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+                  >
+                    <option value="left">Left</option>
+                    <option value="center">Center</option>
+                    <option value="right">Right</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="mt-3 text-xs opacity-70">Effects</div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={!!opts.shine}
+                    onChange={(e) =>
+                      setOpts((o) => ({ ...o, shine: !!e.target.checked }))
+                    }
+                  />
+                  Shine
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={!!opts.pulse}
+                    onChange={(e) =>
+                      setOpts((o) => ({ ...o, pulse: !!e.target.checked }))
+                    }
+                  />
+                  Pulse
+                </label>
+              </div>
+            </div>
+
+            <div className="text-[11px] opacity-60">
+              Dica: em OBS, usa sempre o mesmo <b>Width/Height</b> do browser
+              source para evitar cortes.
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 overflow-auto">
+          <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-sm">
+            As opções são gravadas localmente (localStorage) para este
+            navegador/conta.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OverlayCard({
+  type, // "hunt" | "opening"
+  hunt,
+  slots,
+  opts,
+  setOpts,
+}) {
+  const { t } = useLang();
+  const { profile } = React.useContext(AuthCtx) || {};
+  const [open, setOpen] = React.useState(false);
+  const [openDesigner, setOpenDesigner] = React.useState(false);
+
+  const base = React.useMemo(
+    () =>
+      `${window.location.origin}${window.location.pathname}`.replace(
+        /\/+$/,
+        ""
+      ),
+    []
+  );
+  const url = React.useMemo(() => {
+    if (!hunt?.number_id) return "";
+    return type === "hunt"
+      ? buildHuntOverlayUrl(base, hunt.number_id, opts)
+      : buildOpeningOverlayUrl(base, hunt.number_id, opts);
+  }, [type, hunt?.number_id, base, opts]);
+
+  const copyUrl = async () => {
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      alert("Não consegui copiar o URL.");
+    }
+  };
+  const openOverlay = () => {
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03]">
+      {/* Cabeçalho compacto (abre/fecha) */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full px-3 py-2 text-left flex items-center gap-2"
+      >
+        <div className="h-8 w-8 rounded-lg bg-white/10 flex items-center justify-center">
+          <SlidersHorizontal className="h-4 w-4" />
+        </div>
+        <div className="font-medium flex-1">
+          {type === "hunt" ? t("overlayHunt") : t("overlayOpening")}
+        </div>
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 transition",
+            open ? "rotate-180 opacity-100" : "opacity-70"
+          )}
+        />
+      </button>
+
+      {/* Conteúdo */}
+      {open && (
+        <div className="px-3 pb-3 space-y-3">
+          <div className="grid md:grid-cols-3 gap-2">
+            <div>
+              <div className="text-xs opacity-70 mb-1">{t("preset")}</div>
+              <select
+                value={opts.design}
+                onChange={(e) =>
+                  setOpts((o) => ({ ...o, design: e.target.value }))
+                }
+                className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+              >
+                {type === "hunt" ? (
+                  <option value="cards">Cards (Start • B/E • #Bonus)</option>
+                ) : (
+                  <>
+                    <option value="default">Default</option>
+                    <option value="minimal">Minimal</option>
+                  </>
+                )}
+              </select>
+            </div>
+            <div>
+              <div className="text-xs opacity-70 mb-1">{t("padding")}</div>
+              <Input
+                type="number"
+                value={opts.pad}
+                onChange={(e) =>
+                  setOpts((o) => ({ ...o, pad: Number(e.target.value) || 0 }))
+                }
+                className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+              />
+            </div>
+            <div>
+              <div className="text-xs opacity-70 mb-1">{t("align")}</div>
+              <select
+                value={opts.align}
+                onChange={(e) =>
+                  setOpts((o) => ({ ...o, align: e.target.value }))
+                }
+                className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+              >
+                <option value="left">{t("left")}</option>
+                <option value="center">{t("center")}</option>
+                <option value="right">{t("right")}</option>
+              </select>
+            </div>
+          </div>
+
+          {/* URL + ações */}
+          <div className="flex items-center gap-2">
+            <Button type="button" className="h-9" onClick={copyUrl}>
+              <CopyIcon className="h-4 w-4 mr-2" />
+              {t("copyUrl")}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9"
+              onClick={openOverlay}
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              {t("openLink")}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-9"
+              onClick={() => setOpenDesigner(true)}
+            >
+              <SlidersHorizontal className="h-4 w-4 mr-2" />
+              {t("openDesigner")}
+            </Button>
+          </div>
+
+          {/* Preview ao vivo (estilo battle) */}
+          <div className="overflow-auto">
+            {type === "hunt" ? (
+              <HuntOverlayPreview hunt={hunt} slots={slots} opts={opts} />
+            ) : (
+              <OpeningOverlayPreview hunt={hunt} slots={slots} opts={opts} />
+            )}
+          </div>
+
+          <Designer
+            open={openDesigner}
+            onClose={() => setOpenDesigner(false)}
+            opts={opts}
+            setOpts={setOpts}
+            title={`${type === "hunt" ? "Hunt" : "Opening"} — Designer`}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ───────────────────────── Redeem Drawer ───────────────────────── */
 function RedeemDrawer({
   open,
@@ -695,6 +1243,14 @@ function RedeemDrawer({
   const { t } = useLang();
   const [idx, setIdx] = React.useState(0);
   const [busy, setBusy] = React.useState(false);
+
+  // ESC fecha (fix)
+  React.useEffect(() => {
+    if (!open) return;
+    const onEsc = (e) => e.key === "Escape" && askClose();
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [open]);
 
   // paginação thumbs: 24 por página
   const PER_PAGE = 24;
@@ -748,7 +1304,6 @@ function RedeemDrawer({
     []
   );
 
-  // confirmação para fechar
   const [confirmClose, setConfirmClose] = React.useState(false);
   function askClose() {
     setConfirmClose(true);
@@ -825,7 +1380,6 @@ function RedeemDrawer({
 
   return (
     <div className="fixed inset-0 z-[80]">
-      {/* Clicar no fundo: pede confirmação */}
       <div className="absolute inset-0 bg-black/70" onClick={askClose} />
       <div className="absolute left-1/2 top-1/2 w-[96vw] max-w-6xl -translate-x-1/2 -translate-y-1/2">
         <div className="relative rounded-2xl border border-white/10 bg-zinc-950 text-white shadow-2xl p-4 md:p-6">
@@ -843,12 +1397,11 @@ function RedeemDrawer({
                 "Sem slots"
               )}
             </div>
-            {/* Ícone fecha SEM confirmação */}
             <button
-              onClick={closeNow}
+              type="button"
+              onClick={askClose}
               className="p-2 rounded-lg hover:bg-white/10 transition"
               aria-label="Fechar"
-              title="Fechar"
             >
               <X className="h-5 w-5" />
             </button>
@@ -856,12 +1409,22 @@ function RedeemDrawer({
 
           <div className="grid md:grid-cols-6 gap-3 mb-5">
             {[
-              [t("pl"), renderPL(plNow), plNow >= 0 ? "text-emerald-400" : "text-red-400"],
+              [
+                t("pl"),
+                renderPL(plNow),
+                plNow >= 0 ? "text-emerald-400" : "text-red-400",
+              ],
               [t("amountWon"), fmtMoney(amountWonNow)],
               [t("startCost"), fmtMoney(startCost)],
-              [t("avgReqX"), avgRequiredX != null ? avgRequiredX.toFixed(2) : t("none")],
+              [
+                t("avgReqX"),
+                avgRequiredX != null ? avgRequiredX.toFixed(2) : t("none"),
+              ],
               [t("currAvgX"), currAvgX != null ? currAvgX.toFixed(2) : t("none")],
-              [t("cumulativeX"), cumulativeX != null ? `${cumulativeX.toFixed(2)}x` : t("none")],
+              [
+                t("cumulativeX"),
+                cumulativeX != null ? `${cumulativeX.toFixed(2)}x` : t("none"),
+              ],
             ].map(([label, value, color], i) => (
               <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-3">
                 <div className="text-[11px] opacity-70">{label}</div>
@@ -872,10 +1435,11 @@ function RedeemDrawer({
 
           {s ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+              {/* header card com estilo SUPER */}
               <div
                 className={cn(
                   "md:col-span-3 flex items-center gap-3 p-3 rounded-xl border",
-                  getIsSuper(s)
+                  isSuper
                     ? "bg-fuchsia-500/10 border-fuchsia-400/40 ring-1 ring-fuchsia-400/20"
                     : "bg-white/5 border-white/10"
                 )}
@@ -886,24 +1450,34 @@ function RedeemDrawer({
                     alt=""
                     className={cn(
                       "h-14 w-14 rounded object-cover object-bottom bg-black/30",
-                      getIsSuper(s) && "ring-2 ring-fuchsia-400/60"
+                      isSuper && "ring-2 ring-fuchsia-400/60"
                     )}
                   />
                 ) : (
                   <div className="h-14 w-14 rounded bg-white/10" />
                 )}
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold truncate">{s.name}</div>
-                  <div className="text-xs opacity-70 truncate">{s.provider}</div>
+                  <div className="font-semibold truncate flex items-center gap-2">
+                    <span className="truncate">{s.name}</span>
+                    {isSuper && (
+                      <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full border bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-400/40 inline-flex items-center gap-1">
+                        <Star className="h-3 w-3 fill-fuchsia-300" />
+                        Super
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs opacity-70 truncate">
+                    {s.provider}
+                  </div>
                 </div>
                 <Button
+                  type="button"
                   variant="outline"
                   onClick={() => {
                     try {
                       navigator.clipboard.writeText(s.name || "");
                     } catch {}
-                    // pequeno feedback via alert é suficiente aqui:
-                    // showToast é opcional neste contexto
+                    showToast(`${t("copied")} ${s.name}`);
                   }}
                   className="h-9"
                   title={t("copySlot")}
@@ -948,14 +1522,16 @@ function RedeemDrawer({
               </div>
             </div>
           ) : (
-            <div className="opacity-70 text-sm mb-6">Ainda sem slots neste hunt.</div>
+            <div className="opacity-70 text-sm mb-6">
+              Ainda sem slots neste hunt.
+            </div>
           )}
 
           <div className="flex items-center justify-end gap-2 mb-4">
-            <Button variant="outline" onClick={closeNow}>
+            <Button type="button" variant="outline" onClick={askClose}>
               {t("close")}
             </Button>
-            <Button onClick={handleSaveAndNext} disabled={!s || busy}>
+            <Button type="button" onClick={handleSaveAndNext} disabled={!s || busy}>
               {busy ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
@@ -978,11 +1554,13 @@ function RedeemDrawer({
                     return (
                       <button
                         key={it.id}
+                        type="button"
                         onClick={(e) => {
                           if (e.ctrlKey) {
                             try {
                               navigator.clipboard.writeText(it.name || "");
                             } catch {}
+                            showToast(`${t("copied")} ${it.name}`);
                             return;
                           }
                           setIdx(i);
@@ -1019,6 +1597,7 @@ function RedeemDrawer({
               {pageCount > 1 && (
                 <div className="mt-3 flex items-center justify-center gap-2 text-sm">
                   <Button
+                    type="button"
                     variant="outline"
                     className="h-8 px-3"
                     onClick={() => setPage((p) => Math.max(0, p - 1))}
@@ -1030,9 +1609,12 @@ function RedeemDrawer({
                     {page + 1} / {pageCount}
                   </div>
                   <Button
+                    type="button"
                     variant="outline"
                     className="h-8 px-3"
-                    onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                    onClick={() =>
+                      setPage((p) => Math.min(pageCount - 1, p + 1))
+                    }
                     disabled={page === pageCount - 1}
                   >
                     <ChevronRight className="h-4 w-4" />
@@ -1041,8 +1623,34 @@ function RedeemDrawer({
               )}
             </>
           )}
+
+          {/* Toast */}
+          {toastMsg && (
+            <div
+              className={cn(
+                "pointer-events-none absolute right-4 bottom-4 transition-all",
+                toastOpen ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
+              )}
+            >
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs text-white shadow-lg backdrop-blur-sm">
+                <Check className="h-3.5 w-3.5" />
+                {toastMsg}
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* confirmar fechar */}
+      <ConfirmDialog
+        open={confirmClose}
+        title={t("confirmCloseTitle")}
+        body={t("confirmCloseBody")}
+        confirmText={t("close")}
+        cancelText={t("cancel")}
+        onConfirm={closeNow}
+        onCancel={() => setConfirmClose(false)}
+      />
     </div>
   );
 }
@@ -1054,10 +1662,10 @@ export default function HuntDetail({ numberId }) {
 
   const [nId, setNId] = React.useState(() => {
     const m =
-      ((typeof location !== "undefined" && location.hash) || "").match(
-        /#\/hunts\/(\d+)/i
-      );
-    return Number(numberId ?? (m && m[1])) || 0;
+      (typeof location !== "undefined" && location.hash) ||
+      "";
+    const mm = m.match(/#\/hunts\/(\d+)/i);
+    return Number(numberId ?? (mm && mm[1])) || 0;
   });
   React.useEffect(() => {
     const onHash = () => {
@@ -1084,26 +1692,15 @@ export default function HuntDetail({ numberId }) {
 
   const [sortBy, setSortBy] = React.useState({ key: "order", dir: 1 });
 
-  // Painéis (collapse) de overlays
-  const [openHuntPanel, setOpenHuntPanel] = React.useState(false);
-  const [openOpeningPanel, setOpenOpeningPanel] = React.useState(false);
-
-  // Configurações persistentes e independentes (localStorage)
-  const [huntCfg, setHuntCfg] = React.useState(() => {
-    try { return JSON.parse(localStorage.getItem("overlay:hunt:defaults") || "{}"); }
-    catch { return {}; }
-  });
-  const [openingCfg, setOpeningCfg] = React.useState(() => {
-    try { return JSON.parse(localStorage.getItem("overlay:opening:defaults") || "{}"); }
-    catch { return {}; }
-  });
-
-  React.useEffect(() => {
-    localStorage.setItem("overlay:hunt:defaults", JSON.stringify(huntCfg));
-  }, [huntCfg]);
-  React.useEffect(() => {
-    localStorage.setItem("overlay:opening:defaults", JSON.stringify(openingCfg));
-  }, [openingCfg]);
+  // overlays – estados guardados localmente (compacto e não ocupa o ecrã todo)
+  const [huntOpts, setHuntOpts] = useLocalState(
+    "overlay.hunt.opts",
+    DEFAULT_HUNT_OVERLAY
+  );
+  const [openingOpts, setOpeningOpts] = useLocalState(
+    "overlay.opening.opts",
+    DEFAULT_OPENING_OVERLAY
+  );
 
   const sortedSlots = React.useMemo(() => {
     const arr = [...slots];
@@ -1123,10 +1720,15 @@ export default function HuntDetail({ numberId }) {
       const getTime = (r) => {
         const raw = r?._raw || {};
         const c1 =
-          raw.created_at || raw.createdAt || raw.timestamp || r.created_at;
+          raw.created_at ||
+          raw.createdAt ||
+          raw.timestamp ||
+          r.created_at;
         return c1 ? new Date(c1).getTime() : 0;
       };
-      arr.sort((a, b) => (getTime(a) - getTime(b)) * sortBy.dir || a.id - b.id);
+      arr.sort(
+        (a, b) => (getTime(a) - getTime(b)) * sortBy.dir || a.id - b.id
+      );
       return arr;
     }
 
@@ -1157,6 +1759,7 @@ export default function HuntDetail({ numberId }) {
     const [moved] = arr.splice(from, 1);
     arr.splice(i, 0, moved);
 
+    // Atualiza os índices locais
     arr.forEach((row, idx) => {
       row._raw = { ...(row._raw || {}) };
       for (const c of ORDER_COLS) row._raw[c] = idx + 1;
@@ -1216,13 +1819,19 @@ export default function HuntDetail({ numberId }) {
     refreshSlots();
   }, [refreshSlots]);
 
-  // KPIs reais (a partir das slots)
+  // KPIs topo
   const kpis = React.useMemo(() => {
     const startFromHunt = Number(hunt?.start_cost);
-    const startFromSlots = slots.reduce((a, s) => a + (toNum(s.bet_size) || 0), 0);
+    const startFromSlots = slots.reduce(
+      (a, s) => a + (toNum(s.bet_size) || 0),
+      0
+    );
     const start = Number.isFinite(startFromHunt) ? startFromHunt : startFromSlots;
 
-    const amountWon = slots.reduce((a, s) => a + (toNum(s.payout) || 0), 0);
+    const amountWon = slots.reduce(
+      (a, s) => a + (toNum(s.payout) || 0),
+      0
+    );
     const bonusCount = slots.length;
     const pl = amountWon - start;
 
@@ -1246,38 +1855,6 @@ export default function HuntDetail({ numberId }) {
     setOpenRedeem(true);
   };
 
-  function buildOverlayURL(kind) {
-    const base =
-      (typeof window !== "undefined" &&
-        `${location.origin}${location.pathname}`) ||
-      "";
-    if (kind === "hunt") {
-      const cfg = {
-        design: huntCfg.design || "cards",
-        // opções “classic” (continua suportado)
-        kpi: huntCfg.kpi || "start,won,pl",
-        grid: huntCfg.grid ?? "1",
-        thumbs: huntCfg.thumbs ?? "1",
-        pulse: huntCfg.pulse ?? "1",
-        shine: huntCfg.shine ?? "1",
-        style: huntCfg.style || "chip",
-        align: huntCfg.align || "center",
-        pad: huntCfg.pad ?? "16",
-      };
-      const q = new URLSearchParams(cfg).toString();
-      return `${base}#/overlay/hunt/${hunt?.number_id || nId}?${q}`;
-    } else {
-      const cfg = {
-        pill: openingCfg.pill ?? "1",
-        thumbs: openingCfg.thumbs ?? "1",
-        title: openingCfg.title || "Opening",
-        pad: openingCfg.pad ?? "12",
-      };
-      const q = new URLSearchParams(cfg).toString();
-      return `${base}#/overlay/opening/${hunt?.number_id || nId}?${q}`;
-    }
-  }
-
   if (busy) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-10 text-sm opacity-70">
@@ -1299,28 +1876,6 @@ export default function HuntDetail({ numberId }) {
     );
   }
 
-  // helpers UI
-  const Panel = ({ title, open, onToggle, children }) => (
-    <div className="rounded-xl border border-white/10 bg-white/5">
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center justify-between px-3 py-2"
-      >
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <CopyIcon className="h-4 w-4 opacity-70" />
-          {title}
-        </div>
-        <ChevronDown
-          className={cn(
-            "h-4 w-4 transition-transform",
-            open ? "rotate-180" : ""
-          )}
-        />
-      </button>
-      {open && <div className="px-3 pb-3 pt-1 border-t border-white/10">{children}</div>}
-    </div>
-  );
-
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
       {/* Top bar */}
@@ -1334,8 +1889,8 @@ export default function HuntDetail({ numberId }) {
         </div>
       </div>
 
-      {/* KPIs topo */}
-      <div className="grid md:grid-cols-4 gap-3 mb-3">
+      {/* KPIs topo — mais compacto */}
+      <div className="grid md:grid-cols-4 gap-2 mb-3">
         {[
           [
             "Profit/Loss +/-",
@@ -1349,27 +1904,35 @@ export default function HuntDetail({ numberId }) {
           <div
             key={i}
             className={cn(
-              "rounded-xl border p-4",
-              isDark ? "border-white/10 bg-white/5" : "border-zinc-200 bg-white"
+              "rounded-xl border p-3",
+              isDark
+                ? "border-white/10 bg-white/5"
+                : "border-zinc-200 bg-white"
             )}
           >
             <div
-              className={cn("text-xs", isDark ? "text-white/60" : "text-zinc-600")}
+              className={cn(
+                "text-[11px] leading-none mb-1",
+                isDark ? "text-white/60" : "text-zinc-600"
+              )}
             >
               {label}
             </div>
-            <div className={cn("font-semibold text-lg", numCls, color)}>{value}</div>
+            <div className={cn("font-semibold", numCls, color)}>{value}</div>
           </div>
         ))}
       </div>
 
       {/* Ações rápidas */}
-      <div className="grid md:grid-cols-4 gap-3 mb-4">
+      <div className="grid md:grid-cols-4 gap-2 mb-3">
         <Button
           variant="outline"
           className="h-10"
           onClick={() =>
-            setSortBy((s) => ({ key: "betsize", dir: s.key === "betsize" ? -s.dir : -1 }))
+            setSortBy((s) => ({
+              key: "betsize",
+              dir: s.key === "betsize" ? -s.dir : -1,
+            }))
           }
         >
           <SlidersHorizontal className="mr-2 h-4 w-4" />
@@ -1385,7 +1948,11 @@ export default function HuntDetail({ numberId }) {
           <CalendarIcon className="mr-2 h-4 w-4" />
           {t("date")}
         </Button>
-        <Button variant="outline" className="h-10" onClick={() => setSortBy({ key: "random", dir: 1 })}>
+        <Button
+          variant="outline"
+          className="h-10"
+          onClick={() => setSortBy({ key: "random", dir: 1 })}
+        >
           <Shuffle className="mr-2 h-4 w-4" />
           {t("random")}
         </Button>
@@ -1403,231 +1970,31 @@ export default function HuntDetail({ numberId }) {
         </div>
       </div>
 
-      {/* ── Widget compacto */}
-      <div
-        className={cn(
-          "rounded-xl border p-3 mb-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3",
-          isDark ? "border-white/10 bg-white/5" : "border-zinc-200 bg-white"
-        )}
-      >
-        <div className="flex items-center gap-2">
-          <Wand2 className="h-4 w-4 opacity-70" />
-          <div className="text-sm font-medium">Compact widget</div>
-          <div className="text-[11px] opacity-60">
-            Overlay (Hunt) / Overlay (Opening)
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setOpenHuntPanel((v) => !v)}
-            className="h-8"
-            title="Overlay (Hunt)"
-          >
-            <CopyIcon className="h-4 w-4 mr-1" />
-            Overlay (Hunt)
-            <ChevronDown className={cn("h-4 w-4 ml-1 transition-transform", openHuntPanel ? "rotate-180" : "")} />
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setOpenOpeningPanel((v) => !v)}
-            className="h-8"
-            title="Overlay (Opening)"
-          >
-            <CopyIcon className="h-4 w-4 mr-1" />
-            Overlay (Opening)
-            <ChevronDown className={cn("h-4 w-4 ml-1 transition-transform", openOpeningPanel ? "rotate-180" : "")} />
-          </Button>
-          <Button
-            onClick={() => {
-              window.location.hash = `#/widgets?hunt=${hunt.number_id}`;
-            }}
-            className="h-8"
-            title={t("openDesigner")}
-          >
-            <ExternalLink className="h-4 w-4 mr-1" />
-            {t("openDesigner")}
-          </Button>
+      {/* Widget compacto (discreto) com 2 overlays */}
+      <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 mb-4">
+        <div className="text-sm font-medium mb-2">{t("overlays")}</div>
+        <div className="grid lg:grid-cols-2 gap-3">
+          <OverlayCard
+            type="hunt"
+            hunt={hunt}
+            slots={sortedSlots}
+            opts={huntOpts}
+            setOpts={setHuntOpts}
+          />
+          <OverlayCard
+            type="opening"
+            hunt={hunt}
+            slots={sortedSlots}
+            opts={openingOpts}
+            setOpts={setOpeningOpts}
+          />
         </div>
       </div>
-
-      {/* Painel Overlay (Hunt) */}
-      {openHuntPanel && (
-        <Panel
-          title="Overlay (Hunt)"
-          open={true}
-          onToggle={() => setOpenHuntPanel((v) => !v)}
-        >
-          <div className="grid md:grid-cols-3 gap-3">
-            <div className="space-y-2">
-              <div className="text-xs opacity-70">{t("preset")}</div>
-              <select
-                className="h-9 w-full rounded-md bg-zinc-900 border border-white/10 px-2"
-                value={huntCfg.design || "cards"}
-                onChange={(e) => setHuntCfg((c) => ({ ...c, design: e.target.value }))}
-              >
-                <option value="cards">{t("designCards")}</option>
-                <option value="classic">{t("designClassic")}</option>
-              </select>
-
-              {/* campos extra quando clássico */}
-              {huntCfg.design === "classic" && (
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={(huntCfg.thumbs ?? "1") === "1"}
-                      onChange={(e) =>
-                        setHuntCfg((c) => ({ ...c, thumbs: e.target.checked ? "1" : "0" }))
-                      }
-                    />
-                    Thumbs
-                  </label>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={(huntCfg.pulse ?? "1") === "1"}
-                      onChange={(e) =>
-                        setHuntCfg((c) => ({ ...c, pulse: e.target.checked ? "1" : "0" }))
-                      }
-                    />
-                    Pulse
-                  </label>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={(huntCfg.shine ?? "1") === "1"}
-                      onChange={(e) =>
-                        setHuntCfg((c) => ({ ...c, shine: e.target.checked ? "1" : "0" }))
-                      }
-                    />
-                    Shine
-                  </label>
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <div className="text-xs opacity-70">Padding (px)</div>
-              <Input
-                type="number"
-                value={huntCfg.pad ?? 16}
-                onChange={(e) => setHuntCfg((c) => ({ ...c, pad: e.target.value }))}
-              />
-              <div className="text-xs opacity-70">Alinhamento</div>
-              <select
-                className="h-9 w-full rounded-md bg-zinc-900 border border-white/10 px-2"
-                value={huntCfg.align || "center"}
-                onChange={(e) => setHuntCfg((c) => ({ ...c, align: e.target.value }))}
-              >
-                <option value="left">left</option>
-                <option value="center">center</option>
-              </select>
-            </div>
-
-            <div className="flex items-end justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  const url = buildOverlayURL("hunt");
-                  try { navigator.clipboard.writeText(url); } catch {}
-                }}
-              >
-                <CopyIcon className="h-4 w-4 mr-2" />
-                {t("copyURL")}
-              </Button>
-              <Button
-                onClick={() => window.open(buildOverlayURL("hunt"), "_blank")}
-              >
-                <ExternalLink className="h-4 w-4 mr-2" />
-                {t("openLink")}
-              </Button>
-            </div>
-          </div>
-
-          <div className="text-xs opacity-60 mt-2 break-all">
-            {buildOverlayURL("hunt")}
-          </div>
-        </Panel>
-      )}
-
-      {/* Painel Overlay (Opening) */}
-      {openOpeningPanel && (
-        <div className="mt-3">
-          <Panel
-            title="Overlay (Opening)"
-            open={true}
-            onToggle={() => setOpenOpeningPanel((v) => !v)}
-          >
-            <div className="grid md:grid-cols-3 gap-3">
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={(openingCfg.thumbs ?? "1") === "1"}
-                    onChange={(e) =>
-                      setOpeningCfg((c) => ({ ...c, thumbs: e.target.checked ? "1" : "0" }))
-                    }
-                  />
-                  Thumbs
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={(openingCfg.pill ?? "1") === "1"}
-                    onChange={(e) =>
-                      setOpeningCfg((c) => ({ ...c, pill: e.target.checked ? "1" : "0" }))
-                    }
-                  />
-                  Pílula P/L
-                </label>
-              </div>
-
-              <div className="space-y-2">
-                <div className="text-xs opacity-70">Título</div>
-                <Input
-                  value={openingCfg.title || "Opening"}
-                  onChange={(e) => setOpeningCfg((c) => ({ ...c, title: e.target.value }))}
-                />
-                <div className="text-xs opacity-70">Padding (px)</div>
-                <Input
-                  type="number"
-                  value={openingCfg.pad ?? 12}
-                  onChange={(e) => setOpeningCfg((c) => ({ ...c, pad: e.target.value }))}
-                />
-              </div>
-
-              <div className="flex items-end justify-end gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    const url = buildOverlayURL("opening");
-                    try { navigator.clipboard.writeText(url); } catch {}
-                  }}
-                >
-                  <CopyIcon className="h-4 w-4 mr-2" />
-                  {t("copyURL")}
-                </Button>
-                <Button
-                  onClick={() => window.open(buildOverlayURL("opening"), "_blank")}
-                >
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  {t("openLink")}
-                </Button>
-              </div>
-            </div>
-
-            <div className="text-xs opacity-60 mt-2 break-all">
-              {buildOverlayURL("opening")}
-            </div>
-          </Panel>
-        </div>
-      )}
 
       {/* Tabela */}
       <div
         className={cn(
-          "rounded-xl border overflow-hidden mt-4",
+          "rounded-xl border overflow-hidden",
           isDark ? "border-white/10" : "border-zinc-200"
         )}
       >
@@ -1702,24 +2069,36 @@ export default function HuntDetail({ numberId }) {
 
               {/* Colunas numéricas */}
               <div
-                className={cn("col-span-1 text-center flex items-center justify-center", numCls)}
+                className={cn(
+                  "col-span-1 text-center flex items-center justify-center",
+                  numCls
+                )}
               >
                 {s.bet_size ?? "—"}
               </div>
               <div
-                className={cn("col-span-2 text-center flex items-center justify-center", numCls)}
+                className={cn(
+                  "col-span-2 text-center flex items-center justify-center",
+                  numCls
+                )}
               >
                 {s.payout != null ? fmtMoney(s.payout) : "—"}
               </div>
               <div
-                className={cn("col-span-1 text-center flex items-center justify-center", numCls)}
+                className={cn(
+                  "col-span-1 text-center flex items-center justify-center",
+                  numCls
+                )}
               >
-                {s.multiplier != null ? Number(s.multiplier).toFixed(2) : "—"}
+                {s.multiplier != null
+                  ? Number(s.multiplier).toFixed(2)
+                  : "—"}
               </div>
 
               {/* Ações */}
               <div className="col-span-1 flex items-center justify-end gap-2">
                 <Button
+                  type="button"
                   variant="outline"
                   size="icon"
                   title={t("edit")}
@@ -1733,6 +2112,7 @@ export default function HuntDetail({ numberId }) {
                 </Button>
 
                 <Button
+                  type="button"
                   variant="destructive"
                   size="icon"
                   title={t("delete")}
