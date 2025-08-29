@@ -884,34 +884,37 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
   const start = Number(hunt?.start_cost) || slots.reduce((a, s) => a + toNum(s.bet_size), 0);
   const won   = slots.reduce((a, s) => a + toNum(s.payout), 0);
 
-  // Canvas
-  const baseW = Number(opts.baseW || 720);
+  // Canvas (base do painel de CARDS)
+  const baseW = Number(opts.baseW || 720);   // largura desejada só para os CARDS
   const baseH = Number(opts.baseH || 320);
   const pad   = Number(opts.pad || 0);
   const showBox = opts.showBox !== false;
 
-  // Layout
+  // KPIs
+  const kpiPos   = String(opts.kpiPos || "right"); // "left" | "right" | "top" | "bottom" | "hidden"
+  const kpiStyle = String(opts.kpiStyle || "pill");
+  const kpiAlign = String(opts.kpiAlign || "center");
+  const sideW    = (kpiPos === "left" || kpiPos === "right") ? 210 : 0; // largura fixa da barra lateral
+
+  // Larguras: quando KPIs ficam de lado, a LARGURA TOTAL aumenta
+  const totalW   = (kpiPos === "left" || kpiPos === "right") ? (baseW + sideW) : baseW;
+
+  // Layout cards
   const layout     = String(opts.layout || "carousel");
   const visible    = Math.max(1, Number(opts.visible || 3));
   const autoScroll = !!opts.autoScroll;
   const speedSec   = Math.max(5, Math.min(180, Number(opts.scrollDur || 30)));
   const gap        = layout === "grid" ? 8 : 12;
 
-  // KPIs (sem sobreposição)
-  const kpiPos   = String(opts.kpiPos || "right"); // left|right|top|bottom|hidden
-  const kpiStyle = String(opts.kpiStyle || "pill");
-  const kpiAlign = String(opts.kpiAlign || "center"); // top/bottom: left|center|right • left/right: top|center|bottom
-  const sideW    = kpiPos === "left" || kpiPos === "right" ? 210 : 0;
-
-  // cálculo de largura do painel de cards quando KPIs ficam de lado
-  const paneW    = baseW - sideW;
-  const innerW   = paneW - 0;
-  const cardW    =
+  // largura interna dos CARDS mantém-se SEMPRE a baseW
+  const cardsPaneW = baseW;
+  const innerW     = cardsPaneW - 0;
+  const cardW      =
     layout === "carousel"
       ? Math.max(140, Math.floor((innerW - 6 - (visible - 1) * gap) / visible))
       : undefined;
 
-  // componentes de KPI
+  // Componentes de KPI
   const Pill = ({ label, value }) => (
     <div className="px-3 py-1.5 rounded-full border text-[12px]"
          style={{borderColor:"rgba(255,255,255,.15)", background:"rgba(255,255,255,.10)"}}>
@@ -925,20 +928,20 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
       <b className={numCls}>{value}</b>
     </div>
   );
+
   const KPIList = (
     <div
       className={cn(
         "flex gap-2",
-        kpiPos === "left" || kpiPos === "right"
-          ? // coluna lateral: alinhar vertical
-            (kpiAlign === "top" ? "flex-col items-start" :
-             kpiAlign === "bottom" ? "flex-col items-end mt-auto" :
-             "flex-col items-center")
-          : // topo/fundo: alinhar horizontal
-            (kpiAlign === "left" ? "justify-start" :
-             kpiAlign === "right" ? "justify-end" : "justify-center")
+        (kpiPos === "left" || kpiPos === "right")
+          ? (kpiAlign === "top" ? "flex-col items-start"
+             : kpiAlign === "bottom" ? "flex-col items-end mt-auto"
+             : "flex-col items-center")
+          : (kpiAlign === "left" ? "justify-start"
+             : kpiAlign === "right" ? "justify-end"
+             : "justify-center")
       )}
-      style={kpiPos === "left" || kpiPos === "right" ? {height: baseH - pad*2} : {}}
+      style={(kpiPos === "left" || kpiPos === "right") ? {height: baseH - pad*2} : {}}
     >
       {kpiStyle === "minimal" ? (
         <>
@@ -1015,7 +1018,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
         <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/60 to-transparent pointer-events-none" />
         <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
 
-        {/* infos topo */}
+        {/* Infos topo */}
         <div
           className={cn(
             "absolute top-1.5 z-10",
@@ -1080,23 +1083,22 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     );
   }
 
-  // fundo da box
   const bg1 = opts.panelBgStart || "#0b1020";
   const bg2 = opts.panelBgEnd   || "#111827";
 
-  // container sem sobrepor
+  // Container — aumenta a largura quando KPIs ficam de lado
   return (
     <div
-      className="rounded-xl overflow-hidden relative"
+      className="rounded-xl overflow-visible relative"
       style={{
-        width: baseW,
+        width: totalW,
         height: baseH,
         border: showBox ? "1px solid rgba(255,255,255,.10)" : "none",
         background: showBox ? `linear-gradient(135deg, ${bg1} 0%, ${bg2} 100%)` : "transparent",
         display: (kpiPos === "left" || kpiPos === "right") ? "grid" : "block",
         gridTemplateColumns:
-          kpiPos === "left"  ? `${sideW}px 1fr` :
-          kpiPos === "right" ? `1fr ${sideW}px` : undefined,
+          kpiPos === "left"  ? `${sideW}px ${baseW}px` :
+          kpiPos === "right" ? `${baseW}px ${sideW}px` : undefined,
         padding: pad,
       }}
     >
@@ -1108,49 +1110,130 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
       `}</style>
 
       {/* KPIs no topo */}
-      {(kpiPos === "top") && (
-        <div className="px-2 pt-1 pb-2">{KPIList}</div>
+      {(kpiPos === "top") && <div className="px-2 pt-1 pb-2">{KPIList}</div>}
+
+      {/* LEFT: KPIs primeiro, depois cards */}
+      {(kpiPos === "left") && (
+        <>
+          <div className="px-2">{KPIList}</div>
+          <div className="px-2">
+            {layout === "grid" ? (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(8,minmax(0,1fr))", gap }}>
+                {slots.slice(0, 16).map((s, i) => (
+                  <Card key={s.id} s={s} i={i} tall={false} />
+                ))}
+              </div>
+            ) : (
+              <div className="overflow-hidden" style={{ width: cardsPaneW }}>
+                <div
+                  className={cn("flex marquee")}
+                  style={{
+                    gap,
+                    width: "max-content",
+                    animation: autoScroll && slots.length > visible ? `marquee ${speedSec}s linear infinite` : undefined,
+                  }}
+                >
+                  {[...slots, ...slots].map((s, i) => (
+                    <Card key={`${s.id}-${i}`} s={s} i={i % slots.length} tall={true} width={cardW} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </>
       )}
 
-      {/* Painel dos cards */}
-      <div className="px-2">
-        {layout === "grid" ? (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(8,minmax(0,1fr))", gap }}>
-            {slots.slice(0, 16).map((s, i) => (
-              <Card key={s.id} s={s} i={i} tall={false} />
-            ))}
+      {/* RIGHT: cards primeiro, depois KPIs */}
+      {(kpiPos === "right") && (
+        <>
+          <div className="px-2">
+            {layout === "grid" ? (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(8,minmax(0,1fr))", gap }}>
+                {slots.slice(0, 16).map((s, i) => (
+                  <Card key={s.id} s={s} i={i} tall={false} />
+                ))}
+              </div>
+            ) : (
+              <div className="overflow-hidden" style={{ width: cardsPaneW }}>
+                <div
+                  className={cn("flex marquee")}
+                  style={{
+                    gap,
+                    width: "max-content",
+                    animation: autoScroll && slots.length > visible ? `marquee ${speedSec}s linear infinite` : undefined,
+                  }}
+                >
+                  {[...slots, ...slots].map((s, i) => (
+                    <Card key={`${s.id}-${i}`} s={s} i={i % slots.length} tall={true} width={cardW} />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="overflow-hidden w-full">
-            <div
-              className={cn("flex marquee")}
-              style={{
-                gap,
-                width: "max-content",
-                animation: autoScroll && slots.length > visible ? `marquee ${speedSec}s linear infinite` : undefined,
-              }}
-            >
-              {[...slots, ...slots].map((s, i) => (
-                <Card key={`${s.id}-${i}`} s={s} i={i % slots.length} tall={true} width={cardW} />
+          <div className="px-2">{KPIList}</div>
+        </>
+      )}
+
+      {/* KPIs em baixo */}
+      {(kpiPos === "bottom") && (
+        <>
+          <div className="px-2">
+            {layout === "grid" ? (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(8,minmax(0,1fr))", gap }}>
+                {slots.slice(0, 16).map((s, i) => (
+                  <Card key={s.id} s={s} i={i} tall={false} />
+                ))}
+              </div>
+            ) : (
+              <div className="overflow-hidden" style={{ width: cardsPaneW }}>
+                <div
+                  className={cn("flex marquee")}
+                  style={{
+                    gap,
+                    width: "max-content",
+                    animation: autoScroll && slots.length > visible ? `marquee ${speedSec}s linear infinite` : undefined,
+                  }}
+                >
+                  {[...slots, ...slots].map((s, i) => (
+                    <Card key={`${s.id}-${i}`} s={s} i={i % slots.length} tall={true} width={cardW} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="px-2 pt-2 pb-1">{KPIList}</div>
+        </>
+      )}
+
+      {/* KPIs ocultos */}
+      {(kpiPos === "hidden") && (
+        <div className="px-2">
+          {layout === "grid" ? (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(8,minmax(0,1fr))", gap }}>
+              {slots.slice(0, 16).map((s, i) => (
+                <Card key={s.id} s={s} i={i} tall={false} />
               ))}
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* KPIs de lado */}
-      {(kpiPos === "left" || kpiPos === "right") && (
-        <div className={cn("px-2", kpiPos === "left" ? "order-first" : "order-last")}>
-          {KPIList}
+          ) : (
+            <div className="overflow-hidden" style={{ width: cardsPaneW }}>
+              <div
+                className={cn("flex marquee")}
+                style={{
+                  gap,
+                  width: "max-content",
+                  animation: autoScroll && slots.length > visible ? `marquee ${speedSec}s linear infinite` : undefined,
+                }}
+              >
+                {[...slots, ...slots].map((s, i) => (
+                  <Card key={`${s.id}-${i}`} s={s} i={i % slots.length} tall={true} width={cardW} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* KPIs no fundo */}
-      {(kpiPos === "bottom") && (
-        <div className="px-2 pt-2 pb-1">{KPIList}</div>
-      )}
-
-      {/* P/L — escondido por defeito */}
+      {/* P/L — só se ligares o toggle */}
       {opts.showPL && (
         <div className="absolute left-1/2 -translate-x-1/2 bottom-3">
           <div
@@ -1167,6 +1250,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     </div>
   );
 }
+
 
 
 function OpeningOverlayPreview({ hunt, slots, opts }) {
