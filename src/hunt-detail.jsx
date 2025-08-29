@@ -1,6 +1,6 @@
 // /src/hunt-detail.jsx
 import React from "react";
-import { useTheme, AuthCtx } from "@/contexts/auth-context";
+import { useTheme } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -233,6 +233,19 @@ const toNum = (v) => {
   return Number.isFinite(n) ? n : 0;
 };
 
+// helpers de cor
+function hexToRgba(hex, a = 1) {
+  try {
+    let h = String(hex || "").replace("#", "");
+    if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+    const n = parseInt(h, 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    return `rgba(${r},${g},${b},${a})`;
+  } catch {
+    return `rgba(232,121,249,${a})`;
+  }
+}
+
 /* ───────────────────────── helpers ───────────────────────── */
 async function updateSuperFlag(rowId, value) {
   const tryFns = [
@@ -342,6 +355,7 @@ function ConfirmDialog({
 function AddBonusModal({ open, onClose, numberId, onAdded }) {
   const { t } = useLang();
   const [query, setQuery] = React.useState("");
+  theState: null
   const [busy, setBusy] = React.useState(false);
   const [results, setResults] = React.useState([]);
   const [selected, setSelected] = React.useState(null);
@@ -742,26 +756,38 @@ function ConfirmDeleteModal({ open, slot, onCancel, onConfirm }) {
 const DEFAULT_HUNT_OVERLAY = {
   design: "cards",
 
-  // Layout rolante (carousel original restaurado)
-  layout: "carousel", // 'grid' | 'carousel'
-  visible: 3, // quantos cards visíveis
+  // Layout rolante
+  layout: "carousel",
+  visible: 3,
   autoScroll: true,
-  scrollDur: 30, // segundos para 1 loop (mais baixo = mais rápido)
-  showBox: true, // caixa por trás dos cards
+  scrollDur: 30,
+  showBox: true,
 
   // KPIs
-  kpiStyle: "minimal", // 'minimal' | 'pill'
-  kpiPos: "top", // 'top' | 'bottom' | 'hidden'
-  kpiAlign: "center", // 'left' | 'center' | 'right'
+  kpiStyle: "minimal",
+  kpiPos: "top",
+  kpiAlign: "center",
 
   // Cards
   cardH: 160,
-  nameStyle: "bar", // 'bar' | 'float' | 'hidden'
-  betStyle: "inline", // 'inline' | 'chip' | 'none'
+  nameStyle: "bar",     // 'bar' | 'float' | 'hidden'
+  betStyle: "inline",   // 'inline' | 'chip' | 'none'
   showIdx: true,
-  showBet: true, // (mantém para retro-compat); se betStyle='none' ignora
+  showBet: true,
   showSuper: true,
-  badgesDir: "row", // NOVO: 'row' (como antes) | 'column' (infos na vertical)
+
+  // Infos
+  badgesDir: "row",     // 'row' | 'column'  (vertical = 'column')
+
+  // SUPER glow/tag
+  superGlow: true,
+  superGlowColor: "#e879f9",
+  superGlowStrength: 0.6,   // 0..1
+  superTagColor: "#e879f9",
+
+  // Cores da box/painel
+  panelBgStart: "#0b1020",
+  panelBgEnd:   "#111827",
 
   // genéricos
   pad: 16,
@@ -772,6 +798,7 @@ const DEFAULT_HUNT_OVERLAY = {
   baseW: 560,
   baseH: 280,
 };
+
 const DEFAULT_OPENING_OVERLAY = {
   design: "default",
   pad: 16,
@@ -780,8 +807,8 @@ const DEFAULT_OPENING_OVERLAY = {
   pulse: true,
   baseW: 560,
   baseH: 320,
-  showTitle: true, // NOVO: permitir esconder o título do hunt ("Valek Hunt", etc.)
-  showCurrent: true, // NOVO: permitir esconder o chip da slot atual
+  showTitle: true,
+  showCurrent: true,
 };
 
 function useLocalState(key, initial) {
@@ -818,7 +845,6 @@ function buildHuntOverlayUrl(base, huntNumberId, opts) {
   qs.set("showIdx", opts.showIdx ? "1" : "0");
   qs.set("showBet", opts.showBet ? "1" : "0");
   qs.set("showSuper", opts.showSuper ? "1" : "0");
-  qs.set("vinfo", opts.badgesDir === "column" ? "1" : "0"); // NOVO
   if (opts.shine) qs.set("shine", "1");
   if (opts.pulse) qs.set("pulse", "1");
   qs.set("align", String(opts.align || "center"));
@@ -826,6 +852,17 @@ function buildHuntOverlayUrl(base, huntNumberId, opts) {
   qs.set("bw", String(opts.baseW || 560));
   qs.set("bh", String(opts.baseH || 280));
   qs.set("cardH", String(opts.cardH || 140));
+
+  // Novos parâmetros
+  qs.set("vinfo", String(opts.badgesDir === "column" ? 1 : 0));
+  qs.set("sg", String(opts.superGlow === false ? 0 : 1));
+  if (opts.superGlowColor) qs.set("sgc", String(opts.superGlowColor).replace("#", ""));
+  if (typeof opts.superGlowStrength === "number")
+    qs.set("sgs", String(opts.superGlowStrength));
+  if (opts.superTagColor) qs.set("stc", String(opts.superTagColor).replace("#", ""));
+  if (opts.panelBgStart) qs.set("bg1", String(opts.panelBgStart).replace("#", ""));
+  if (opts.panelBgEnd)   qs.set("bg2", String(opts.panelBgEnd).replace("#", ""));
+
   return `${base}#/overlay/hunt/${huntNumberId}?${qs.toString()}`;
 }
 function buildOpeningOverlayUrl(base, huntNumberId, opts) {
@@ -837,8 +874,8 @@ function buildOpeningOverlayUrl(base, huntNumberId, opts) {
   qs.set("pad", String(opts.pad || 0));
   qs.set("bw", String(opts.baseW || 560));
   qs.set("bh", String(opts.baseH || 320));
-  qs.set("title", opts.showTitle === false ? "0" : "1"); // NOVO
-  qs.set("current", opts.showCurrent === false ? "0" : "1"); // NOVO
+  qs.set("title", opts.showTitle === false ? "0" : "1");
+  qs.set("current", opts.showCurrent === false ? "0" : "1");
   return `${base}#/overlay/opening/${huntNumberId}?${qs.toString()}`;
 }
 
@@ -926,7 +963,18 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     const captionIsBar = opts.nameStyle === "bar";
     const captionIsFloat = opts.nameStyle === "float";
     const showName = opts.nameStyle !== "hidden";
-    const badgesVertical = String(opts.badgesDir || "row") === "column"; // NOVO
+    const badgesVertical = String(opts.badgesDir || "row") === "column";
+
+    // SUPER visual (glow/cores)
+    const tagColor = opts.superTagColor || "#e879f9";
+    const glowColor = opts.superGlowColor || tagColor;
+    const sStr = Math.max(0, Math.min(1, Number(opts.superGlowStrength ?? 0.6)));
+    const withGlow = !!opts.superGlow && showSuper;
+
+    const superBorder = withGlow ? hexToRgba(glowColor, 0.55 * sStr) : "rgba(255,255,255,.10)";
+    const superShadow = withGlow
+      ? `0 0 0 3px ${hexToRgba(glowColor, 0.20 * sStr)}, 0 0 ${36 + 40 * sStr}px ${hexToRgba(glowColor, 0.35 * sStr)}, 0 14px 36px rgba(0,0,0,.45)`
+      : "0 12px 28px rgba(0,0,0,.35)";
 
     return (
       <div
@@ -934,8 +982,8 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
         style={{
           height: h,
           width,
-          borderColor: superB ? "rgba(232,121,249,.55)" : "rgba(255,255,255,.10)",
-          boxShadow: superB ? "0 0 0 3px rgba(232,121,249,.18), 0 14px 36px rgba(0,0,0,.45)" : "0 12px 28px rgba(0,0,0,.35)"
+          borderColor: showSuper ? superBorder : "rgba(255,255,255,.10)",
+          boxShadow: showSuper ? superShadow : "0 12px 28px rgba(0,0,0,.35)",
         }}
         title={s?.name}
       >
@@ -984,8 +1032,14 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
           </div>
         )}
         {showSuper && (
-          <div className="absolute right-1.5 top-1.5 z-10 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide"
-               style={{ background: "rgba(232,121,249,.9)", color: "#120614", boxShadow: "0 0 22px rgba(232,121,249,.45)" }}>
+          <div
+            className="absolute right-1.5 top-1.5 z-10 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide"
+            style={{
+              background: tagColor,
+              color: "#120614",
+              boxShadow: withGlow ? `0 0 ${22 + 20 * sStr}px ${hexToRgba(glowColor, 0.45 * sStr)}` : "none"
+            }}
+          >
             SUPER
           </div>
         )}
@@ -1027,7 +1081,10 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     );
   }
 
-  // animação para o carrossel (comportamento original)
+  const bg1 = opts.panelBgStart || "#0b1020";
+  const bg2 = opts.panelBgEnd || "#111827";
+
+  // animação para o carrossel
   return (
     <div
       className="rounded-xl overflow-hidden relative"
@@ -1035,9 +1092,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
         width: baseW,
         height: baseH,
         border: showBox ? "1px solid rgba(255,255,255,.10)" : "none",
-        background: showBox
-          ? "linear-gradient(135deg, rgba(14,22,42,1) 0%, rgba(28,26,49,1) 100%)"
-          : "transparent",
+        background: showBox ? `linear-gradient(135deg, ${bg1} 0%, ${bg2} 100%)` : "transparent",
       }}
     >
       <style>{`
@@ -1098,6 +1153,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
 }
 
 function OpeningOverlayPreview({ hunt, slots, opts }) {
+  const { t } = useLang();
   const current = slots[0] || null;
   const baseW = Number(opts.baseW || 560);
   const baseH = Number(opts.baseH || 320);
@@ -1115,7 +1171,7 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
       <div className="px-3 pt-3 pb-2 flex items-center justify-between">
         {opts.showTitle !== false ? (
           <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
-            {hunt?.title || "Hunt"} — Opening
+            {hunt?.title || t("overlayOpening")}
           </div>
         ) : <div />}
         {opts.showCurrent !== false ? (
@@ -1158,10 +1214,50 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
   );
 }
 
-/* ───────────────────────── Designer com novos controlos ───────────────────────── */
+/* ───────────────────────── Designer ───────────────────────── */
 function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
   const { t } = useLang();
   if (!open) return null;
+
+  // presets de cor (box/painel)
+  const colorPresets = [
+    { name: "Neon",    a: "#0b1020", b: "#111827" },
+    { name: "Sunset",  a: "#4b0b3a", b: "#6b1145" },
+    { name: "Emerald", a: "#053b35", b: "#0e5a49" },
+    { name: "Magenta", a: "#2a0b38", b: "#4a0b4f" },
+    { name: "Carbon",  a: "#0b0b0b", b: "#1a1a1a" },
+    { name: "Twilight",a: "#0b1025", b: "#102a4a" },
+  ];
+
+  // presets de layout (apenas atalho de opções)
+  function applyLayoutPreset(p) {
+    if (p === "default") {
+      setOpts((o) => ({ ...o,
+        layout: "carousel", visible: 3, badgesDir:"row",
+        nameStyle: "bar", betStyle: "inline", kpiPos: "top", kpiStyle:"minimal",
+        showIdx: true, showSuper: true, showBox: true,
+      }));
+    } else if (p === "compact") {
+      setOpts((o) => ({ ...o,
+        layout: "carousel", visible: 4, badgesDir:"column",
+        nameStyle: "bar", betStyle: "chip", cardH: 150,
+        kpiPos:"top", kpiStyle:"pill",
+      }));
+    } else if (p === "bar") {
+      setOpts((o) => ({ ...o,
+        nameStyle:"bar", betStyle:"inline", kpiStyle:"pill", kpiPos:"bottom",
+      }));
+    } else if (p === "minimal") {
+      setOpts((o) => ({ ...o,
+        nameStyle:"hidden", betStyle:"none", showIdx:false, showSuper:true,
+        kpiPos:"hidden",
+      }));
+    } else if (p === "vs") {
+      setOpts((o) => ({ ...o,
+        layout:"grid", cardH: 160, badgesDir:"row", kpiPos:"top",
+      }));
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-sm">
@@ -1186,7 +1282,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
       {/* Body */}
       <div className="absolute inset-x-0 top-14 bottom-0 md:flex">
         {/* Sidebar */}
-        <div className="border-r border-white/10 bg-zinc-950/70 overflow-auto w-full md:w-[400px]">
+        <div className="border-r border-white/10 bg-zinc-950/70 overflow-auto w-full md:w-[420px]">
           <div className="p-4 space-y-4">
             <div className="rounded-xl border border-white/10 bg-white/5 p-3">
               <div className="text-xs opacity-70 mb-1">Canvas / OBS</div>
@@ -1271,6 +1367,18 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
             {/* ----- CONTROLOS HUNT ----- */}
             {type === "hunt" && (
               <>
+                {/* Layout presets */}
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
+                  <div className="text-xs opacity-70 mb-1">Layout presets</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button variant="outline" className="h-9" onClick={() => applyLayoutPreset("default")}>Default</Button>
+                    <Button variant="outline" className="h-9" onClick={() => applyLayoutPreset("compact")}>Compact (columns)</Button>
+                    <Button variant="outline" className="h-9" onClick={() => applyLayoutPreset("bar")}>Bar</Button>
+                    <Button variant="outline" className="h-9" onClick={() => applyLayoutPreset("minimal")}>Minimal</Button>
+                    <Button variant="outline" className="h-9 col-span-2" onClick={() => applyLayoutPreset("vs")}>Head-to-Head (overlay VS)</Button>
+                  </div>
+                </div>
+
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
                   <div className="text-xs opacity-70 mb-1">Cards</div>
                   <div className="grid grid-cols-2 gap-2">
@@ -1427,6 +1535,90 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                   </div>
                 </div>
 
+                {/* SUPER opções */}
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
+                  <div className="text-xs opacity-70 mb-1">SUPER</div>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={!!opts.superGlow}
+                      onChange={(e) => setOpts((o) => ({ ...o, superGlow: !!e.target.checked }))}
+                    />
+                    Ativar brilho SUPER
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 items-center">
+                    <div>
+                      <div className="text-xs opacity-70 mb-1">Cor do brilho</div>
+                      <input
+                        type="color"
+                        value={opts.superGlowColor}
+                        onChange={(e) => setOpts((o) => ({ ...o, superGlowColor: e.target.value }))}
+                        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10"
+                      />
+                    </div>
+                    <div>
+                      <div className="text-xs opacity-70 mb-1">Intensidade</div>
+                      <input
+                        type="range"
+                        min="0" max="1" step="0.05"
+                        value={Number(opts.superGlowStrength ?? 0.6)}
+                        onChange={(e) => setOpts((o) => ({ ...o, superGlowStrength: Number(e.target.value) }))}
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs opacity-70 mb-1">Cor da tag SUPER</div>
+                    <input
+                      type="color"
+                      value={opts.superTagColor}
+                      onChange={(e) => setOpts((o) => ({ ...o, superTagColor: e.target.value }))}
+                      className="h-9 w-full rounded-xl bg-zinc-900 border-white/10"
+                    />
+                  </div>
+                </div>
+
+                {/* Cores / Presets */}
+                <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
+                  <div className="text-xs opacity-70 mb-1">Color presets</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {colorPresets.map((p) => (
+                      <button
+                        key={p.name}
+                        type="button"
+                        onClick={() => setOpts((o) => ({ ...o, panelBgStart: p.a, panelBgEnd: p.b }))}
+                        className="h-12 rounded-lg overflow-hidden border border-white/10 text-left px-3"
+                        style={{ background: `linear-gradient(135deg, ${p.a} 0%, ${p.b} 100%)` }}
+                        title={p.name}
+                      >
+                        <span className="text-[12px] text-white/80 drop-shadow">{p.name}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <div className="text-xs opacity-70 mb-1">Background start</div>
+                      <input
+                        type="color"
+                        value={opts.panelBgStart}
+                        onChange={(e) => setOpts((o) => ({ ...o, panelBgStart: e.target.value }))}
+                        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10"
+                      />
+                    </div>
+                    <div>
+                      <div className="text-xs opacity-70 mb-1">Background end</div>
+                      <input
+                        type="color"
+                        value={opts.panelBgEnd}
+                        onChange={(e) => setOpts((o) => ({ ...o, panelBgEnd: e.target.value }))}
+                        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* KPIs */}
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
                   <div className="text-xs opacity-70">KPIs (Start • B/E • #Bonus)</div>
                   <div className="grid grid-cols-2 gap-2">
@@ -1478,7 +1670,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
             )}
 
             {/* ----- CONTROLOS OPENING ----- */}
-            {type !== 'hunt' && (
+            {type !== "hunt" && (
               <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
                 <div className="text-xs opacity-70 mb-1">Header</div>
                 <label className="flex items-center gap-2 text-sm">
@@ -1487,7 +1679,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                     checked={opts.showTitle !== false}
                     onChange={(e) => setOpts((o) => ({ ...o, showTitle: !!e.target.checked }))}
                   />
-                  {t('showHuntTitle')}
+                  {t("showHuntTitle")}
                 </label>
                 <label className="flex items-center gap-2 text-sm">
                   <input
@@ -1495,7 +1687,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                     checked={opts.showCurrent !== false}
                     onChange={(e) => setOpts((o) => ({ ...o, showCurrent: !!e.target.checked }))}
                   />
-                  {t('showCurrentSlot')}
+                  {t("showCurrentSlot")}
                 </label>
               </div>
             )}
