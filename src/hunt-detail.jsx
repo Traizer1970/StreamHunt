@@ -1,6 +1,6 @@
 // /src/hunt-detail.jsx
 import React from "react";
-import { useTheme, AuthCtx } from "@/contexts/auth-context";
+import { useTheme } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -189,7 +189,8 @@ function useLang() {
   );
   return { lang, t, setLang };
 }
-// ── colunas possíveis para a ordem no DB
+
+// ordem possível
 const ORDER_COLS = ["order_index", "order", "position", "sort", "order_idx"];
 const readOrderFromRow = (row) => {
   const raw = row?._raw || row || {};
@@ -222,7 +223,6 @@ function renderPL(value) {
     maximumFractionDigits: 2,
   })}`;
 }
-// aceita vírgulas decimais e valores vazios
 const toNum = (v) => {
   if (v == null || v === "") return 0;
   if (typeof v === "string") v = v.replace(",", ".");
@@ -241,7 +241,7 @@ function hexToRgba(hex, a = 1) {
       b = n & 255;
     return `rgba(${r},${g},${b},${a})`;
   } catch {
-    return `rgba(232,121,249,${a})`; // fallback
+    return `rgba(232,121,249,${a})`;
   }
 }
 
@@ -264,7 +264,6 @@ async function updateSuperFlag(rowId, value) {
 const getIsSuper = (s) =>
   !!(s?.is_super ?? s?.super ?? s?._raw?.is_super ?? s?._raw?.super);
 
-/* tentar persistir order_index (com fallbacks de coluna/ID) */
 async function persistOrder(slots) {
   const colCandidates = ["order_index", "order", "position", "sort", "order_idx"];
   for (let i = 0; i < slots.length; i++) {
@@ -283,12 +282,12 @@ async function persistOrder(slots) {
       }
     }
     if (!ok) {
-      // se não houver nenhuma coluna, ignoramos silenciosamente
+      // silencioso
     }
   }
 }
 
-/* debounce genérico */
+/* debounce */
 function useDebounced(value, delay = 250) {
   const [v, setV] = React.useState(value);
   React.useEffect(() => {
@@ -298,7 +297,7 @@ function useDebounced(value, delay = 250) {
   return v;
 }
 
-/* ───────────────────────── Modais Auxiliares ───────────────────────── */
+/* ───────────────────────── Modais ───────────────────────── */
 function ConfirmDialog({ open, title, body, confirmText, cancelText, onConfirm, onCancel }) {
   if (!open) return null;
   return (
@@ -309,9 +308,7 @@ function ConfirmDialog({ open, title, body, confirmText, cancelText, onConfirm, 
           <div className="text-lg font-semibold mb-2">{title}</div>
           <div className="text-sm opacity-80 mb-5">{body}</div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onCancel}>
-              {cancelText}
-            </Button>
+            <Button variant="outline" onClick={onCancel}>{cancelText}</Button>
             <Button onClick={onConfirm}>{confirmText}</Button>
           </div>
         </div>
@@ -350,23 +347,13 @@ function AddBonusModal({ open, onClose, numberId, onAdded }) {
         if (active) setBusy(false);
       }
     })();
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [open, dQuery]);
 
   const resetForm = () => {
-    setQuery("");
-    setResults([]);
-    setSelected(null);
-    setBetSize("");
-    setIsSuper(false);
-    setErr("");
+    setQuery(""); setResults([]); setSelected(null); setBetSize(""); setIsSuper(false); setErr("");
   };
-  const handleClose = () => {
-    resetForm();
-    onClose && onClose();
-  };
+  const handleClose = () => { resetForm(); onClose && onClose(); };
 
   async function handleAdd() {
     try {
@@ -414,7 +401,7 @@ function AddBonusModal({ open, onClose, numberId, onAdded }) {
                 <Search className="h-4 w-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-white/60" />
               </div>
 
-              <div className="max-h[320px] max-h-[320px] overflow-auto rounded-xl border border-white/10 bg-zinc-900">
+              <div className="max-h-[320px] overflow-auto rounded-xl border border-white/10 bg-zinc-900">
                 {busy && (
                   <div className="px-3 py-3 text-sm flex items-center gap-2 opacity-80">
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -638,9 +625,7 @@ function ConfirmDeleteModal({ open, slot, onCancel, onConfirm }) {
           </div>
           <div className="text-sm opacity-80 mb-5">{t("eliminarPerg")}</div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onCancel}>
-              {t("cancel")}
-            </Button>
+            <Button variant="outline" onClick={onCancel}>{t("cancel")}</Button>
             <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={onConfirm}>
               <Trash2 className="h-4 w-4 mr-2" />
               {t("delete")}
@@ -652,8 +637,7 @@ function ConfirmDeleteModal({ open, slot, onCancel, onConfirm }) {
   );
 }
 
-/* ───────────────────────── Overlays — helpers & previews ───────────────────────── */
-
+/* ───────────────────────── Overlays — presets ───────────────────────── */
 const PANEL_PRESETS = {
   Neon: ["#0b1020", "#111827"],
   Sunset: ["#3d0f3a", "#6a1047"],
@@ -665,51 +649,39 @@ const PANEL_PRESETS = {
 
 const DEFAULT_HUNT_OVERLAY = {
   design: "cards",
-
-  // Layout rolante
   layout: "carousel",
   visible: 3,
   autoScroll: true,
   scrollDur: 30,
   showBox: true,
-
-  // KPIs
-  kpiStyle: "minimal",
-  kpiPos: "top",
-  kpiAlign: "center",
-  kpiDir: "row", // <-- NOVO: 'row' | 'column'
-
-  // Cards
+  kpiStyle: "pill",      // "minimal" | "pill"
+  kpiPos: "top",         // "top" | "bottom" | "hidden"
+  kpiAlign: "center",    // "left" | "center" | "right"
+  kpiDir: "row",         // "row" | "column"  ← ORIENTAÇÃO KPI
   cardH: 160,
-  nameStyle: "bar",
-  betStyle: "inline",
+  nameStyle: "bar",      // "bar" | "float" | "hidden"
+  betStyle: "inline",    // "inline" | "chip" | "none"
   showIdx: true,
   showBet: true,
   showSuper: true,
-
-  // Infos (vertical #/bet)
-  vInfo: false,
-
+  vInfo: false,          // infos verticais
+  infoPos: "left",       // "left" | "right"  ← POSIÇÃO INFOS
   // SUPER glow
   superGlow: true,
   superGlowColor: "#e879f9",
   superGlowStrength: 0.6,
   superTagColor: "#e879f9",
-
-  // Cores painel
+  // painel
   panelBgStart: "#0b1020",
-  panelBgEnd:   "#111827",
-
+  panelBgEnd: "#111827",
   // genéricos
   pad: 16,
   align: "center",
   shine: true,
   pulse: true,
-  thumbs: true,
   baseW: 560,
   baseH: 280,
 };
-
 
 const DEFAULT_OPENING_OVERLAY = {
   design: "default",
@@ -733,9 +705,7 @@ function useLocalState(key, initial) {
     }
   });
   React.useEffect(() => {
-    try {
-      localStorage.setItem(key, JSON.stringify(s));
-    } catch {}
+    try { localStorage.setItem(key, JSON.stringify(s)); } catch {}
   }, [key, s]);
   return [s, setS];
 }
@@ -746,7 +716,7 @@ function buildHuntOverlayUrl(base, huntNumberId, opts) {
   qs.set("kpi", opts.kpiStyle === "minimal" ? "min" : "pill");
   qs.set("kpiPos", String(opts.kpiPos || "top"));
   qs.set("kpiAlign", String(opts.kpiAlign || "center"));
-  qs.set("kpiDir", String(opts.kpiDir || "row"));        // <-- NOVO
+  qs.set("kpiDir", String(opts.kpiDir || "row"));
   qs.set("layout", String(opts.layout || "carousel"));
   qs.set("visible", String(opts.visible || 3));
   qs.set("speed", String(opts.scrollDur || 30));
@@ -758,6 +728,7 @@ function buildHuntOverlayUrl(base, huntNumberId, opts) {
   qs.set("showBet", opts.showBet ? "1" : "0");
   qs.set("showSuper", opts.showSuper ? "1" : "0");
   if (opts.vInfo) qs.set("vinfo", "1");
+  if (opts.infoPos) qs.set("infoPos", String(opts.infoPos));
 
   // SUPER glow + painel
   if (opts.superGlow === false) qs.set("sg", "0");
@@ -790,7 +761,7 @@ function buildOpeningOverlayUrl(base, huntNumberId, opts) {
   return `${base}#/overlay/opening/${huntNumberId}?${qs.toString()}`;
 }
 
-/* Preview Hunt */
+/* ───────────────────────── PREVIEW: Hunt ───────────────────────── */
 function HuntOverlayPreview({ hunt, slots, opts }) {
   const { t } = useLang();
   const start = Number(hunt?.start_cost) || slots.reduce((a, s) => a + toNum(s.bet_size), 0);
@@ -799,15 +770,14 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
 
   const baseW = Number(opts.baseW || 560);
   const baseH = Number(opts.baseH || 280);
-  const pad = Number(opts.pad || 0);
   const showBox = opts.showBox !== false;
 
   const layout = String(opts.layout || "carousel");
   const visible = Math.max(1, Number(opts.visible || 3));
-  const kpiStyle = String(opts.kpiStyle || "minimal");
+  const kpiStyle = String(opts.kpiStyle || "pill");
   const kpiPos = String(opts.kpiPos || "top");
   const kpiAlign = String(opts.kpiAlign || "center");
-  const kpiDir     = String(opts.kpiDir || "row"); // <-- NOVO
+  const kpiDir   = String(opts.kpiDir || "row");
   const autoScroll = !!opts.autoScroll;
   const speedSec = Math.max(5, Math.min(180, Number(opts.scrollDur || 30)));
 
@@ -818,20 +788,24 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
       ? Math.max(140, Math.floor((innerW - 6 - (visible - 1) * gap) / visible))
       : undefined;
 
-  // chips
   const Mini = ({ label, value }) => (
-    <div className="px-2.5 py-1 rounded-md border text-[12px]" style={{ borderColor: "rgba(255,255,255,.12)", background: "rgba(255,255,255,.06)" }} title={label}>
+    <div className="px-2.5 py-1 rounded-md border text-[12px]"
+      style={{ borderColor: "rgba(255,255,255,.12)", background: "rgba(255,255,255,.06)" }}
+      title={label}
+    >
       <span className="opacity-70 mr-1">{label}:</span>
       <b className={numCls}>{value}</b>
     </div>
   );
   const Pill = ({ label, value }) => (
-    <div className="px-3 py-1.5 rounded-full border text-[12px]" style={{ borderColor: "rgba(255,255,255,.15)", background: "rgba(255,255,255,.10)" }}>
+    <div className="px-3 py-1.5 rounded-full border text-[12px]"
+      style={{ borderColor: "rgba(255,255,255,.15)", background: "rgba(255,255,255,.10)" }}
+    >
       {label}: <b className={numCls}>{value}</b>
     </div>
   );
 
- const KPIs = (
+  const KPIs = (
     <div className="px-3 py-2">
       <div
         className={cn(
@@ -858,17 +832,6 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
             <Pill label={t("kpiBonus")} value={String(slots.length)} />
           </>
         )}
-        <div>
-  <div className="text-xs opacity-70 mb-1">KPI orientação</div>
-  <select
-    value={opts.kpiDir}
-    onChange={(e) => setOpts((o) => ({ ...o, kpiDir: e.target.value }))}
-    className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-  >
-    <option value="row">Horizontal</option>
-    <option value="column">Vertical</option>
-  </select>
-</div>
       </div>
     </div>
   );
@@ -880,7 +843,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     const showSuper = !!opts.showSuper && superB;
     const showBetInBadge = showBet && (opts.betStyle === "chip" || !!opts.vInfo);
 
-    const h = tall ? Math.max(180, Math.round(baseH - 96 - pad)) : Math.max(120, Number(opts.cardH || 140));
+    const h = tall ? Math.max(180, Math.round(baseH - 96)) : Math.max(120, Number(opts.cardH || 140));
     const captionIsBar = opts.nameStyle === "bar";
     const captionIsFloat = opts.nameStyle === "float";
     const showName = opts.nameStyle !== "hidden";
@@ -915,7 +878,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
           <div className="absolute inset-0 bg-white/10" />
         )}
 
-        {/* AURA SUPER 2.0 */}
+        {/* AURA SUPER */}
         {superB && opts.superGlow && (
           <>
             <div
@@ -1065,6 +1028,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
   );
 }
 
+/* ───────────────────────── PREVIEW: Opening ───────────────────────── */
 function OpeningOverlayPreview({ hunt, slots, opts }) {
   const current = slots[0] || null;
   const baseW = Number(opts.baseW || 560);
@@ -1084,16 +1048,12 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
           <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
             {hunt?.title || "Hunt"} — Opening
           </div>
-        ) : (
-          <div />
-        )}
+        ) : <div />}
         {opts.showCurrent !== false ? (
           <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
             {current ? current.name : "—"}
           </div>
-        ) : (
-          <div />
-        )}
+        ) : <div />}
       </div>
 
       <div className="px-3" style={{ display: "grid", gridTemplateColumns: "repeat(8,minmax(0,1fr))", gap: 8 }}>
@@ -1292,6 +1252,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                       <input type="checkbox" checked={!!opts.vInfo} onChange={(e) => setOpts((o) => ({ ...o, vInfo: !!e.target.checked }))} />
                       {t("infoVertical")}
                     </label>
+
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <div className="text-xs opacity-70 mb-1">Posição das infos</div>
@@ -1326,12 +1287,21 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                     </div>
                   </div>
 
-                  <div>
-                    <div className="text-xs opacity-70 mb-1">KPI style</div>
-                    <select value={opts.kpiStyle} onChange={(e) => setOpts((o) => ({ ...o, kpiStyle: e.target.value }))} className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3">
-                      <option value="minimal">Minimal</option>
-                      <option value="pill">Pills</option>
-                    </select>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <div className="text-xs opacity-70 mb-1">KPI style</div>
+                      <select value={opts.kpiStyle} onChange={(e) => setOpts((o) => ({ ...o, kpiStyle: e.target.value }))} className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3">
+                        <option value="minimal">Minimal</option>
+                        <option value="pill">Pills</option>
+                      </select>
+                    </div>
+                    <div>
+                      <div className="text-xs opacity-70 mb-1">KPI orientação</div>
+                      <select value={opts.kpiDir} onChange={(e) => setOpts((o) => ({ ...o, kpiDir: e.target.value }))} className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3">
+                        <option value="row">Horizontal</option>
+                        <option value="column">Vertical</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
 
@@ -1407,7 +1377,9 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 
         {/* Preview */}
         <div className="flex-1 p-6 overflow-auto">
-          {type === "hunt" ? <HuntOverlayPreview hunt={hunt} slots={slots} opts={opts} /> : <OpeningOverlayPreview hunt={hunt} slots={slots} opts={opts} />}
+          {type === "hunt"
+            ? <HuntOverlayPreview hunt={hunt} slots={slots} opts={opts} />
+            : <OpeningOverlayPreview hunt={hunt} slots={slots} opts={opts} />}
         </div>
       </div>
     </div>
@@ -1428,16 +1400,10 @@ function OverlayCard({ type, hunt, slots, opts, setOpts }) {
 
   const copyUrl = async () => {
     if (!url) return;
-    try {
-      await navigator.clipboard.writeText(url);
-    } catch {
-      alert("Não consegui copiar o URL.");
-    }
+    try { await navigator.clipboard.writeText(url); }
+    catch { alert("Não consegui copiar o URL."); }
   };
-  const openOverlay = () => {
-    if (!url) return;
-    window.open(url, "_blank", "noopener,noreferrer");
-  };
+  const openOverlay = () => { if (url) window.open(url, "_blank", "noopener,noreferrer"); };
 
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.03]">
@@ -1506,17 +1472,17 @@ function OverlayCard({ type, hunt, slots, opts, setOpts }) {
 }
 
 /* ───────────────────────── Redeem Drawer ───────────────────────── */
-function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart */ }) {
+function RedeemDrawer({ open, onClose, hunt, slots, onSaved }) {
   const { t } = useLang();
   const [idx, setIdx] = React.useState(0);
   const [busy, setBusy] = React.useState(false);
 
   React.useEffect(() => {
     if (!open) return;
-    const onEsc = (e) => e.key === "Escape" && askClose();
+    const onEsc = (e) => e.key === "Escape" && onClose && onClose();
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
-  }, [open]);
+  }, [open, onClose]);
 
   const PER_PAGE = 24;
   const [page, setPage] = React.useState(0);
@@ -1545,26 +1511,6 @@ function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart *
     }
   }, [payout, bet]);
 
-  const [toastMsg, setToastMsg] = React.useState("");
-  const [toastOpen, setToastOpen] = React.useState(false);
-  const hideTimer = React.useRef(null);
-  const removeTimer = React.useRef(null);
-  const showToast = React.useCallback((msg) => {
-    if (hideTimer.current) clearTimeout(hideTimer.current);
-    if (removeTimer.current) clearTimeout(removeTimer.current);
-    setToastMsg(msg);
-    setToastOpen(true);
-    hideTimer.current = setTimeout(() => {
-      setToastOpen(false);
-      removeTimer.current = setTimeout(() => setToastMsg(""), 320);
-    }, 1200);
-  }, []);
-  React.useEffect(() => () => { clearTimeout(hideTimer.current); clearTimeout(removeTimer.current); }, []);
-
-  const [confirmClose, setConfirmClose] = React.useState(false);
-  function askClose() { setConfirmClose(true); }
-  function closeNow() { setConfirmClose(false); onClose && onClose(); }
-
   async function handleSaveAndNext() {
     if (!s) return;
     try {
@@ -1579,7 +1525,7 @@ function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart *
       onSaved && onSaved();
 
       if (idx < slots.length - 1) setIdx((i) => i + 1);
-      else closeNow();
+      else onClose && onClose();
     } catch (e) {
       alert(e.message || "Falha ao guardar.");
     } finally {
@@ -1594,26 +1540,9 @@ function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart *
   const amountWonNow = sumPayoutsNow;
   const plNow = amountWonNow - startCost;
 
-  const remaining = slots.slice(idx + 1);
-  const sumRemainingBets = remaining.reduce((a, it) => a + toNum(it.bet_size), 0);
-  const requiredNet = Math.max(0, startCost - amountWonNow);
-  const avgRequiredX = sumRemainingBets > 0 ? requiredNet / sumRemainingBets : null;
-
-  const processedMultipliers = slots
-    .slice(0, idx + 1)
-    .map((it, i) => {
-      const b = toNum(i === idx ? bet : it.bet_size);
-      const p = toNum(i === idx ? payout : it.payout);
-      return b > 0 && Number.isFinite(p) ? p / b : null;
-    })
-    .filter((v) => v != null);
-
-  const currAvgX = processedMultipliers.length ? processedMultipliers.reduce((a, v) => a + v, 0) / processedMultipliers.length : null;
-  const cumulativeX = processedMultipliers.length ? processedMultipliers.reduce((a, v) => a + v, 0) : null;
-
   return (
     <div className="fixed inset-0 z-[80]">
-      <div className="absolute inset-0 bg-black/70" onClick={askClose} />
+      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
       <div className="absolute left-1/2 top-1/2 w-[96vw] max-w-6xl -translate-x-1/2 -translate-y-1/2">
         <div className="relative rounded-2xl border border-white/10 bg-zinc-950 text-white shadow-2xl p-4 md:p-6">
           <div className="flex items-center justify-between mb-4">
@@ -1621,25 +1550,9 @@ function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart *
               Start Redeeming —{" "}
               {s ? <span className="opacity-90">{s.name} <span className="opacity-60">({idx + 1}/{slots.length})</span></span> : "Sem slots"}
             </div>
-            <button type="button" onClick={askClose} className="p-2 rounded-lg hover:bg-white/10 transition" aria-label="Fechar">
+            <button type="button" onClick={onClose} className="p-2 rounded-lg hover:bg-white/10 transition" aria-label="Fechar">
               <X className="h-5 w-5" />
             </button>
-          </div>
-
-          <div className="grid md:grid-cols-6 gap-3 mb-5">
-            {[
-              [t("pl"), renderPL(plNow), plNow >= 0 ? "text-emerald-400" : "text-red-400"],
-              [t("amountWon"), fmtMoney(amountWonNow)],
-              [t("startCost"), fmtMoney(startCost)],
-              [t("avgReqX"), avgRequiredX != null ? avgRequiredX.toFixed(2) : t("none")],
-              [t("currAvgX"), currAvgX != null ? currAvgX.toFixed(2) : t("none")],
-              [t("cumulativeX"), cumulativeX != null ? `${cumulativeX.toFixed(2)}x` : t("none")],
-            ].map(([label, value, color], i) => (
-              <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-3">
-                <div className="text-[11px] opacity-70">{label}</div>
-                <div className={cn("font-semibold", numCls, color)}>{value}</div>
-              </div>
-            ))}
           </div>
 
           {s ? (
@@ -1662,9 +1575,9 @@ function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart *
                   </div>
                   <div className="text-xs opacity-70 truncate">{s.provider}</div>
                 </div>
-                <Button type="button" variant="outline" onClick={() => { try { navigator.clipboard.writeText(s.name || ""); } catch {} showToast(`${t("copied")} ${s.name}`); }} className="h-9" title={t("copySlot")}>
+                <Button type="button" variant="outline" onClick={() => { try { navigator.clipboard.writeText(s.name || ""); } catch {} }} className="h-9" title="Copy slot">
                   <CopyIcon className="h-4 w-4 mr-1" />
-                  {t("copySlot")}
+                  Copy
                 </Button>
               </div>
 
@@ -1686,9 +1599,7 @@ function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart *
           )}
 
           <div className="flex items-center justify-end gap-2 mb-4">
-            <Button type="button" variant="outline" onClick={askClose}>
-              {t("close")}
-            </Button>
+            <Button type="button" variant="outline" onClick={onClose}>{t("close")}</Button>
             <Button type="button" onClick={handleSaveAndNext} disabled={!s || busy}>
               {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ChevronRight className="h-4 w-4 mr-2" />}
               {t("saveContinue")}
@@ -1706,18 +1617,8 @@ function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart *
                     <button
                       key={it.id}
                       type="button"
-                      onClick={(e) => {
-                        if (e.ctrlKey) {
-                          try {
-                            navigator.clipboard.writeText(it.name || "");
-                          } catch {}
-                          showToast(`${t("copied")} ${it.name}`);
-                          return;
-                        }
-                        setIdx(i);
-                      }}
+                      onClick={() => setIdx(i)}
                       className={cn("relative rounded-xl overflow-hidden border transition", active ? "border-emerald-400 ring-2 ring-emerald-400/20" : "border-white/10 hover:border-white/20")}
-                      title={t("copyHint")}
                     >
                       <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">#{i + 1}</div>
                       {superB && <div className="absolute right-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-fuchsia-600/80">SUPER</div>}
@@ -1739,28 +1640,8 @@ function RedeemDrawer({ open, onClose, hunt, slots, onSaved /* baselineAtStart *
               )}
             </>
           )}
-
-          {/* Toast */}
-          {toastMsg && (
-            <div className={cn("pointer-events-none absolute right-4 bottom-4 transition-all", toastOpen ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2")}>
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs text-white shadow-lg backdrop-blur-sm">
-                <Check className="h-3.5 w-3.5" />
-                {toastMsg}
-              </div>
-            </div>
-          )}
         </div>
       </div>
-
-      <ConfirmDialog
-        open={confirmClose}
-        title={t("confirmCloseTitle")}
-        body={t("confirmCloseBody")}
-        confirmText={t("close")}
-        cancelText={t("cancel")}
-        onConfirm={closeNow}
-        onCancel={() => setConfirmClose(false)}
-      />
     </div>
   );
 }
@@ -1915,16 +1796,10 @@ export default function HuntDetail({ numberId }) {
   function goBack() { window.location.hash = "#/hunts"; }
 
   const [openRedeem, setOpenRedeem] = React.useState(false);
-  const [baselineAtStart, setBaselineAtStart] = React.useState(0);
   const [confirmStart, setConfirmStart] = React.useState(false);
 
   const openStart = () => setConfirmStart(true);
-  const confirmStartYes = () => {
-    setConfirmStart(false);
-    const base = slots.reduce((a, s) => a + (toNum(s.payout) || 0), 0);
-    setBaselineAtStart(base);
-    setOpenRedeem(true);
-  };
+  const confirmStartYes = () => { setConfirmStart(false); setOpenRedeem(true); };
 
   if (busy) {
     return <div className="max-w-7xl mx-auto px-4 py-10 text-sm opacity-70">A carregar…</div>;
@@ -2077,7 +1952,7 @@ export default function HuntDetail({ numberId }) {
       {/* Modais */}
       <AddBonusModal open={openAdd} onClose={() => setOpenAdd(false)} numberId={hunt.number_id} onAdded={refreshSlots} />
 
-      <RedeemDrawer open={openRedeem} onClose={() => setOpenRedeem(false)} hunt={hunt} slots={sortedSlots} onSaved={refreshSlots} baselineAtStart={baselineAtStart} />
+      <RedeemDrawer open={openRedeem} onClose={() => setOpenRedeem(false)} hunt={hunt} slots={sortedSlots} onSaved={refreshSlots} />
 
       <EditBonusModal open={editOpen} row={editRow} onClose={() => setEditOpen(false)} onSaved={refreshSlots} />
 
