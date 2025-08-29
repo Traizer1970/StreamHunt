@@ -884,114 +884,317 @@ function buildOpeningOverlayUrl(base, huntNumberId, opts) {
 }
 
 /* Preview Hunt */
-{/* KPIs */}
-<div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
-  <div className="text-sm font-medium">KPIs (Start • B/E • #Bonus)</div>
+function HuntOverlayPreview({ hunt, slots, opts }) {
+  const { t } = useLang();
 
-  <div className="grid grid-cols-2 gap-2">
-    <div>
-      <div className="text-xs opacity-70 mb-1">Posição</div>
-      <select
-        value={opts.kpiPos}
-        onChange={(e) => setOpts((o) => ({ ...o, kpiPos: e.target.value }))}
-        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-      >
-        <option value="left">Esquerda (lado dos cards)</option>
-        <option value="right">Direita (lado dos cards)</option>
-        <option value="top">Topo</option>
-        <option value="bottom">Fundo</option>
-        <option value="hidden">Ocultar</option>
-      </select>
-    </div>
-    <div>
-      <div className="text-xs opacity-70 mb-1">Orientação interna</div>
-      <select
-        value={opts.kpiDir}
-        onChange={(e) => setOpts((o) => ({ ...o, kpiDir: e.target.value }))}
-        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-      >
-        <option value="row">Horizontal</option>
-        <option value="column">Vertical</option>
-      </select>
-    </div>
-  </div>
+  // ─── valores para os KPIs ───
+  const start = Number(hunt?.start_cost) || slots.reduce((a, s) => a + toNum(s.bet_size), 0);
+  const won = slots.reduce((a, s) => a + toNum(s.payout), 0);
+  const beLeft = Math.max(0, start - won);
 
-  <div className="grid grid-cols-3 gap-2">
-    <div>
-      <div className="text-xs opacity-70 mb-1">Alinhamento</div>
-      <select
-        value={opts.kpiAlign}
-        onChange={(e) => setOpts((o) => ({ ...o, kpiAlign: e.target.value }))}
-        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-      >
-        <option value="left">Esquerda</option>
-        <option value="center">Centro</option>
-        <option value="right">Direita</option>
-      </select>
-    </div>
-    <div>
-      <div className="text-xs opacity-70 mb-1">Estilo</div>
-      <select
-        value={opts.kpiStyle}
-        onChange={(e) => setOpts((o) => ({ ...o, kpiStyle: e.target.value }))}
-        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-      >
-        <option value="pill">Pills (texto)</option>
-        <option value="circle">Círculos (emoji)</option>
-        <option value="emojiBox">Caixas (emoji)</option>
-      </select>
-    </div>
-    <div>
-      <div className="text-xs opacity-70 mb-1">Gap entre KPIs</div>
-      <Input
-        type="number"
-        value={opts.kpiGap}
-        onChange={(e) => setOpts((o) => ({ ...o, kpiGap: Number(e.target.value) || 0 }))}
-        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-      />
-    </div>
-  </div>
+  // ─── medidas / opções ───
+  const baseW = Number(opts.baseW || 560);
+  const baseH = Number(opts.baseH || 280);
+  const pad = Number(opts.pad || 0);
+  const showBox = opts.showBox !== false;
 
-  <div className="grid grid-cols-2 gap-2">
-    <div>
-      <div className="text-xs opacity-70 mb-1">Gap KPIs ↔ carrossel</div>
-      <Input
-        type="number"
-        value={opts.kpiCarouselGap}
-        onChange={(e) => setOpts((o) => ({ ...o, kpiCarouselGap: Number(e.target.value) || 0 }))}
-        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-      />
-    </div>
-  </div>
+  const layout = String(opts.layout || "carousel");
+  const visible = Math.max(1, Number(opts.visible || 3));
+  const autoScroll = !!opts.autoScroll;
+  const speedSec = Math.max(5, Math.min(180, Number(opts.scrollDur || 30)));
+  const gapCards = layout === "grid" ? 8 : 12;
 
-  {/* Emojis */}
-  <div className="grid grid-cols-3 gap-2">
-    <div>
-      <div className="text-xs opacity-70 mb-1">Emoji Start</div>
-      <Input
-        value={opts.kpiStartEmoji}
-        onChange={(e) => setOpts((o) => ({ ...o, kpiStartEmoji: e.target.value }))}
-        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-      />
+  const innerW = baseW;
+  const cardW =
+    layout === "carousel"
+      ? Math.max(140, Math.floor((innerW - 6 - (visible - 1) * gapCards) / visible))
+      : undefined;
+
+  // ─── helpers visuais ───
+  const Mini = ({ label, value }) => (
+    <div
+      className="px-2.5 py-1 rounded-md border text-[12px]"
+      style={{ borderColor: "rgba(255,255,255,.12)", background: "rgba(255,255,255,.06)" }}
+      title={label}
+    >
+      <span className="opacity-70 mr-1">{label}:</span>
+      <b className={numCls}>{value}</b>
     </div>
-    <div>
-      <div className="text-xs opacity-70 mb-1">Emoji B/E</div>
-      <Input
-        value={opts.kpiBEEmoji}
-        onChange={(e) => setOpts((o) => ({ ...o, kpiBEEmoji: e.target.value }))}
-        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-      />
+  );
+
+  const Pill = ({ label, value }) => (
+    <div
+      className="px-3 py-1.5 rounded-full border text-[12px]"
+      style={{ borderColor: "rgba(255,255,255,.15)", background: "rgba(255,255,255,.10)" }}
+      title={label}
+    >
+      {label}: <b className={numCls}>{value}</b>
     </div>
-    <div>
-      <div className="text-xs opacity-70 mb-1">Emoji #Bonus</div>
-      <Input
-        value={opts.kpiBonusEmoji}
-        onChange={(e) => setOpts((o) => ({ ...o, kpiBonusEmoji: e.target.value }))}
-        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-      />
+  );
+
+  const EmojiOnly = ({ emoji, label, styleVariant }) => (
+    <div
+      aria-label={label}
+      title={label}
+      className={cn(
+        "flex items-center justify-center border shadow",
+        styleVariant === "circle" ? "rounded-full h-11 w-11" : "rounded-xl h-11 w-11"
+      )}
+      style={{
+        borderColor: "rgba(255,255,255,.15)",
+        background: "rgba(255,255,255,.08)",
+        boxShadow: "0 6px 16px rgba(0,0,0,.35)",
+        fontSize: 18,
+      }}
+    >
+      <span style={{ lineHeight: 1 }}>{emoji}</span>
     </div>
-  </div>
-</div>
+  );
+
+  // ─── bloco KPIs (com os 3 itens) ───
+  const KPIsBlock = (
+    <div
+      className={cn(
+        "flex",
+        opts.kpiDir === "column" ? "flex-col" : "flex-row items-center",
+        // alinhamento
+        (opts.kpiDir === "row"   && opts.kpiAlign === "left"   && "justify-start") ||
+          (opts.kpiDir === "row" && opts.kpiAlign === "center" && "justify-center") ||
+          (opts.kpiDir === "row" && opts.kpiAlign === "right"  && "justify-end"),
+        (opts.kpiDir === "column" && opts.kpiAlign === "left"   && "items-start") ||
+          (opts.kpiDir === "column" && opts.kpiAlign === "center" && "items-center") ||
+          (opts.kpiDir === "column" && opts.kpiAlign === "right"  && "items-end")
+      )}
+      style={{ gap: Number(opts.kpiGap ?? 8) }}
+    >
+      {opts.kpiStyle === "pill" ? (
+        <>
+          <Pill label={t("kpiStart")} value={fmtMoney(start)} />
+          <Pill label={t("kpiBE")} value={fmtMoney(beLeft)} />
+          <Pill label={t("kpiBonus")} value={String(slots.length)} />
+        </>
+      ) : (
+        <>
+          <EmojiOnly emoji={opts.kpiStartEmoji || "💶"} label={`${t("kpiStart")} ${fmtMoney(start)}`} styleVariant={opts.kpiStyle === "circle" ? "circle" : "box"} />
+          <EmojiOnly emoji={opts.kpiBEEmoji || "⚖️"} label={`${t("kpiBE")} ${fmtMoney(beLeft)}`} styleVariant={opts.kpiStyle === "circle" ? "circle" : "box"} />
+          <EmojiOnly emoji={opts.kpiBonusEmoji || "🎁"} label={`${t("kpiBonus")} ${slots.length}`} styleVariant={opts.kpiStyle === "circle" ? "circle" : "box"} />
+        </>
+      )}
+    </div>
+  );
+
+  // ─── Card (mantém o teu visual anterior, com melhorias de SUPER glow) ───
+  function Card({ s, i, tall = false, width }) {
+    const superB = getIsSuper(s);
+    const showIdx = !!opts.showIdx;
+    const showBet = !!opts.showBet;
+    const showSuper = !!opts.showSuper && superB;
+    const showBetInBadge = showBet && (opts.betStyle === "chip" || !!opts.vInfo);
+
+    const h = tall ? Math.max(180, Math.round(baseH - 96 - pad)) : Math.max(120, Number(opts.cardH || 140));
+    const captionIsBar = opts.nameStyle === "bar";
+    const captionIsFloat = opts.nameStyle === "float";
+    const showName = opts.nameStyle !== "hidden";
+    const badgesVertical = !!opts.vInfo;
+    const infoRight = String(opts.infoPos || "left") === "right";
+
+    const glowColor = opts.superGlowColor || "#e879f9";
+    const glowAlpha = Math.max(0, Math.min(1, Number(opts.superGlowStrength ?? 0.6)));
+    const borderCol = hexToRgba(glowColor, 0.45 + glowAlpha * 0.35);
+    const shadowSoft = `0 0 ${18 + 30 * glowAlpha}px ${hexToRgba(glowColor, 0.35 * glowAlpha)}, 0 12px 28px rgba(0,0,0,.35)`;
+
+    return (
+      <div
+        className="relative rounded-xl overflow-hidden border"
+        style={{
+          height: h,
+          width,
+          borderColor: superB ? borderCol : "rgba(255,255,255,.10)",
+          boxShadow: superB ? shadowSoft : "0 12px 28px rgba(0,0,0,.35)",
+        }}
+        title={s?.name}
+      >
+        {opts.shine && (
+          <div
+            className="absolute inset-y-0 left-0 w-1/3 pointer-events-none"
+            style={{
+              background: "linear-gradient(90deg, transparent, rgba(255,255,255,.12), transparent)",
+              animation: "sweep 4.8s linear infinite",
+            }}
+          />
+        )}
+
+        {s?.thumbnail ? (
+          <img src={s.thumbnail} alt="" className="absolute inset-0 h-full w-full object-cover object-center" />
+        ) : (
+          <div className="absolute inset-0 bg-white/10" />
+        )}
+
+        {/* AURA SUPER */}
+        {superB && opts.superGlow && (
+          <>
+            <div
+              className="absolute -inset-1 rounded-xl pointer-events-none"
+              style={{ boxShadow: `0 0 ${22 + 40 * glowAlpha}px ${hexToRgba(glowColor, 0.5 * glowAlpha)}` }}
+            />
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background: `radial-gradient(60% 50% at 50% 40%, ${hexToRgba(glowColor, 0.28 * glowAlpha)} 0%, transparent 60%)`,
+              }}
+            />
+          </>
+        )}
+
+        {/* gradientes */}
+        <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/60 to-transparent pointer-events-none" />
+        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
+
+        {/* INFO GROUP (top) */}
+        <div
+          className={cn(
+            "absolute top-1.5 z-10",
+            infoRight ? "right-1.5" : "left-1.5",
+            badgesVertical ? "flex flex-col items-start gap-1" : "flex items-center gap-1"
+          )}
+          style={infoRight ? { alignItems: badgesVertical ? "flex-end" : "center", textAlign: "right" } : {}}
+        >
+          {showIdx && <div className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-black/70">#{i + 1}</div>}
+          {showBetInBadge && (
+            <div className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-white/85 text-black/90 shadow">
+              {fmtMoney(toNum(s.bet_size))}
+            </div>
+          )}
+        </div>
+
+        {/* SUPER TAG – lado oposto */}
+        {showSuper && (
+          <div
+            className={cn(
+              "absolute top-1.5 z-10 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide",
+              infoRight ? "left-1.5" : "right-1.5"
+            )}
+            style={{
+              background: hexToRgba(opts.superTagColor || "#e879f9", 0.95),
+              color: "#120614",
+              boxShadow: opts.superGlow ? `0 0 22px ${hexToRgba(glowColor, 0.6 * glowAlpha)}` : "none",
+            }}
+          >
+            SUPER
+          </div>
+        )}
+
+        {/* Caption (nome + bet inline) */}
+        {showName && (
+          <>
+            {captionIsBar ? (
+              <div className="absolute left-2 right-2 bottom-2">
+                <div
+                  className="px-2.5 py-1.5 rounded-lg border text-white shadow-[0_10px_30px_rgba(0,0,0,.45)] truncate"
+                  style={{ background: "rgba(0,0,0,.45)", borderColor: "rgba(255,255,255,.18)" }}
+                  title={s?.name || ""}
+                >
+                  <div className="font-semibold leading-tight truncate">{s?.name || "—"}</div>
+                  {opts.betStyle === "inline" && !!opts.showBet && (
+                    <div className="mt-0.5 text-[11px] opacity-85 flex items-center gap-1">
+                      <span className="h-[6px] w-[6px] rounded-full bg-white/70" />
+                      {s?.bet_size != null ? fmtMoney(toNum(s.bet_size)) : "—"}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : captionIsFloat ? (
+              <div className="absolute left-2 bottom-2 right-2 pointer-events-none">
+                <div className="font-semibold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,.8)] truncate">
+                  {s?.name || "—"}
+                </div>
+                {opts.betStyle === "inline" && !!opts.showBet && (
+                  <div className="text-[11px] text-white/85 drop-shadow-[0_2px_6px_rgba(0,0,0,.8)]">
+                    {s?.bet_size != null ? fmtMoney(toNum(s.bet_size)) : "—"}
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </>
+        )}
+      </div>
+    );
+  }
+
+  const bg1 = opts.panelBgStart || "#0b1020";
+  const bg2 = opts.panelBgEnd || "#111827";
+
+  // ─── conteúdo do carrossel ───
+  const Carousel = (
+    <>
+      {layout === "grid" ? (
+        <div className="px-3" style={{ display: "grid", gridTemplateColumns: "repeat(8,minmax(0,1fr))", gap: gapCards }}>
+          {slots.slice(0, 16).map((s, i) => (
+            <Card key={s.id} s={s} i={i} tall={false} />
+          ))}
+        </div>
+      ) : (
+        <div className="px-3">
+          <div className="overflow-hidden w-full">
+            <div
+              className={cn("flex")}
+              style={{
+                gap: gapCards,
+                width: "max-content",
+                animation:
+                  autoScroll && slots.length > visible
+                    ? `marquee ${Math.max(6, speedSec)}s linear infinite`
+                    : undefined,
+              }}
+            >
+              {[...slots, ...slots].map((s, i) => (
+                <Card key={`${s.id}-${i}`} s={s} i={i % slots.length} tall={true} width={cardW} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  // ─── layout final: KPIs à esquerda/direita/cima/baixo ───
+  return (
+    <div
+      className="rounded-xl overflow-hidden relative"
+      style={{
+        width: baseW,
+        height: baseH,
+        border: showBox ? "1px solid rgba(255,255,255,.10)" : "none",
+        background: showBox ? `linear-gradient(135deg, ${bg1} 0%, ${bg2} 100%)` : "transparent",
+        padding: pad,
+      }}
+    >
+      <style>{`
+        @keyframes sweep { 0% { transform: translateX(-120%);} 100% { transform: translateX(120%);} }
+        @keyframes marquee { 0% { transform: translateX(0%); } 100% { transform: translateX(-50%); } }
+      `}</style>
+
+      {opts.kpiPos === "hidden" ? (
+        // só carrossel
+        <div className="w-full h-full flex">{Carousel}</div>
+      ) : opts.kpiPos === "top" || opts.kpiPos === "bottom" ? (
+        // KPIs em cima/baixo (coluna)
+        <div className="w-full h-full flex flex-col" style={{ gap: Number(opts.kpiCarouselGap ?? 16) }}>
+          {opts.kpiPos === "top" && KPIsBlock}
+          <div className="flex-1 min-h-0">{Carousel}</div>
+          {opts.kpiPos === "bottom" && KPIsBlock}
+        </div>
+      ) : (
+        // KPIs à esquerda/direita (linha)
+        <div className="w-full h-full flex" style={{ gap: Number(opts.kpiCarouselGap ?? 16) }}>
+          {opts.kpiPos === "left" && <div className="shrink-0 flex items-center">{KPIsBlock}</div>}
+          <div className="flex-1 min-w-0">{Carousel}</div>
+          {opts.kpiPos === "right" && <div className="shrink-0 flex items-center">{KPIsBlock}</div>}
+        </div>
+      )}
+    </div>
+  );
+}
 
 
 
@@ -1468,8 +1671,8 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                 </div>
 
 {/* KPIs */}
-<div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
-  <div className="text-xs opacity-70">KPIs (Start • B/E • #Bonus)</div>
+<div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
+  <div className="text-sm font-medium">KPIs (Start • B/E • #Bonus)</div>
 
   <div className="grid grid-cols-2 gap-2">
     <div>
@@ -1479,65 +1682,102 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         onChange={(e) => setOpts((o) => ({ ...o, kpiPos: e.target.value }))}
         className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
       >
+        <option value="left">Esquerda (lado dos cards)</option>
+        <option value="right">Direita (lado dos cards)</option>
         <option value="top">Topo</option>
         <option value="bottom">Fundo</option>
-        <option value="left">Esquerda (lado)</option>
-        <option value="right">Direita (lado)</option>
         <option value="hidden">Ocultar</option>
       </select>
     </div>
-
     <div>
-      <div className="text-xs opacity-70 mb-1">
-        { (opts.kpiPos === "left" || opts.kpiPos === "right") ? "Alinhamento vertical" : "Alinhamento" }
-      </div>
+      <div className="text-xs opacity-70 mb-1">Orientação interna</div>
+      <select
+        value={opts.kpiDir}
+        onChange={(e) => setOpts((o) => ({ ...o, kpiDir: e.target.value }))}
+        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+      >
+        <option value="row">Horizontal</option>
+        <option value="column">Vertical</option>
+      </select>
+    </div>
+  </div>
+
+  <div className="grid grid-cols-3 gap-2">
+    <div>
+      <div className="text-xs opacity-70 mb-1">Alinhamento</div>
       <select
         value={opts.kpiAlign}
         onChange={(e) => setOpts((o) => ({ ...o, kpiAlign: e.target.value }))}
         className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
       >
-        { (opts.kpiPos === "left" || opts.kpiPos === "right") ? (
-          <>
-            <option value="top">Top</option>
-            <option value="center">Center</option>
-            <option value="bottom">Bottom</option>
-          </>
-        ) : (
-          <>
-            <option value="left">Left</option>
-            <option value="center">Center</option>
-            <option value="right">Right</option>
-          </>
-        )}
+        <option value="left">Esquerda</option>
+        <option value="center">Centro</option>
+        <option value="right">Direita</option>
       </select>
     </div>
-  </div>
-
-  <div className="grid grid-cols-2 gap-2">
     <div>
-      <div className="text-xs opacity-70 mb-1">KPI style</div>
+      <div className="text-xs opacity-70 mb-1">Estilo</div>
       <select
         value={opts.kpiStyle}
         onChange={(e) => setOpts((o) => ({ ...o, kpiStyle: e.target.value }))}
         className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
       >
-        <option value="minimal">Minimal</option>
-        <option value="pill">Pills</option>
+        <option value="pill">Pills (texto)</option>
+        <option value="circle">Círculos (emoji)</option>
+        <option value="emojiBox">Caixas (emoji)</option>
       </select>
     </div>
-    <div className="flex items-end">
-      <label className="flex items-center gap-2 text-sm w-full">
-        <input
-          type="checkbox"
-          checked={!!opts.showPL}
-          onChange={(e) => setOpts((o) => ({ ...o, showPL: !!e.target.checked }))}
-        />
-        Mostrar P/L
-      </label>
+    <div>
+      <div className="text-xs opacity-70 mb-1">Gap entre KPIs</div>
+      <Input
+        type="number"
+        value={opts.kpiGap}
+        onChange={(e) => setOpts((o) => ({ ...o, kpiGap: Number(e.target.value) || 0 }))}
+        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+      />
+    </div>
+  </div>
+
+  <div className="grid grid-cols-2 gap-2">
+    <div>
+      <div className="text-xs opacity-70 mb-1">Gap KPIs ↔ carrossel</div>
+      <Input
+        type="number"
+        value={opts.kpiCarouselGap}
+        onChange={(e) => setOpts((o) => ({ ...o, kpiCarouselGap: Number(e.target.value) || 0 }))}
+        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+      />
+    </div>
+  </div>
+
+  {/* Emojis */}
+  <div className="grid grid-cols-3 gap-2">
+    <div>
+      <div className="text-xs opacity-70 mb-1">Emoji Start</div>
+      <Input
+        value={opts.kpiStartEmoji}
+        onChange={(e) => setOpts((o) => ({ ...o, kpiStartEmoji: e.target.value }))}
+        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+      />
+    </div>
+    <div>
+      <div className="text-xs opacity-70 mb-1">Emoji B/E</div>
+      <Input
+        value={opts.kpiBEEmoji}
+        onChange={(e) => setOpts((o) => ({ ...o, kpiBEEmoji: e.target.value }))}
+        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+      />
+    </div>
+    <div>
+      <div className="text-xs opacity-70 mb-1">Emoji #Bonus</div>
+      <Input
+        value={opts.kpiBonusEmoji}
+        onChange={(e) => setOpts((o) => ({ ...o, kpiBonusEmoji: e.target.value }))}
+        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+      />
     </div>
   </div>
 </div>
-
 
                 {/* SUPER glow/tag */}
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
