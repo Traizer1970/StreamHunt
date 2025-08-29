@@ -665,16 +665,21 @@ const PANEL_PRESETS = {
 
 const DEFAULT_HUNT_OVERLAY = {
   design: "cards",
+
+  // Layout rolante
   layout: "carousel",
   visible: 3,
   autoScroll: true,
   scrollDur: 30,
   showBox: true,
 
+  // KPIs
   kpiStyle: "minimal",
   kpiPos: "top",
   kpiAlign: "center",
+  kpiDir: "row", // <-- NOVO: 'row' | 'column'
 
+  // Cards
   cardH: 160,
   nameStyle: "bar",
   betStyle: "inline",
@@ -682,17 +687,20 @@ const DEFAULT_HUNT_OVERLAY = {
   showBet: true,
   showSuper: true,
 
-  vInfo: false,            // infos na vertical
-  infoPos: "left",         // NOVO: 'left' | 'right'
+  // Infos (vertical #/bet)
+  vInfo: false,
 
+  // SUPER glow
   superGlow: true,
   superGlowColor: "#e879f9",
   superGlowStrength: 0.6,
   superTagColor: "#e879f9",
 
-  panelBgStart: PANEL_PRESETS.Neon[0],
-  panelBgEnd: PANEL_PRESETS.Neon[1],
+  // Cores painel
+  panelBgStart: "#0b1020",
+  panelBgEnd:   "#111827",
 
+  // genéricos
   pad: 16,
   align: "center",
   shine: true,
@@ -700,9 +708,8 @@ const DEFAULT_HUNT_OVERLAY = {
   thumbs: true,
   baseW: 560,
   baseH: 280,
-
-  layoutPreset: "Default",
 };
+
 
 const DEFAULT_OPENING_OVERLAY = {
   design: "default",
@@ -739,6 +746,7 @@ function buildHuntOverlayUrl(base, huntNumberId, opts) {
   qs.set("kpi", opts.kpiStyle === "minimal" ? "min" : "pill");
   qs.set("kpiPos", String(opts.kpiPos || "top"));
   qs.set("kpiAlign", String(opts.kpiAlign || "center"));
+  qs.set("kpiDir", String(opts.kpiDir || "row"));        // <-- NOVO
   qs.set("layout", String(opts.layout || "carousel"));
   qs.set("visible", String(opts.visible || 3));
   qs.set("speed", String(opts.scrollDur || 30));
@@ -749,24 +757,25 @@ function buildHuntOverlayUrl(base, huntNumberId, opts) {
   qs.set("showIdx", opts.showIdx ? "1" : "0");
   qs.set("showBet", opts.showBet ? "1" : "0");
   qs.set("showSuper", opts.showSuper ? "1" : "0");
+  if (opts.vInfo) qs.set("vinfo", "1");
 
-  // NOVO
-  qs.set("vinfo", opts.vInfo ? "1" : "0");
-  qs.set("ipos", String(opts.infoPos || "left"));
+  // SUPER glow + painel
   if (opts.superGlow === false) qs.set("sg", "0");
-  if (opts.superGlowColor) qs.set("sgc", String(opts.superGlowColor).replace("#", ""));
+  if (opts.superGlowColor) qs.set("sgc", String(opts.superGlowColor).replace("#",""));
   if (opts.superGlowStrength != null) qs.set("sgs", String(opts.superGlowStrength));
-  if (opts.superTagColor) qs.set("stc", String(opts.superTagColor).replace("#", ""));
-  if (opts.panelBgStart) qs.set("bg1", String(opts.panelBgStart).replace("#", ""));
-  if (opts.panelBgEnd) qs.set("bg2", String(opts.panelBgEnd).replace("#", ""));
+  if (opts.superTagColor) qs.set("stc", String(opts.superTagColor).replace("#",""));
+  if (opts.panelBgStart) qs.set("bg1", String(opts.panelBgStart).replace("#",""));
+  if (opts.panelBgEnd)   qs.set("bg2", String(opts.panelBgEnd).replace("#",""));
 
   qs.set("align", String(opts.align || "center"));
   qs.set("pad", String(opts.pad || 0));
   qs.set("bw", String(opts.baseW || 560));
   qs.set("bh", String(opts.baseH || 280));
   qs.set("cardH", String(opts.cardH || 140));
+
   return `${base}#/overlay/hunt/${huntNumberId}?${qs.toString()}`;
 }
+
 function buildOpeningOverlayUrl(base, huntNumberId, opts) {
   const qs = new URLSearchParams();
   qs.set("design", "opening");
@@ -798,6 +807,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
   const kpiStyle = String(opts.kpiStyle || "minimal");
   const kpiPos = String(opts.kpiPos || "top");
   const kpiAlign = String(opts.kpiAlign || "center");
+  const kpiDir     = String(opts.kpiDir || "row"); // <-- NOVO
   const autoScroll = !!opts.autoScroll;
   const speedSec = Math.max(5, Math.min(180, Number(opts.scrollDur || 30)));
 
@@ -821,14 +831,18 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     </div>
   );
 
-  const KPIs = (
+ const KPIs = (
     <div className="px-3 py-2">
       <div
         className={cn(
-          "flex items-center gap-2 text-[12px]",
-          kpiAlign === "left" && "justify-start",
-          kpiAlign === "center" && "justify-center",
-          kpiAlign === "right" && "justify-end"
+          "flex text-[12px] gap-2",
+          kpiDir === "column" ? "flex-col" : "flex-row items-center",
+          kpiDir === "row" && kpiAlign === "left" && "justify-start",
+          kpiDir === "row" && kpiAlign === "center" && "justify-center",
+          kpiDir === "row" && kpiAlign === "right" && "justify-end",
+          kpiDir === "column" && kpiAlign === "left" && "items-start",
+          kpiDir === "column" && kpiAlign === "center" && "items-center",
+          kpiDir === "column" && kpiAlign === "right" && "items-end"
         )}
       >
         {kpiStyle === "minimal" ? (
@@ -844,6 +858,17 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
             <Pill label={t("kpiBonus")} value={String(slots.length)} />
           </>
         )}
+        <div>
+  <div className="text-xs opacity-70 mb-1">KPI orientação</div>
+  <select
+    value={opts.kpiDir}
+    onChange={(e) => setOpts((o) => ({ ...o, kpiDir: e.target.value }))}
+    className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+  >
+    <option value="row">Horizontal</option>
+    <option value="column">Vertical</option>
+  </select>
+</div>
       </div>
     </div>
   );
