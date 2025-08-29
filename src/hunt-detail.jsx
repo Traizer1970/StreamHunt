@@ -733,17 +733,22 @@ function ConfirmDeleteModal({ open, slot, onCancel, onConfirm }) {
 
 /* ───────────────────────── Overlays — helpers & previews ───────────────────────── */
 
-// opções rápidas (guardadas só em memória/localStorage)
+// opções (localStorage)
 const DEFAULT_HUNT_OVERLAY = {
   design: "cards",
+  // NOVO — layout rolante com N visíveis
+  layout: "carousel",   // 'grid' | 'carousel'
+  visible: 3,           // quantos cards aparecem ao mesmo tempo
+  autoScroll: true,     // rolar automaticamente se houver mais
+  showBox: true,        // mostra/oculta a caixa por trás dos cards
 
-  // NOVO — controlo de apresentação
-  cardMode: "focus3",        // 'grid' | 'focus3'
-  kpiStyle: "minimal",     // 'minimal' | 'pill'
-  cardH: 140,              // altura em px no modo grid
+  // aparência dos cards e KPIs
+  kpiStyle: "minimal",  // 'minimal' | 'pill'
+  cardH: 160,
   showIdx: true,
   showBet: true,
 
+  // genéricos
   pad: 16,
   align: "center",
   shine: true,
@@ -783,11 +788,13 @@ function useLocalState(key, initial) {
 function buildHuntOverlayUrl(base, huntNumberId, opts) {
   const qs = new URLSearchParams();
   qs.set("design", "cards");
-  qs.set("kpi", opts.kpiStyle === "minimal" ? "min" : "pill"); // estilo KPI
-  qs.set("mode", opts.cardMode || "grid");                     // grid | focus3
+  qs.set("kpi", opts.kpiStyle === "minimal" ? "min" : "pill");
+  qs.set("layout", String(opts.layout || "carousel")); // grid | carousel
+  qs.set("visible", String(opts.visible || 3));
+  if (opts.autoScroll) qs.set("scroll", "1");
+  qs.set("box", opts.showBox ? "1" : "0");
   qs.set("showIdx", opts.showIdx ? "1" : "0");
   qs.set("showBet", opts.showBet ? "1" : "0");
-  if (opts.thumbs) qs.set("thumbs", "1");
   if (opts.shine) qs.set("shine", "1");
   if (opts.pulse) qs.set("pulse", "1");
   qs.set("align", String(opts.align || "center"));
@@ -809,10 +816,9 @@ function buildOpeningOverlayUrl(base, huntNumberId, opts) {
   return `${base}#/overlay/opening/${huntNumberId}?${qs.toString()}`;
 }
 
-/* Preview compacto estilo battle — AGORA com Focus 3 + KPI minimal */
+/* Preview compacto — com CAROUSEL (N visíveis), SUPER e KPI minimal */
 function HuntOverlayPreview({ hunt, slots, opts }) {
   const { t } = useLang();
-
   const start = Number(hunt?.start_cost) || slots.reduce((a, s) => a + toNum(s.bet_size), 0);
   const won = slots.reduce((a, s) => a + toNum(s.payout), 0);
   const beLeft = Math.max(0, start - won);
@@ -820,11 +826,21 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
   const baseW = Number(opts.baseW || 560);
   const baseH = Number(opts.baseH || 280);
   const pad   = Number(opts.pad || 0);
+  const showBox = opts.showBox !== false;
 
-  const mode = opts.cardMode || "grid";        // 'grid' | 'focus3'
-  const kpiStyle = opts.kpiStyle || "minimal"; // 'minimal' | 'pill'
+  const layout   = String(opts.layout || "carousel");     // 'grid' | 'carousel'
+  const visible  = Math.max(1, Number(opts.visible || 3));
+  const kpiStyle = String(opts.kpiStyle || "minimal");
+  const autoScroll = !!opts.autoScroll;
 
-  // pequenos “chips” minimalistas
+  const gap = layout === "grid" ? 8 : 12;
+  const innerW = baseW - 0; // container já controla padding via px-3
+  const cardW =
+    layout === "carousel"
+      ? Math.max(120, Math.floor((innerW - 6 - (visible - 1) * gap) / visible))
+      : undefined;
+
+  // chips
   const Mini = ({ label, value }) => (
     <div
       className="px-2.5 py-1 rounded-md border text-[12px]"
@@ -835,7 +851,6 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
       <b className={numCls}>{value}</b>
     </div>
   );
-
   const Pill = ({ label, value }) => (
     <div
       className="px-3 py-1.5 rounded-full border text-[12px]"
@@ -845,17 +860,17 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     </div>
   );
 
-  function Card({ s, i, tall = false }) {
+  function Card({ s, i, tall = false, width }) {
     const superB = getIsSuper(s);
     const showIdx = !!opts.showIdx;
     const showBet = !!opts.showBet;
-    const h = tall ? Math.max(180, Math.round(baseH - 96 - pad)) : Math.max(80, Number(opts.cardH || 140));
-
+    const h = tall ? Math.max(180, Math.round(baseH - 96 - pad)) : Math.max(120, Number(opts.cardH || 140));
     return (
       <div
         className="relative rounded-xl overflow-hidden border"
         style={{
           height: h,
+          width,
           borderColor: superB ? "rgba(232,121,249,.55)" : "rgba(255,255,255,.10)",
           boxShadow: superB ? "0 0 0 3px rgba(232,121,249,.18), 0 14px 36px rgba(0,0,0,.45)" : "0 12px 28px rgba(0,0,0,.35)"
         }}
@@ -870,13 +885,12 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
             }}
           />
         )}
-
         {s?.thumbnail ? (
           <img src={s.thumbnail} alt="" className="absolute inset-0 h-full w-full object-cover object-center" />
         ) : (
           <div className="absolute inset-0 bg-white/10" />
         )}
-
+        {/* gradientes top/bot */}
         <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/60 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 to-transparent" />
 
@@ -913,18 +927,23 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     );
   }
 
+  // animação para o carrossel
+  const dur = Math.max(10, Math.min(60, slots.length * 3)); // segundos
   return (
     <div
-      className="rounded-xl border overflow-hidden relative"
+      className="rounded-xl overflow-hidden relative"
       style={{
         width: baseW,
         height: baseH,
-        background: "linear-gradient(135deg, rgba(14,22,42,1) 0%, rgba(28,26,49,1) 100%)",
-        borderColor: "rgba(255,255,255,.10)"
+        border: showBox ? "1px solid rgba(255,255,255,.10)" : "none",
+        background: showBox
+          ? "linear-gradient(135deg, rgba(14,22,42,1) 0%, rgba(28,26,49,1) 100%)"
+          : "transparent",
       }}
     >
       <style>{`
         @keyframes sweep { 0% { transform: translateX(-120%);} 100% { transform: translateX(120%);} }
+        @keyframes marquee { 0% { transform: translateX(0%); } 100% { transform: translateX(-50%); } }
       `}</style>
 
       {/* Topo KPIs */}
@@ -933,7 +952,6 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
           <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10">
             {hunt?.title || "Hunt"}
           </div>
-
           <div className="flex items-center gap-2">
             {kpiStyle === "minimal" ? (
               <>
@@ -953,17 +971,30 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
       </div>
 
       {/* LISTAGEM */}
-      {mode !== "focus3" ? (
-        <div className="px-3" style={{ display: "grid", gridTemplateColumns: "repeat(8,minmax(0,1fr))", gap: 8 }}>
+      {layout === "grid" ? (
+        <div className="px-3" style={{ display: "grid", gridTemplateColumns: "repeat(8,minmax(0,1fr))", gap }}>
           {slots.slice(0, 16).map((s, i) => (
             <Card key={s.id} s={s} i={i} tall={false} />
           ))}
         </div>
       ) : (
-        <div className="px-3" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: 12 }}>
-          {slots.slice(0, 3).map((s, i) => (
-            <Card key={s.id} s={s} i={i} tall={true} />
-          ))}
+        <div className="px-3">
+          {/* viewport */}
+          <div className="overflow-hidden w-full">
+            {/* track duplicada para loop infinito */}
+            <div
+              className="flex"
+              style={{
+                gap,
+                width: "max-content",
+                animation: autoScroll && slots.length > visible ? `marquee ${dur}s linear infinite` : undefined,
+              }}
+            >
+              {[...slots, ...slots].map((s, i) => (
+                <Card key={`${s.id}-${i}`} s={s} i={i % slots.length} tall={true} width={cardW} />
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
@@ -1040,6 +1071,7 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
   );
 }
 
+/* ───────────────────────── Designer (com controlos) ───────────────────────── */
 function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
   if (!open) return null;
 
@@ -1063,12 +1095,11 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         </div>
       </div>
 
-      {/* Body (flex) */}
+      {/* Body */}
       <div className="absolute inset-x-0 top-14 bottom-0 md:flex">
         {/* Sidebar */}
-        <div className="border-r border-white/10 bg-zinc-950/70 overflow-auto w-full md:w-96">
+        <div className="border-r border-white/10 bg-zinc-950/70 overflow-auto w-full md:w-[380px]">
           <div className="p-4 space-y-4">
-            {/* Canvas / OBS */}
             <div className="rounded-xl border border-white/10 bg-white/5 p-3">
               <div className="text-xs opacity-70 mb-1">Canvas / OBS</div>
               <div className="grid grid-cols-2 gap-2">
@@ -1149,22 +1180,24 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
               </div>
             </div>
 
-            {/* ----- CONTROLOS ESPECÍFICOS DO HUNT (o que pediste) ----- */}
+            {/* ----- CONTROLOS HUNT ----- */}
             {type === "hunt" && (
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
-                <div className="text-xs opacity-70">Cards</div>
-                <select
-                  value={opts.cardMode}
-                  onChange={(e) =>
-                    setOpts((o) => ({ ...o, cardMode: e.target.value }))
-                  }
-                  className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-                >
-                  <option value="grid">Grid (até 16)</option>
-                  <option value="focus3">Focus 3 (apenas 3 grandes)</option>
-                </select>
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
+                <div>
+                  <div className="text-xs opacity-70 mb-1">Cards</div>
+                  <select
+                    value={opts.layout}
+                    onChange={(e) =>
+                      setOpts((o) => ({ ...o, layout: e.target.value }))
+                    }
+                    className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+                  >
+                    <option value="carousel">Rolante (N visíveis)</option>
+                    <option value="grid">Grid (até 16)</option>
+                  </select>
+                </div>
 
-                <div className="grid grid-cols-2 gap-2 mt-2">
+                <div className="grid grid-cols-2 gap-2">
                   <div>
                     <div className="text-xs opacity-70 mb-1">KPI style</div>
                     <select
@@ -1178,6 +1211,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                       <option value="pill">Pills</option>
                     </select>
                   </div>
+
                   <div>
                     <div className="text-xs opacity-70 mb-1">Card height (px)</div>
                     <Input
@@ -1194,7 +1228,38 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-sm mt-2">
+                {opts.layout === "carousel" && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <div className="text-xs opacity-70 mb-1">Visíveis</div>
+                      <Input
+                        type="number"
+                        value={opts.visible}
+                        onChange={(e) =>
+                          setOpts((o) => ({
+                            ...o,
+                            visible: Math.max(1, Number(e.target.value) || 3),
+                          }))
+                        }
+                        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <label className="flex items-center gap-2 text-sm w-full">
+                        <input
+                          type="checkbox"
+                          checked={!!opts.autoScroll}
+                          onChange={(e) =>
+                            setOpts((o) => ({ ...o, autoScroll: !!e.target.checked }))
+                          }
+                        />
+                        Auto-scroll
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-2 text-sm">
                   <label className="flex items-center gap-2">
                     <input
                       type="checkbox"
@@ -1217,21 +1282,34 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                   </label>
                 </div>
 
+                <div className="grid grid-cols-1 gap-2 text-sm">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={!!opts.showBox}
+                      onChange={(e) =>
+                        setOpts((o) => ({ ...o, showBox: !!e.target.checked }))
+                      }
+                    />
+                    Mostrar caixa (box) por trás dos cards
+                  </label>
+                </div>
+
                 <div className="text-[11px] opacity-60">
-                  No <b>Focus 3</b> os cards ocupam grande parte da altura (destaque
-                  ao “SUPER”), e os KPIs ficam no estilo escolhido acima.
+                  Em <b>Rolante</b>, aparecem apenas <b>N</b> cards; se existirem mais
+                  slots, a faixa desloca-se automaticamente para os mostrar.
                 </div>
               </div>
             )}
 
             <div className="text-[11px] opacity-60">
-              Dica: em OBS usa sempre o mesmo <b>Width/Height</b> do browser source
-              para evitar cortes.
+              Dica: em OBS, usa sempre o mesmo <b>Width/Height</b> do browser
+              source para evitar cortes.
             </div>
           </div>
         </div>
 
-        {/* Preview / direita */}
+        {/* Preview */}
         <div className="flex-1 p-6 overflow-auto">
           {type === "hunt" ? (
             <HuntOverlayPreview hunt={hunt} slots={slots} opts={opts} />
@@ -1244,8 +1322,9 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
   );
 }
 
+/* ───────────────────────── OverlayCard (widget compacto sem controlos avançados) ───────────────────────── */
 function OverlayCard({
-  type, // "hunt" | "opening"
+  type,
   hunt,
   slots,
   opts,
@@ -1257,7 +1336,10 @@ function OverlayCard({
 
   const base = React.useMemo(
     () =>
-      `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, ""),
+      `${window.location.origin}${window.location.pathname}`.replace(
+        /\/+$/,
+        ""
+      ),
     []
   );
   const url = React.useMemo(() => {
@@ -1275,11 +1357,13 @@ function OverlayCard({
       alert("Não consegui copiar o URL.");
     }
   };
-  const openOverlay = () => url && window.open(url, "_blank", "noopener,noreferrer");
+  const openOverlay = () => {
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
 
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.03]">
-      {/* Cabeçalho (abre/fecha) */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -1292,20 +1376,23 @@ function OverlayCard({
           {type === "hunt" ? t("overlayHunt") : t("overlayOpening")}
         </div>
         <ChevronDown
-          className={cn("h-4 w-4 transition", open ? "rotate-180 opacity-100" : "opacity-70")}
+          className={cn(
+            "h-4 w-4 transition",
+            open ? "rotate-180 opacity-100" : "opacity-70"
+          )}
         />
       </button>
 
-      {/* Conteúdo */}
       {open && (
         <div className="px-3 pb-3 space-y-3">
-          {/* Mantemos apenas controls rápidos genéricos */}
           <div className="grid md:grid-cols-3 gap-2">
             <div>
               <div className="text-xs opacity-70 mb-1">{t("preset")}</div>
               <select
                 value={opts.design}
-                onChange={(e) => setOpts((o) => ({ ...o, design: e.target.value }))}
+                onChange={(e) =>
+                  setOpts((o) => ({ ...o, design: e.target.value }))
+                }
                 className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
               >
                 {type === "hunt" ? (
@@ -1323,7 +1410,9 @@ function OverlayCard({
               <Input
                 type="number"
                 value={opts.pad}
-                onChange={(e) => setOpts((o) => ({ ...o, pad: Number(e.target.value) || 0 }))}
+                onChange={(e) =>
+                  setOpts((o) => ({ ...o, pad: Number(e.target.value) || 0 }))
+                }
                 className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
               />
             </div>
@@ -1331,7 +1420,9 @@ function OverlayCard({
               <div className="text-xs opacity-70 mb-1">{t("align")}</div>
               <select
                 value={opts.align}
-                onChange={(e) => setOpts((o) => ({ ...o, align: e.target.value }))}
+                onChange={(e) =>
+                  setOpts((o) => ({ ...o, align: e.target.value }))
+                }
                 className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
               >
                 <option value="left">{t("left")}</option>
@@ -1341,13 +1432,17 @@ function OverlayCard({
             </div>
           </div>
 
-          {/* Ações */}
           <div className="flex items-center gap-2">
             <Button type="button" className="h-9" onClick={copyUrl}>
               <CopyIcon className="h-4 w-4 mr-2" />
               {t("copyUrl")}
             </Button>
-            <Button type="button" variant="outline" className="h-9" onClick={openOverlay}>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9"
+              onClick={openOverlay}
+            >
               <ExternalLink className="h-4 w-4 mr-2" />
               {t("openLink")}
             </Button>
@@ -1362,7 +1457,6 @@ function OverlayCard({
             </Button>
           </div>
 
-          {/* Preview ao vivo */}
           <div className="overflow-auto">
             {type === "hunt" ? (
               <HuntOverlayPreview hunt={hunt} slots={slots} opts={opts} />
@@ -1371,7 +1465,6 @@ function OverlayCard({
             )}
           </div>
 
-          {/* Designer modal (agora recebe type/hunt/slots para preview) */}
           <Designer
             open={openDesigner}
             onClose={() => setOpenDesigner(false)}
@@ -1388,7 +1481,7 @@ function OverlayCard({
   );
 }
 
-/* ───────────────────────── Redeem Drawer ───────────────────────── */
+/* ───────────────────────── Redeem Drawer (sem alterações relevantes) ───────────────────────── */
 function RedeemDrawer({
   open,
   onClose,
@@ -1400,7 +1493,6 @@ function RedeemDrawer({
   const [idx, setIdx] = React.useState(0);
   const [busy, setBusy] = React.useState(false);
 
-  // ESC fecha (fix)
   React.useEffect(() => {
     if (!open) return;
     const onEsc = (e) => e.key === "Escape" && askClose();
@@ -1408,7 +1500,6 @@ function RedeemDrawer({
     return () => window.removeEventListener("keydown", onEsc);
   }, [open]);
 
-  // paginação thumbs: 24 por página
   const PER_PAGE = 24;
   const [page, setPage] = React.useState(0);
   React.useEffect(() => setPage(Math.floor(idx / PER_PAGE)), [idx]);
@@ -1560,22 +1651,12 @@ function RedeemDrawer({
 
           <div className="grid md:grid-cols-6 gap-3 mb-5">
             {[
-              [
-                t("pl"),
-                renderPL(plNow),
-                plNow >= 0 ? "text-emerald-400" : "text-red-400",
-              ],
+              [t("pl"), renderPL(plNow), plNow >= 0 ? "text-emerald-400" : "text-red-400"],
               [t("amountWon"), fmtMoney(amountWonNow)],
               [t("startCost"), fmtMoney(startCost)],
-              [
-                t("avgReqX"),
-                avgRequiredX != null ? avgRequiredX.toFixed(2) : t("none"),
-              ],
+              [t("avgReqX"), avgRequiredX != null ? avgRequiredX.toFixed(2) : t("none")],
               [t("currAvgX"), currAvgX != null ? currAvgX.toFixed(2) : t("none")],
-              [
-                t("cumulativeX"),
-                cumulativeX != null ? `${cumulativeX.toFixed(2)}x` : t("none"),
-              ],
+              [t("cumulativeX"), cumulativeX != null ? `${cumulativeX.toFixed(2)}x` : t("none")],
             ].map(([label, value, color], i) => (
               <div key={i} className="rounded-xl border border-white/10 bg-white/5 p-3">
                 <div className="text-[11px] opacity-70">{label}</div>
@@ -1672,9 +1753,7 @@ function RedeemDrawer({
               </div>
             </div>
           ) : (
-            <div className="opacity-70 text-sm mb-6">
-              Ainda sem slots neste hunt.
-            </div>
+            <div className="opacity-70 text-sm mb-6">Ainda sem slots neste hunt.</div>
           )}
 
           <div className="flex items-center justify-end gap-2 mb-4">
@@ -1773,6 +1852,7 @@ function RedeemDrawer({
             </>
           )}
 
+          {/* Toast */}
           {toastMsg && (
             <div
               className={cn(
@@ -1839,7 +1919,7 @@ export default function HuntDetail({ numberId }) {
 
   const [sortBy, setSortBy] = React.useState({ key: "order", dir: 1 });
 
-  // overlays – estados guardados localmente (compacto e não ocupa o ecrã todo)
+  // overlays – estados guardados localmente
   const [huntOpts, setHuntOpts] = useLocalState(
     "overlay.hunt.opts",
     DEFAULT_HUNT_OVERLAY
@@ -2033,14 +2113,10 @@ export default function HuntDetail({ numberId }) {
         </div>
       </div>
 
-      {/* KPIs topo — mais compacto */}
+      {/* KPIs topo */}
       <div className="grid md:grid-cols-4 gap-2 mb-3">
         {[
-          [
-            "Profit/Loss +/-",
-            renderPL(kpis.pl),
-            kpis.pl >= 0 ? "text-emerald-400" : "text-red-400",
-          ],
+          ["Profit/Loss +/-", renderPL(kpis.pl), kpis.pl >= 0 ? "text-emerald-400" : "text-red-400"],
           ["Bonus Count", String(kpis.bonusCount), ""],
           [t("startCost"), fmtMoney(kpis.startCost), ""],
           [t("amountWon"), fmtMoney(kpis.amountWon), ""],
@@ -2049,9 +2125,7 @@ export default function HuntDetail({ numberId }) {
             key={i}
             className={cn(
               "rounded-xl border p-3",
-              isDark
-                ? "border-white/10 bg-white/5"
-                : "border-zinc-200 bg-white"
+              isDark ? "border-white/10 bg-white/5" : "border-zinc-200 bg-white"
             )}
           >
             <div
@@ -2114,7 +2188,7 @@ export default function HuntDetail({ numberId }) {
         </div>
       </div>
 
-      {/* Widget compacto (discreto) com 2 overlays */}
+      {/* Widget compacto com os 2 overlays */}
       <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 mb-4">
         <div className="text-sm font-medium mb-2">{t("overlays")}</div>
         <div className="grid lg:grid-cols-2 gap-3">
@@ -2142,7 +2216,6 @@ export default function HuntDetail({ numberId }) {
           isDark ? "border-white/10" : "border-zinc-200"
         )}
       >
-        {/* Header */}
         <div
           className={cn(
             "grid grid-cols-12 items-center px-4 py-3 text-xs font-semibold",
@@ -2212,31 +2285,14 @@ export default function HuntDetail({ numberId }) {
               </div>
 
               {/* Colunas numéricas */}
-              <div
-                className={cn(
-                  "col-span-1 text-center flex items-center justify-center",
-                  numCls
-                )}
-              >
+              <div className={cn("col-span-1 text-center flex items-center justify-center", numCls)}>
                 {s.bet_size ?? "—"}
               </div>
-              <div
-                className={cn(
-                  "col-span-2 text-center flex items-center justify-center",
-                  numCls
-                )}
-              >
+              <div className={cn("col-span-2 text-center flex items-center justify-center", numCls)}>
                 {s.payout != null ? fmtMoney(s.payout) : "—"}
               </div>
-              <div
-                className={cn(
-                  "col-span-1 text-center flex items-center justify-center",
-                  numCls
-                )}
-              >
-                {s.multiplier != null
-                  ? Number(s.multiplier).toFixed(2)
-                  : "—"}
+              <div className={cn("col-span-1 text-center flex items-center justify-center", numCls)}>
+                {s.multiplier != null ? Number(s.multiplier).toFixed(2) : "—"}
               </div>
 
               {/* Ações */}
