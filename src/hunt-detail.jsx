@@ -1912,7 +1912,7 @@ function AddBonusModal({ open, onClose, numberId, onAdded }) {
                 <Search className="h-4 w-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-white/60" />
               </div>
 
-              <div className="max-h-[320px] overflow-auto rounded-xl border border-white/10 bg-zinc-900">
+              <div className="max-h[320px] max-h-[320px] overflow-auto rounded-xl border border-white/10 bg-zinc-900">
                 {busy && (
                   <div className="px-3 py-3 text-sm flex items-center gap-2 opacity-80">
                     <Loader2 className="h-4 w-4 animate-spin" />
