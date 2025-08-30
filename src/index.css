@@ -1,17 +1,29 @@
 @import "tailwindcss";
 
-/* === Scrollbar unificada (WebKit + Firefox) === */
 :root{
-  /* escolhe aqui a cor */
   --sb-track: rgba(255,255,255,.06);   /* trilho */
   --sb-thumb: rgba(255,255,255,.28);   /* polegar */
+  --sb-thumb-hover: rgba(255,255,255,.45);
+}
+
+/* Tema claro */
+[data-theme="light"]{
+  --sb-track: rgba(0,0,0,.06);
+  --sb-thumb: rgba(0,0,0,.28);
+  --sb-thumb-hover: rgba(0,0,0,.45);
+}
+
+/* Tema escuro */
+[data-theme="dark"]{
+  --sb-track: rgba(255,255,255,.06);
+  --sb-thumb: rgba(255,255,255,.28);
   --sb-thumb-hover: rgba(255,255,255,.45);
 }
 
 /* Firefox */
 html, body, * {
   scrollbar-width: thin;
-  scrollbar-color: var(--sb-thumb) transparent;
+  scrollbar-color: var(--sb-thumb) var(--sb-track);
 }
 
 /* WebKit / Chromium */
@@ -28,30 +40,12 @@ html, body, * {
   background-color: var(--sb-thumb);
   border-radius: 9999px;
   border: 3px solid transparent;
-  background-clip: content-box; /* dá “almofada” */
+  background-clip: content-box; /* “almofada” */
 }
 *::-webkit-scrollbar-thumb:hover{
   background-color: var(--sb-thumb-hover);
 }
 *::-webkit-scrollbar-corner{ background: transparent; }
-/* Firefox */
-* { scrollbar-width: thin; scrollbar-color: #334155 rgba(255,255,255,0.06); }
 
-/* Chrome/Edge/Safari */
-:root {
-  --sb-track: rgba(255,255,255,0.06); /* trilho igual para todos os contêineres */
-  --sb-thumb: #334155;                /* Slate-700 */
-  --sb-thumb-hover: #475569;          /* Slate-600 */
-}
-
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: var(--sb-track); }
-::-webkit-scrollbar-thumb {
-  background: var(--sb-thumb);
-  border-radius: 999px;
-  border: 2px solid var(--sb-track);
-}
-::-webkit-scrollbar-thumb:hover { background: var(--sb-thumb-hover); }
-
-/* evita “salto” quando a barra aparece/some */
+/* Evita “salto” do layout quando aparece a barra */
 html { scrollbar-gutter: stable both-edges; }

@@ -356,34 +356,34 @@ function QuickStats({ stats }) {
 function BareModal({ open, onClose, children }) {
   const { isDark } = useTheme();
 
-React.useEffect(() => {
-  const html = document.documentElement;
-  const body = document.body;
-  const sbw = window.innerWidth - html.clientWidth;
+  useEffect(() => {
+    if (!open) return; // só aplica quando estiver aberto
+    const html = document.documentElement;
+    const body = document.body;
+    const sbw = window.innerWidth - html.clientWidth;
 
-  const prev = {
-    htmlBg: html.style.background,
-    bodyBg: body.style.background,
-    bodyMargin: body.style.margin,
-    overflow: body.style.overflow,
-    marginRight: body.style.marginRight,
-  };
+    const prev = {
+      htmlBg: html.style.background,
+      bodyBg: body.style.background,
+      bodyMargin: body.style.margin,
+      overflow: body.style.overflow,
+      marginRight: body.style.marginRight,
+    };
 
-  html.style.background = "transparent";
-  body.style.background = "transparent";
-  body.style.margin = "0";
-  body.style.overflow = "hidden";
-  if (sbw > 0) body.style.marginRight = `${sbw}px`;
+    html.style.background = "transparent";
+    body.style.background = "transparent";
+    body.style.margin = "0";
+    body.style.overflow = "hidden";
+    if (sbw > 0) body.style.marginRight = `${sbw}px`;
 
-  return () => {
-    html.style.background = prev.htmlBg;
-    body.style.background = prev.bodyBg;
-    body.style.margin = prev.bodyMargin;
-    body.style.overflow = prev.overflow;
-    body.style.marginRight = prev.marginRight;
-  };
-}, []);
-
+    return () => {
+      html.style.background = prev.htmlBg;
+      body.style.background = prev.bodyBg;
+      body.style.margin = prev.bodyMargin;
+      body.style.overflow = prev.overflow;
+      body.style.marginRight = prev.marginRight;
+    };
+  }, [open]);
 
   if (!open) return null;
   return (
@@ -498,6 +498,11 @@ const UserMenu = ({ onGoDashboard, onGoSettings, onLogout }) => {
 const Shell = ({ route, navigate, children }) => {
   const [isDark, setIsDark] = useState(true);
   const toggle = () => setIsDark((v) => !v);
+
+  // >>> mantém o atributo no <html> para CSS global (scrollbar, etc.)
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
+  }, [isDark]);
 
   // Auth modal
   const [showAuth, setShowAuth] = useState(false);
