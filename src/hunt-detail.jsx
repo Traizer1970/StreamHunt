@@ -1557,7 +1557,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                   </div>
                 </div>
 
-                {/* SUPER glow/tag */}
+       {/* SUPER glow/tag */}
 <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
   <div className="text-sm font-medium">Color presets</div>
 
@@ -1726,7 +1726,6 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
     </div>
   </div>
 </div>
-
 
                 {/* Panel/box presets */}
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
