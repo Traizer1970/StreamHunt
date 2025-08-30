@@ -594,37 +594,39 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
   }
 
   // KPIs verticais (lado) — fora dos cards, à direita/esquerda, centrados ao painel
-  function KPIsSide() {
-    return (
-      <div
-        className="absolute z-20"
-        style={{
-          top: "50%",
-          transform: "translateY(-50%)",
-          left: kpiSide === "left" ? kpiSideSpace : undefined,
-          right: kpiSide === "right" ? kpiSideSpace : undefined,
-          display: "flex",
-          flexDirection: "column",
-          gap: kpiGap,
-        }}
-      >
-        {items.map(({ key, value, Icon, label }) =>
-          kpiShape === "circle" ? (
-            <div key={key} className="rounded-full border border-white/15 bg-white/10 text-[12px] flex items-center justify-center shadow-lg"
-                 style={{ width: circleD, height: circleD }}>
-              {showIcons ? <Icon className="w-[60%] h-[60%]" /> : <span className={numCls}>{value}</span>}
-            </div>
-          ) : (
-            <div key={key} className={cn("border border-white/15 bg-white/10 px-3", kpiShape === "pill" ? "rounded-full" : "rounded-lg")}
-                 style={{ height: kpiH, display: "inline-flex", alignItems: "center", gap: 6 }}>
-              {kpiShowLabels && <span className="opacity-70 text-[12px]">{label}:</span>}
-              <b className={cn(numCls, "text-[12px]")}>{value}</b>
-            </div>
-          )
-        )}
-      </div>
-    );
-  }
+function KPIsSide() {
+  return (
+    <div
+      className="absolute z-20"
+      style={{
+        top: "50%",
+        transform: "translateY(-50%)",   // centro vertical do painel
+        left:  kpiSide === "left"  ? kpiSideSpace : undefined,
+        right: kpiSide === "right" ? kpiSideSpace : undefined,
+        display: "flex",
+        flexDirection: "column",
+        gap: kpiGap,
+      }}
+    >
+      {items.map(({ key, value, Icon, label }) =>
+        kpiShape === "circle" ? (
+          <div key={key}
+            className="rounded-full border border-white/15 bg-white/10 text-[12px] flex items-center justify-center shadow-lg"
+            style={{ width: circleD, height: circleD }}>
+            {showIcons ? <Icon className="w-[60%] h-[60%]" /> : <span className={numCls}>{value}</span>}
+          </div>
+        ) : (
+          <div key={key}
+            className={cn("border border-white/15 bg-white/10 px-3", kpiShape === "pill" ? "rounded-full" : "rounded-lg")}
+            style={{ height: kpiH, display: "inline-flex", alignItems: "center", gap: 6 }}>
+            {kpiShowLabels && <span className="opacity-70 text-[12px]">{label}:</span>}
+            <b className={cn(numCls, "text-[12px]")}>{value}</b>
+          </div>
+        )
+      )}
+    </div>
+  );
+}
 
   // ➜ largura dos cards (NÃO reduzimos por causa da reserva lateral)
   const innerW = baseW;
@@ -649,31 +651,50 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
       {kpiPos === "top" && <KPIsInline />}
       {kpiPos === "side" && <KPIsSide />}
 
-      {layout === "grid" ? (
-        <div className="px-3" style={{ display: "grid", gridTemplateColumns: "repeat(8,minmax(0,1fr))", gap: gapCards }}>
-          {slots.slice(0, 16).map((s, i) => <Card key={s.id} s={s} i={i} width="100%" />)}
-        </div>
-      ) : (
-        <div className="px-3">
-          <div className="overflow-hidden w-full">
-            <div
-              className="flex"
-              style={{
-                gap: gapCards,
-                width: "max-content",
-                // afastamento para NÃO sobrepor: empurramos os cards para longe dos KPIs
-                paddingLeft:  kpiPos === "side" && kpiSide === "left"  ? reserveSide : 0,
-                paddingRight: kpiPos === "side" && kpiSide === "right" ? reserveSide : 0,
-                animation: autoScroll && slots.length > visible ? `marquee ${speedSec}s linear infinite` : undefined,
-              }}
-            >
-              {[...slots, ...slots].map((s, i) => (
-                <Card key={`${s.id}-${i}`} s={s} i={i % slots.length} width={visibleW} />
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+{/* CARDS */}
+{layout === "grid" ? (
+  // wrapper com h-full + flex + items-center -> centra a grelha verticalmente
+  <div className="h-full px-3 flex items-center">
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(8,minmax(0,1fr))",
+        gap: gapCards,
+        paddingLeft:  kpiPos === "side" && kpiSide === "left"  ? reserveSide : 0,
+        paddingRight: kpiPos === "side" && kpiSide === "right" ? reserveSide : 0,
+      }}
+      className="w-full"
+    >
+      {slots.slice(0, 16).map((s, i) => (
+        <Card key={s.id} s={s} i={i} width="100%" />
+      ))}
+    </div>
+  </div>
+) : (
+  // wrapper com h-full + flex + items-center -> centra a faixa do carrossel
+  <div className="h-full px-3 flex items-center">
+    <div className="overflow-hidden w-full">
+      <div
+        className="flex"
+        style={{
+          gap: gapCards,
+          width: "max-content",
+          paddingLeft:  kpiPos === "side" && kpiSide === "left"  ? reserveSide : 0,
+          paddingRight: kpiPos === "side" && kpiSide === "right" ? reserveSide : 0,
+          animation:
+            autoScroll && slots.length > visible
+              ? `marquee ${speedSec}s linear infinite`
+              : undefined,
+        }}
+      >
+        {[...slots, ...slots].map((s, i) => (
+          <Card key={`${s.id}-${i}`} s={s} i={i % slots.length} width={visibleW} />
+        ))}
+      </div>
+    </div>
+  </div>
+)}
+
 
       {kpiPos === "bottom" && <KPIsInline />}
 
