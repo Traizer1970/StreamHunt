@@ -34,3 +34,24 @@ html, body, * {
   background-color: var(--sb-thumb-hover);
 }
 *::-webkit-scrollbar-corner{ background: transparent; }
+/* Firefox */
+* { scrollbar-width: thin; scrollbar-color: #334155 rgba(255,255,255,0.06); }
+
+/* Chrome/Edge/Safari */
+:root {
+  --sb-track: rgba(255,255,255,0.06); /* trilho igual para todos os contêineres */
+  --sb-thumb: #334155;                /* Slate-700 */
+  --sb-thumb-hover: #475569;          /* Slate-600 */
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--sb-track); }
+::-webkit-scrollbar-thumb {
+  background: var(--sb-thumb);
+  border-radius: 999px;
+  border: 2px solid var(--sb-track);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--sb-thumb-hover); }
+
+/* evita “salto” quando a barra aparece/some */
+html { scrollbar-gutter: stable both-edges; }
