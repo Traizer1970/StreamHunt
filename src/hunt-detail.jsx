@@ -652,35 +652,50 @@ function KPIsSide() {
       {kpiPos === "side" && <KPIsSide />}
 
 {/* CARDS */}
+{/* CARDS (com espaçador lateral) */}
 {layout === "grid" ? (
-  // wrapper com h-full + flex + items-center -> centra a grelha verticalmente
-  <div className="h-full px-3 flex items-center">
+  <div className="h-full px-3 relative flex items-center">
+    {/* Espaçador quando os KPIs ficam à esquerda */}
+    {kpiPos === "side" && kpiSide === "left" && (
+      <div style={{ width: reserveSide }} />
+    )}
+
+    {/* Grelha */}
     <div
       style={{
         display: "grid",
         gridTemplateColumns: "repeat(8,minmax(0,1fr))",
         gap: gapCards,
-        paddingLeft:  kpiPos === "side" && kpiSide === "left"  ? reserveSide : 0,
-        paddingRight: kpiPos === "side" && kpiSide === "right" ? reserveSide : 0,
       }}
-      className="w-full"
+      className="flex-1"
     >
       {slots.slice(0, 16).map((s, i) => (
         <Card key={s.id} s={s} i={i} width="100%" />
       ))}
     </div>
+
+    {/* Espaçador quando os KPIs ficam à direita */}
+    {kpiPos === "side" && kpiSide === "right" && (
+      <div style={{ width: reserveSide }} />
+    )}
+
+    {/* KPIs lado (fora do card, centrados verticalmente) */}
+    {kpiPos === "side" && <KPIsSide />}
   </div>
 ) : (
-  // wrapper com h-full + flex + items-center -> centra a faixa do carrossel
-  <div className="h-full px-3 flex items-center">
-    <div className="overflow-hidden w-full">
+  <div className="h-full px-3 relative flex items-center">
+    {/* Espaçador quando os KPIs ficam à esquerda */}
+    {kpiPos === "side" && kpiSide === "left" && (
+      <div style={{ width: reserveSide }} />
+    )}
+
+    {/* Carrossel */}
+    <div className="overflow-hidden flex-1">
       <div
         className="flex"
         style={{
           gap: gapCards,
           width: "max-content",
-          paddingLeft:  kpiPos === "side" && kpiSide === "left"  ? reserveSide : 0,
-          paddingRight: kpiPos === "side" && kpiSide === "right" ? reserveSide : 0,
           animation:
             autoScroll && slots.length > visible
               ? `marquee ${speedSec}s linear infinite`
@@ -688,12 +703,27 @@ function KPIsSide() {
         }}
       >
         {[...slots, ...slots].map((s, i) => (
-          <Card key={`${s.id}-${i}`} s={s} i={i % slots.length} width={visibleW} />
+          <Card
+            key={`${s.id}-${i}`}
+            s={s}
+            i={i % slots.length}
+            width={visibleW}
+            tall
+          />
         ))}
       </div>
     </div>
+
+    {/* Espaçador quando os KPIs ficam à direita */}
+    {kpiPos === "side" && kpiSide === "right" && (
+      <div style={{ width: reserveSide }} />
+    )}
+
+    {/* KPIs lado (fora do card, centrados verticalmente) */}
+    {kpiPos === "side" && <KPIsSide />}
   </div>
 )}
+
 
 
       {kpiPos === "bottom" && <KPIsInline />}
