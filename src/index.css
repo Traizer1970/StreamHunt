@@ -1,1 +1,36 @@
 @import "tailwindcss";
+
+/* === Scrollbar unificada (WebKit + Firefox) === */
+:root{
+  /* escolhe aqui a cor */
+  --sb-track: rgba(255,255,255,.06);   /* trilho */
+  --sb-thumb: rgba(255,255,255,.28);   /* polegar */
+  --sb-thumb-hover: rgba(255,255,255,.45);
+}
+
+/* Firefox */
+html, body, * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--sb-thumb) transparent;
+}
+
+/* WebKit / Chromium */
+*::-webkit-scrollbar{
+  width: 12px;
+  height: 12px;
+}
+*::-webkit-scrollbar-track{
+  background: var(--sb-track);
+  border-radius: 9999px;
+  margin: 6px;                 /* afasta do bordo */
+}
+*::-webkit-scrollbar-thumb{
+  background-color: var(--sb-thumb);
+  border-radius: 9999px;
+  border: 3px solid transparent;
+  background-clip: content-box; /* dá “almofada” */
+}
+*::-webkit-scrollbar-thumb:hover{
+  background-color: var(--sb-thumb-hover);
+}
+*::-webkit-scrollbar-corner{ background: transparent; }
