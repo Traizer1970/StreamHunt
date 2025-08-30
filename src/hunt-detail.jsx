@@ -208,6 +208,37 @@ function hexToRgba(hex, a = 1) {
   }
 }
 
+// aceita hex (#RRGGBB/#RGB) ou rgba()/rgb()/hsl()/hsla()
+function anyToRgba(color, a = 1) {
+  const v = String(color || "").trim();
+  if (/^(rgba?|hsla?)\(/i.test(v)) return v;        // já é css válido
+  return hexToRgba(v, a);                            // cai no conversor hex
+}
+
+/* Campo de cor com swatch à esquerda (hex/rgba em texto) */
+function ColorField({ label, value, onChange, placeholder = "#RRGGBB ou rgba()" }) {
+  const css = String(value ?? "");
+  return (
+    <div>
+      <div className="text-xs opacity-70 mb-1">{label}</div>
+      <div className="relative">
+        <div
+          className="absolute left-2 top-1/2 -translate-y-1/2 h-5 w-8 rounded border border-white/20"
+          style={{ background: css || "transparent" }}
+        />
+        <Input
+          type="text"
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="h-9 pl-12 rounded-xl bg-zinc-900 border-white/10 text-white placeholder:text-white/40"
+        />
+      </div>
+    </div>
+  );
+}
+
+
 /* ───────────────────────── db helpers ───────────────────────── */
 async function updateSuperFlag(rowId, value) {
   const tryFns = [
@@ -368,6 +399,12 @@ const DEFAULT_HUNT_OVERLAY = {
   superGlowStrength: 0.6,
   superTagColor: "#e879f9",
   superTextColor: "#120614",   // <<< cor do TEXTO do selo SUPER
+  // Tema avançado (para UI de cores)
+  panelBorder: "rgba(255,255,255,.12)",
+  textColor:   "#e5e7eb",
+  subtextColor:"#9ca3af",
+  accentColor: "#fb7185",
+  chipBg:      "rgba(255,255,255,.08)",
 
 
   // Cores painel
@@ -565,7 +602,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     const glowColor = opts.superGlowColor || "#e879f9";
     const glowAlpha = Math.max(0, Math.min(1, Number(opts.superGlowStrength ?? 0.6)));
     const borderCol = hexToRgba(glowColor, 0.45 + glowAlpha * 0.35);
-    const shadowSoft = `0 0 ${18 + 30 * glowAlpha}px ${hexToRgba(glowColor, 0.35 * glowAlpha)}, 0 12px 28px rgba(0,0,0,.35)`;
+    const shadowSoft = `0 0 ${18 + 30 * glowAlpha}px ${anyToRgba(glowColor, 0.35 * glowAlpha)}, 0 12px 28px rgba(0,0,0,.35)`;
     const captionIsBar = opts.nameStyle === "bar";
     const captionIsFloat = opts.nameStyle === "float";
     const showName = opts.nameStyle !== "hidden";
@@ -585,9 +622,9 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
         {superB && opts.superGlow && (
           <>
             <div className="absolute -inset-1 rounded-xl pointer-events-none"
-                 style={{ boxShadow: `0 0 ${22 + 40 * glowAlpha}px ${hexToRgba(glowColor, 0.5 * glowAlpha)}` }} />
+                 style={{ boxShadow: `0 0 ${22 + 40 * glowAlpha}px ${anyToRgba(glowColor, 0.5 * glowAlpha)}` }} />
             <div className="absolute inset-0 pointer-events-none"
-                 style={{ background: `radial-gradient(60% 50% at 50% 40%, ${hexToRgba(glowColor, 0.28 * glowAlpha)} 0%, transparent 60%)` }} />
+                 style={{ background: `radial-gradient(60% 50% at 50% 40%, ${anyToRgba(glowColor, 0.28 * glowAlpha)} 0%, transparent 60%)` }} />
           </>
         )}
 
@@ -610,7 +647,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
         {opts.showSuper && superB && (
           <div className={cn("absolute top-1.5 z-10 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide",
                              infoRight ? "left-1.5" : "right-1.5")}
-style={{ background: hexToRgba(opts.superTagColor || "#e879f9", 0.95), color: opts.superTextColor || "#120614" }}>
+style={{ background: anyToRgba(opts.superTagColor || "#e879f9", 0.95), color: opts.superTextColor || "#120614" }}>
   SUPER
           </div>
         )}
@@ -770,7 +807,7 @@ style={{ background: hexToRgba(opts.superTagColor || "#e879f9", 0.95), color: op
       style={{
         width: baseW,
         height: baseH,
-        border: showBox ? "1px solid rgba(255,255,255,.10)" : "none",
+        border: showBox ? `1px solid ${opts.panelBorder || "rgba(255,255,255,.10)"}` : "none",
         background: showBox ? `linear-gradient(135deg, ${bg1} 0%, ${bg2} 100%)` : "transparent",
         fontFamily: RUBIK_STACK,
       }}
@@ -1521,66 +1558,175 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                 </div>
 
                 {/* SUPER glow/tag */}
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
-                  <div className="text-sm font-medium">SUPER — Glow & Tag</div>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={!!opts.superGlow}
-                      onChange={(e) =>
-                        setOpts((o) => ({
-                          ...o,
-                          superGlow: !!e.target.checked,
-                        }))
-                      }
-                    />
-                    Ativar brilho na slot SUPER
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">Cor do brilho</div>
-                      <input
-                        type="color"
-                        value={opts.superGlowColor}
-                        onChange={(e) =>
-                          setOpts((o) => ({
-                            ...o,
-                            superGlowColor: e.target.value,
-                          }))
-                        }
-                        className="h-9 w-full rounded-md bg-zinc-900 border border-white/10 p-1"
-                      />
-                    </div>
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">Força (0–1)</div>
-                      <input
-                        type="range"
-                        min={0}
-                        max={1}
-                        step={0.05}
-                        value={opts.superGlowStrength}
-                        onChange={(e) =>
-                          setOpts((o) => ({
-                            ...o,
-                            superGlowStrength: Number(e.target.value),
-                          }))
-                        }
-                        className="w-full"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs opacity-70 mb-1">Cor da tag SUPER</div>
-                    <input
-                      type="color"
-                      value={opts.superTagColor}
-                      onChange={(e) =>
-                        setOpts((o) => ({ ...o, superTagColor: e.target.value }))
-                      }
-                      className="h-9 w-[120px] rounded-md bg-zinc-900 border border-white/10 p-1"
-                    />
-                  </div>
-                </div>
+<div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
+  <div className="text-sm font-medium">Color presets</div>
+
+  <div className="grid grid-cols-2 gap-2">
+    {Object.keys(PANEL_PRESETS).map((name) => {
+      const [a, b] = PANEL_PRESETS[name];
+      return (
+        <button
+          key={name}
+          onClick={() => applyPanelPreset(name)}
+          className="h-12 rounded-lg border border-white/10 text-sm"
+          style={{ background: `linear-gradient(135deg, ${a} 0%, ${b} 100%)` }}
+          title={name}
+        >
+          <span className="drop-shadow">{name}</span>
+        </button>
+      );
+    })}
+  </div>
+
+  {/* Background start / end */}
+  <div className="grid grid-cols-2 gap-2">
+    <div>
+      <div className="text-xs opacity-70 mb-1">Background start</div>
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={(opts.panelBgStart || "").startsWith("#") ? opts.panelBgStart : "#000000"}
+          onChange={(e) => setOpts((o) => ({ ...o, panelBgStart: e.target.value }))}
+          className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
+          title={opts.panelBgStart || ""}
+        />
+        <Input
+          type="text"
+          value={opts.panelBgStart ?? ""}
+          onChange={(e) => setOpts((o) => ({ ...o, panelBgStart: e.target.value }))}
+          placeholder="#RRGGBB ou rgba()"
+          className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+        />
+      </div>
+    </div>
+
+    <div>
+      <div className="text-xs opacity-70 mb-1">Background end</div>
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={(opts.panelBgEnd || "").startsWith("#") ? opts.panelBgEnd : "#000000"}
+          onChange={(e) => setOpts((o) => ({ ...o, panelBgEnd: e.target.value }))}
+          className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
+          title={opts.panelBgEnd || ""}
+        />
+        <Input
+          type="text"
+          value={opts.panelBgEnd ?? ""}
+          onChange={(e) => setOpts((o) => ({ ...o, panelBgEnd: e.target.value }))}
+          placeholder="#RRGGBB ou rgba()"
+          className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+        />
+      </div>
+    </div>
+  </div>
+
+  {/* Linha/painel border */}
+  <div>
+    <div className="text-xs opacity-70 mb-1">Panel/Line border</div>
+    <div className="flex items-center gap-2">
+      <input
+        type="color"
+        value={(opts.panelBorder || "").startsWith("#") ? opts.panelBorder : "#000000"}
+        onChange={(e) => setOpts((o) => ({ ...o, panelBorder: e.target.value }))}
+        className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
+        title={opts.panelBorder || ""}
+      />
+      <Input
+        type="text"
+        value={opts.panelBorder ?? ""}
+        onChange={(e) => setOpts((o) => ({ ...o, panelBorder: e.target.value }))}
+        placeholder="rgba(255,255,255,.12) ou #hex"
+        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+      />
+    </div>
+  </div>
+
+  {/* Texto principal */}
+  <div>
+    <div className="text-xs opacity-70 mb-1">Text</div>
+    <div className="flex items-center gap-2">
+      <input
+        type="color"
+        value={(opts.textColor || "").startsWith("#") ? opts.textColor : "#e5e7eb"}
+        onChange={(e) => setOpts((o) => ({ ...o, textColor: e.target.value }))}
+        className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
+        title={opts.textColor || ""}
+      />
+      <Input
+        type="text"
+        value={opts.textColor ?? ""}
+        onChange={(e) => setOpts((o) => ({ ...o, textColor: e.target.value }))}
+        placeholder="#RRGGBB"
+        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+      />
+    </div>
+  </div>
+
+  {/* Subtexto */}
+  <div>
+    <div className="text-xs opacity-70 mb-1">Subtext</div>
+    <div className="flex items-center gap-2">
+      <input
+        type="color"
+        value={(opts.subtextColor || "").startsWith("#") ? opts.subtextColor : "#9ca3af"}
+        onChange={(e) => setOpts((o) => ({ ...o, subtextColor: e.target.value }))}
+        className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
+        title={opts.subtextColor || ""}
+      />
+      <Input
+        type="text"
+        value={opts.subtextColor ?? ""}
+        onChange={(e) => setOpts((o) => ({ ...o, subtextColor: e.target.value }))}
+        placeholder="#RRGGBB"
+        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+      />
+    </div>
+  </div>
+
+  {/* Acento */}
+  <div>
+    <div className="text-xs opacity-70 mb-1">Accent</div>
+    <div className="flex items-center gap-2">
+      <input
+        type="color"
+        value={(opts.accentColor || "").startsWith("#") ? opts.accentColor : "#fb7185"}
+        onChange={(e) => setOpts((o) => ({ ...o, accentColor: e.target.value }))}
+        className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
+        title={opts.accentColor || ""}
+      />
+      <Input
+        type="text"
+        value={opts.accentColor ?? ""}
+        onChange={(e) => setOpts((o) => ({ ...o, accentColor: e.target.value }))}
+        placeholder="#RRGGBB"
+        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+      />
+    </div>
+  </div>
+
+  {/* Fundo dos chips */}
+  <div>
+    <div className="text-xs opacity-70 mb-1">Chip bg</div>
+    <div className="flex items-center gap-2">
+      <input
+        type="color"
+        value={(opts.chipBg || "").startsWith("#") ? opts.chipBg : "#000000"}
+        onChange={(e) => setOpts((o) => ({ ...o, chipBg: e.target.value }))}
+        className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
+        title={opts.chipBg || ""}
+      />
+      <Input
+        type="text"
+        value={opts.chipBg ?? ""}
+        onChange={(e) => setOpts((o) => ({ ...o, chipBg: e.target.value }))}
+        placeholder="rgba(...) ou #hex"
+        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+      />
+    </div>
+  </div>
+</div>
+
 
                 {/* Panel/box presets */}
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
