@@ -1559,24 +1559,6 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 
        {/* SUPER glow/tag */}
 <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
-  <div className="text-sm font-medium">Color presets</div>
-
-  <div className="grid grid-cols-2 gap-2">
-    {Object.keys(PANEL_PRESETS).map((name) => {
-      const [a, b] = PANEL_PRESETS[name];
-      return (
-        <button
-          key={name}
-          onClick={() => applyPanelPreset(name)}
-          className="h-12 rounded-lg border border-white/10 text-sm"
-          style={{ background: `linear-gradient(135deg, ${a} 0%, ${b} 100%)` }}
-          title={name}
-        >
-          <span className="drop-shadow">{name}</span>
-        </button>
-      );
-    })}
-  </div>
 
   {/* Background start / end */}
   <div className="grid grid-cols-2 gap-2">
