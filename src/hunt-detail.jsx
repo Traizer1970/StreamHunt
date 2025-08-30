@@ -42,6 +42,10 @@ import { cn as _cn } from "@/lib/utils";
 
 const cn = (...c) => (_cn ? _cn(...c) : c.filter(Boolean).join(" "));
 
+/* ───────────────────────── Fonte ───────────────────────── */
+const RUBIK_STACK =
+  `'Rubik', ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"`;
+
 /* ───────────────────────── i18n ───────────────────────── */
 const DICT = {
   pt: {
@@ -273,9 +277,7 @@ function useLocalState(key, initial) {
   return [s, setS];
 }
 
-/* ───────────────────────── presets ───────────────────────── */
 /* ───────────────────────── Overlays — helpers & presets ───────────────────────── */
-
 const PANEL_PRESETS = {
   Neon: ["#0b1020", "#111827"],
   Sunset: ["#3d0f3a", "#6a1047"],
@@ -327,6 +329,7 @@ const DEFAULT_HUNT_OVERLAY = {
   kpiShape: "box",       // "box" | "pill" | "circle"
   kpiRound: 2,           // 0,1,2
   kpiShowLabels: true,
+  kpiBold: false,        // << NOVO
 
   // alternância + cores
   kpiAltIconMs: 1200,
@@ -379,6 +382,7 @@ const DEFAULT_OPENING_OVERLAY = {
   baseH: 320,
   showTitle: true,
   showCurrent: true,
+  kpiBold: false, // por consistência
 };
 
 /* ───────────────────────── URLs ───────────────────────── */
@@ -414,8 +418,9 @@ function buildHuntOverlayUrl(base, huntNumberId, o) {
   qs.set("kshape", String(o.kpiShape || "box"));
   qs.set("kround", String(o.kpiRound ?? 2));
   qs.set("klabels", o.kpiShowLabels ? "1" : "0");
+  if (o.kpiBold) qs.set("kbold", "1"); // << NOVO
 
-  // NOVO: tempos e animação + cores
+  // tempos/animação + cores
   qs.set("kicon", String(o.kpiAltIconMs ?? 0));
   qs.set("kval",  String(o.kpiAltValueMs ?? 0));
   qs.set("kanim", String(o.kpiAnim || "fade"));
@@ -483,7 +488,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
   const kpiRound = Math.max(0, Math.min(2, Number(opts.kpiRound ?? 2)));
   const kpiShowLabels = !!opts.kpiShowLabels;
 
-  // NOVOS (alternância + cores)
+  // alternância + cores
   const kpiAltIconMs  = Math.max(0, Number(opts.kpiAltIconMs ?? 0));
   const kpiAltValueMs = Math.max(0, Number(opts.kpiAltValueMs ?? 0));
   const kpiAnim       = String(opts.kpiAnim || "fade");
@@ -642,7 +647,14 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
           {showIcons ? (
             <Icon size={iconPxCircle} strokeWidth={2} className="block" />
           ) : (
-            <span className={numCls} style={{ fontSize: valueFontCircle, lineHeight: 1 }}>
+            <span
+              className={numCls}
+              style={{
+                fontSize: valueFontCircle,
+                lineHeight: 1,
+                fontWeight: opts.kpiBold ? 700 : 600, // << NOVO
+              }}
+            >
               {value}
             </span>
           )}
@@ -663,7 +675,10 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
             {label}:
           </span>
         )}
-        <b className={cn(numCls, "text-[12px]")} style={{ lineHeight: 1 }}>
+        <b
+          className={cn(numCls, "text-[12px]")}
+          style={{ lineHeight: 1, fontWeight: opts.kpiBold ? 700 : 600 }} // << NOVO
+        >
           {value}
         </b>
       </div>
@@ -740,10 +755,14 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
       style={{
         width: baseW,
         height: baseH,
+        fontFamily: RUBIK_STACK, // << NOVO
         border: showBox ? "1px solid rgba(255,255,255,.10)" : "none",
         background: showBox ? `linear-gradient(135deg, ${bg1} 0%, ${bg2} 100%)` : "transparent",
       }}
     >
+      {/* importar Rubik */}
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap');`}</style>
+
       {kpiPos === "top" && <KPIsInline />}
       {kpiPos === "side" && <KPIsSide />}
 
@@ -794,7 +813,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
   );
 }
 
-/* ───────────────────────── Opening Preview (sem mudanças de KPI) ───────────────────────── */
+/* ───────────────────────── Opening Preview ───────────────────────── */
 function OpeningOverlayPreview({ hunt, slots, opts }) {
   const current = slots[0] || null;
   const baseW = Number(opts.baseW || 560);
@@ -806,10 +825,14 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
       style={{
         width: baseW,
         height: baseH,
+        fontFamily: RUBIK_STACK, // << NOVO
         background:
           "linear-gradient(135deg, rgba(15,16,33,1) 0%, rgba(24,16,40,1) 100%)",
       }}
     >
+      {/* importar Rubik */}
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap');`}</style>
+
       <div className="px-3 pt-3 pb-2 flex items-center justify-between">
         {opts.showTitle !== false ? (
           <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
@@ -1440,6 +1463,20 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                       />
                       Mostrar labels (box/pill)
                     </label>
+
+                    {/* NOVO: KPI em bold */}
+                    <div className="col-span-2">
+                      <label className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={!!opts.kpiBold}
+                          onChange={(e) =>
+                            setOpts((o) => ({ ...o, kpiBold: !!e.target.checked }))
+                          }
+                        />
+                        KPI em bold
+                      </label>
+                    </div>
                   </div>
 
                   {/* Cores */}
@@ -1805,9 +1842,6 @@ function OverlayCard({ type, hunt, slots, opts, setOpts }) {
 }
 
 /* ───────────────────────── Redeem & CRUD (inalterado exceto importações) ───────────────────────── */
-/*  Para manter resposta curta, não alterei a lógica destes modais/tabela.
-    Eles continuam a funcionar como no teu ficheiro anterior.  */
-
 function AddBonusModal({ open, onClose, numberId, onAdded }) {
   const { t } = useLang();
   const [query, setQuery] = React.useState("");
