@@ -355,12 +355,50 @@ function QuickStats({ stats }) {
 /* ---------- Simple modal ---------- */
 function BareModal({ open, onClose, children }) {
   const { isDark } = useTheme();
+
+  React.useEffect(() => {
+    if (!open) return;
+
+    const html = document.documentElement;
+    const body = document.body;
+
+    // calcula a largura da scrollbar para evitar “jump” do layout
+    const sbw = window.innerWidth - html.clientWidth;
+
+    // guarda os estilos anteriores para restaurar no cleanup
+    const prev = {
+      htmlOverflow: html.style.overflow,
+      bodyOverflow: body.style.overflow,
+      htmlPad: html.style.paddingRight,
+      bodyPad: body.style.paddingRight,
+    };
+
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
+    if (sbw > 0) {
+      html.style.paddingRight = `${sbw}px`;
+      body.style.paddingRight = `${sbw}px`;
+    }
+
+    return () => {
+      html.style.overflow = prev.htmlOverflow;
+      body.style.overflow = prev.bodyOverflow;
+      html.style.paddingRight = prev.htmlPad;
+      body.style.paddingRight = prev.bodyPad;
+    };
+  }, [open]);
+
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[60]">
+    <div className="fixed inset-0 z-[60] overflow-hidden">   {/* evita scroll no overlay */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden />
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-[520px]">
-        <div className={cn("rounded-2xl p-6 border shadow-2xl", isDark ? "bg-gradient-to-b from-zinc-900 to-zinc-950 border-white/10" : "bg-white border-zinc-200")}>
+        <div
+          className={cn(
+            "rounded-2xl p-6 border shadow-2xl max-h-[90vh] overflow-auto",  // ⬅️ rolagem só aqui
+            isDark ? "bg-gradient-to-b from-zinc-900 to-zinc-950 border-white/10" : "bg-white border-zinc-200"
+          )}
+        >
           {children}
         </div>
       </div>
