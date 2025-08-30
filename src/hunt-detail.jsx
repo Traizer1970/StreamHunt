@@ -1023,14 +1023,14 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
       </div>
 
       {/* Body */}
-      <div className="absolute inset-x-0 top-14 bottom-0 md:flex">
+      <div className="absolute inset-x-0 top-14 bottom-0 md:flex overflow-hidden">
         {/* Sidebar */}
-        <div className="border-r border-white/10 bg-zinc-950/70 overflow-auto w-full md:w-[420px] text-white">
+        <div className="border-r border-white/10 bg-zinc-950/70 overflow-auto w-full md:w-[360px] lg:w-[420px] xl:w-[480px] text-white min-w-0">
           <div className="p-4 space-y-4">
             {/* Canvas */}
             <div className="rounded-xl border border-white/10 bg-white/5 p-3">
               <div className="text-xs opacity-70 mb-1">Canvas / OBS</div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 min-w-0">
                 <div>
                   <div className="text-xs opacity-70 mb-1">Base width</div>
                   <Input
@@ -1122,7 +1122,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
               <>
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
                   <div className="text-sm font-medium mb-1">Layout presets</div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2 min-w-0">
                     {["Default", "Compact", "Bar", "Minimal", "Head-to-Head"].map(
                       (n) => (
                         <button
@@ -1147,14 +1147,14 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                 {/* Cards & Carrossel */}
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
                   <div className="text-xs opacity-70 mb-1">Cards</div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2 min-w-0">
                     <div>
                       <select
                         value={opts.layout}
                         onChange={(e) =>
                           setOpts((o) => ({ ...o, layout: e.target.value }))
                         }
-                        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+                        className="h-9 w-full appearance-none pr-8 rounded-xl bg-zinc-900 border-white/10 text-white px-3"
                       >
                         <option value="carousel">Rolante (N visíveis)</option>
                         <option value="grid">Grid (até 16)</option>
@@ -1179,7 +1179,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                   </div>
 
                   {opts.layout === "carousel" && (
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-2 min-w-0">
                       <div>
                         <div className="text-xs opacity-70 mb-1">Visíveis</div>
                         <Input
@@ -1240,7 +1240,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2 min-w-0">
                     <div>
                       <div className="text-xs opacity-70 mb-1">
                         Estilo do nome
@@ -1319,7 +1319,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                       />
                       Vertical infos (#/bet)
                     </label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-2 min-w-0">
                       <div>
                         <div className="text-xs opacity-70 mb-1">
                           Posição das infos
@@ -1343,7 +1343,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
                   <div className="text-xs opacity-70">KPIs (Start • B/E • #Bonus)</div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2 min-w-0">
                     <div>
                       <div className="text-xs opacity-70 mb-1">Posição</div>
                       <select
@@ -1372,7 +1372,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2 min-w-0">
                     <div>
                       <div className="text-xs opacity-70 mb-1">Alinhamento</div>
                       <select
@@ -1401,7 +1401,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2 min-w-0">
                     <div>
                       <div className="text-xs opacity-70 mb-1">KPI gap</div>
                       <Input
@@ -1437,7 +1437,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2 min-w-0">
                     <div>
                       <div className="text-xs opacity-70 mb-1">KPI shape</div>
                       <select
@@ -1466,7 +1466,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                   </div>
 
                   {/* Alternância com tempos + animação */}
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2 min-w-0">
                     <div>
                       <div className="text-xs opacity-70 mb-1">Ícone (ms, círculo)</div>
                       <Input
@@ -1561,7 +1561,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
 
   {/* Background start / end */}
-  <div className="grid grid-cols-2 gap-2">
+  <div className="grid grid-cols-2 gap-2 min-w-0">
     <div>
       <div className="text-xs opacity-70 mb-1">Background start</div>
       <div className="flex items-center gap-2">
@@ -1712,7 +1712,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                 {/* Panel/box presets */}
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
                   <div className="text-sm font-medium">Color presets</div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2 min-w-0">
                     {Object.keys(PANEL_PRESETS).map((name) => {
                       const [a, b] = PANEL_PRESETS[name];
                       return (
@@ -1731,7 +1731,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                     })}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2 min-w-0">
                     <div>
                       <div className="text-xs opacity-70 mb-1">
                         Background start
@@ -1796,7 +1796,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         </div>
 
         {/* Preview */}
-        <div className="flex-1 p-6 overflow-auto">
+        <div className="flex-1 p-6 overflow-auto min-w-0">
           {type === "hunt" ? (
             <HuntOverlayPreview hunt={hunt} slots={slots} opts={opts} />
           ) : (
