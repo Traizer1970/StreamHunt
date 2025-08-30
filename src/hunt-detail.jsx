@@ -274,6 +274,8 @@ function useLocalState(key, initial) {
 }
 
 /* ───────────────────────── presets ───────────────────────── */
+/* ───────────────────────── Overlays — helpers & presets ───────────────────────── */
+
 const PANEL_PRESETS = {
   Neon: ["#0b1020", "#111827"],
   Sunset: ["#3d0f3a", "#6a1047"],
@@ -286,35 +288,37 @@ const PANEL_PRESETS = {
 const DEFAULT_HUNT_OVERLAY = {
   design: "cards",
 
-  // Layout rolante
+  // Carrossel / grid
   layout: "carousel",
   visible: 3,
   autoScroll: true,
   scrollDur: 30,
   showBox: true,
 
-  // KPIs
-  kpiStyle: "pill",          // pill | minimal (mantido p/ compatibilidade)
-  kpiShape: "pill",          // pill | box | circle
-  kpiPos: "side",            // top | bottom | hidden | side
-  kpiAlign: "center",        // quando top/bottom: left/center/right
-  kpiGap: 8,
-  kpiSide: "right",          // left | right
-  kpiSideSpacing: 18,
-  kpiSize: 1.0,              // escala 0.7–1.4
-  kpiFlipMs: 1200,           // alternância ícone/valor no circle
+  // KPIs (Start • B/E • #Bonus)
+  kpiPos: "top",         // "top" | "bottom" | "side" | "hidden"
+  kpiDir: "row",         // "row" | "column"   (usado quando kpiPos = top/bottom)
+  kpiAlign: "center",    // "left" | "center" | "right" (top/bottom)
+  kpiSide: "right",      // "left" | "right"   (usado quando kpiPos = side)
+  kpiGap: 8,             // gap entre KPIs
+  kpiSideSpace: 18,      // afastamento do lado (quando side)
+  kpiSize: 1.0,          // escala 0.7 a 1.6
+  kpiShape: "box",       // "box" | "pill" | "circle"
+  kpiAltMs: 1500,        // alternância valor/ícone nos círculos (0 = desliga)
+  kpiRound: 2,           // 0 = unidades, 1 = décimas, 2 = centésimas
+  kpiShowLabels: true,   // para box/pill mostrar texto "Start", "B/E", "# Bonus"
 
   // Cards
   cardH: 160,
-  nameStyle: "bar",
-  betStyle: "inline",
+  nameStyle: "bar",      // "bar" | "float" | "hidden"
+  betStyle: "inline",    // "inline" | "chip" | "none"
   showIdx: true,
   showBet: true,
   showSuper: true,
 
-  // Infos topo
+  // Infos verticais no topo do card
   vInfo: false,
-  infoPos: "left",
+  infoPos: "left",       // "left" | "right"
 
   // SUPER glow
   superGlow: true,
@@ -324,9 +328,9 @@ const DEFAULT_HUNT_OVERLAY = {
 
   // Cores painel
   panelBgStart: "#0b1020",
-  panelBgEnd: "#111827",
+  panelBgEnd:   "#111827",
 
-  // genéricos
+  // canvas
   pad: 16,
   align: "center",
   shine: true,
@@ -351,45 +355,55 @@ const DEFAULT_OPENING_OVERLAY = {
 /* ───────────────────────── URLs ───────────────────────── */
 function buildHuntOverlayUrl(base, huntNumberId, o) {
   const qs = new URLSearchParams();
-  qs.set("design", "cards");
-  // KPIs
-  qs.set("kpos", String(o.kpiPos));                   // top | bottom | hidden | side
-  qs.set("kshape", String(o.kpiShape));               // pill | box | circle
-  qs.set("kalign", String(o.kpiAlign));
-  qs.set("kgap", String(o.kpiGap));
-  qs.set("kside", String(o.kpiSide));
-  qs.set("kspace", String(o.kpiSideSpacing));
-  qs.set("ksize", String(o.kpiSize));
-  qs.set("kflip", String(o.kpiFlipMs));
 
-  // layout
-  qs.set("layout", String(o.layout));
-  qs.set("visible", String(o.visible));
-  qs.set("speed", String(o.scrollDur));
+  // layout básico
+  qs.set("design", "cards");
+  qs.set("layout", String(o.layout || "carousel"));
+  qs.set("visible", String(o.visible || 3));
   if (o.autoScroll) qs.set("scroll", "1");
+  qs.set("speed", String(o.scrollDur || 30));
+  qs.set("cardH", String(o.cardH || 140));
   qs.set("box", o.showBox ? "1" : "0");
-  qs.set("name", String(o.nameStyle));
-  qs.set("bet", String(o.betStyle));
+
+  // cards
+  qs.set("name", String(o.nameStyle || "bar"));
+  qs.set("bet", String(o.betStyle || "inline"));
   qs.set("showIdx", o.showIdx ? "1" : "0");
   qs.set("showBet", o.showBet ? "1" : "0");
   qs.set("showSuper", o.showSuper ? "1" : "0");
   if (o.vInfo) qs.set("vinfo", "1");
-  // SUPER + fundo
+  qs.set("infoside", String(o.infoPos || "left"));
+
+  // KPIs
+  qs.set("kpos", String(o.kpiPos || "top"));            // top | bottom | side | hidden
+  qs.set("kdir", String(o.kpiDir || "row"));
+  qs.set("kalign", String(o.kpiAlign || "center"));
+  qs.set("kside", String(o.kpiSide || "right"));
+  qs.set("kgap", String(o.kpiGap ?? 8));
+  qs.set("kspace", String(o.kpiSideSpace ?? 18));
+  qs.set("ksize", String(o.kpiSize ?? 1));
+  qs.set("kshape", String(o.kpiShape || "box"));
+  qs.set("kalt", String(o.kpiAltMs ?? 0));              // 0 desliga
+  qs.set("kround", String(o.kpiRound ?? 2));
+  qs.set("klabels", o.kpiShowLabels ? "1" : "0");
+
+  // SUPER glow + painel
   if (o.superGlow === false) qs.set("sg", "0");
-  if (o.superGlowColor) qs.set("sgc", String(o.superGlowColor).replace("#", ""));
+  if (o.superGlowColor) qs.set("sgc", String(o.superGlowColor).replace("#",""));
   if (o.superGlowStrength != null) qs.set("sgs", String(o.superGlowStrength));
-  if (o.superTagColor) qs.set("stc", String(o.superTagColor).replace("#", ""));
-  if (o.panelBgStart) qs.set("bg1", String(o.panelBgStart).replace("#", ""));
-  if (o.panelBgEnd) qs.set("bg2", String(o.panelBgEnd).replace("#", ""));
+  if (o.superTagColor) qs.set("stc", String(o.superTagColor).replace("#",""));
+  if (o.panelBgStart) qs.set("bg1", String(o.panelBgStart).replace("#",""));
+  if (o.panelBgEnd)   qs.set("bg2", String(o.panelBgEnd).replace("#",""));
+
   // canvas
   qs.set("align", String(o.align || "center"));
   qs.set("pad", String(o.pad || 0));
   qs.set("bw", String(o.baseW || 560));
   qs.set("bh", String(o.baseH || 280));
-  qs.set("cardH", String(o.cardH || 140));
 
   return `${base}#/overlay/hunt/${huntNumberId}?${qs.toString()}`;
 }
+
 
 function buildOpeningOverlayUrl(base, huntNumberId, opts) {
   const qs = new URLSearchParams();
@@ -407,265 +421,76 @@ function buildOpeningOverlayUrl(base, huntNumberId, opts) {
 
 /* ───────────────────────── Hunt Overlay Preview ───────────────────────── */
 function HuntOverlayPreview({ hunt, slots, opts }) {
-  const { t } = useLang();
-
-  const start =
-    Number(hunt?.start_cost) ||
-    slots.reduce((a, s) => a + toNum(s.bet_size), 0);
-  const won = slots.reduce((a, s) => a + toNum(s.payout), 0);
+  const start = Number(hunt?.start_cost) || slots.reduce((a, s) => a + toNum(s.bet_size), 0);
+  const won   = slots.reduce((a, s) => a + toNum(s.payout), 0);
   const beLeft = Math.max(0, start - won);
 
   const baseW = Number(opts.baseW || 560);
   const baseH = Number(opts.baseH || 280);
-  const pad = Number(opts.pad || 0);
+  const pad   = Number(opts.pad || 0);
   const showBox = opts.showBox !== false;
 
-  const layout = String(opts.layout || "carousel");
-  const visible = Math.max(1, Number(opts.visible || 3));
+  const layout   = String(opts.layout || "carousel");
+  const visible  = Math.max(1, Number(opts.visible || 3));
   const autoScroll = !!opts.autoScroll;
-  const speedSec = Math.max(
-    5,
-    Math.min(180, Number(opts.scrollDur || 30))
-  );
+  const speedSec = Math.max(5, Math.min(180, Number(opts.scrollDur || 30)));
+  const gapCards = layout === "grid" ? 8 : 12;
 
-  const gap = 12;
-  const innerW = baseW;
-  const cardW =
-    layout === "carousel"
-      ? Math.max(
-          140,
-          Math.floor((innerW - 6 - (visible - 1) * gap) / visible)
-        )
-      : undefined;
+  const kpiPos   = String(opts.kpiPos || "top");       // "top" | "bottom" | "side" | "hidden"
+  const kpiDir   = String(opts.kpiDir || "row");
+  const kpiAlign = String(opts.kpiAlign || "center");
+  const kpiSide  = String(opts.kpiSide || "right");
+  const kpiGap   = Number(opts.kpiGap ?? 8);
+  const kpiSideSpace = Number(opts.kpiSideSpace ?? 18);
+  const kpiSize  = Math.max(0.7, Math.min(1.6, Number(opts.kpiSize ?? 1)));
+  const kpiShape = String(opts.kpiShape || "box");     // "box" | "pill" | "circle"
+  const kpiAltMs = Math.max(0, Number(opts.kpiAltMs ?? 0));
+  const kpiRound = Math.max(0, Math.min(2, Number(opts.kpiRound ?? 2)));
+  const kpiShowLabels = !!opts.kpiShowLabels;
 
-  /* KPI helpers */
-  const kShape = String(opts.kpiShape || "pill"); // pill | box | circle
-  const kPos = String(opts.kpiPos || "side");     // top | bottom | hidden | side
-  const kAlign = String(opts.kpiAlign || "center");
-  const kGap = Number(opts.kpiGap ?? 8);
-  const kSide = String(opts.kpiSide || "right");
-  const kSideSpace = Number(opts.kpiSideSpacing ?? 18);
-  const kSize = Math.max(0.7, Math.min(1.4, Number(opts.kpiSize ?? 1)));
-  const kFlipMs = Math.max(500, Number(opts.kpiFlipMs || 1200));
+  const innerW = baseW - 0;
 
-  const [showIcon, setShowIcon] = React.useState(true);
+  // ===== helpers =====
+  const formatMoneyRound = (n) => {
+    const num = Number(n) || 0;
+    return new Intl.NumberFormat(LOCALE, {
+      style: "currency",
+      currency: CURRENCY,
+      minimumFractionDigits: kpiRound,
+      maximumFractionDigits: kpiRound,
+    }).format(num);
+  };
+
+  // ícones (Lucide)
+  const items = [
+    { key: "start",  label: "Start",  value: formatMoneyRound(start),  Icon: Wallet },
+    { key: "be",     label: "B/E",    value: formatMoneyRound(beLeft), Icon: Scale  },
+    { key: "bonus",  label: "# Bonus",value: String(slots.length),     Icon: Gift   },
+  ];
+
+  // alternância (só para círculos)
+  const [showIcons, setShowIcons] = React.useState(kpiAltMs > 0);
   React.useEffect(() => {
-    if (kShape !== "circle") return;
-    const id = setInterval(() => setShowIcon((v) => !v), kFlipMs);
+    if (kpiAltMs <= 0 || kpiShape !== "circle") { setShowIcons(false); return; }
+    setShowIcons(true);
+    const id = setInterval(() => setShowIcons(s => !s), kpiAltMs);
     return () => clearInterval(id);
-  }, [kShape, kFlipMs]);
+  }, [kpiAltMs, kpiShape]);
 
-  const KPIItem = ({ label, value, icon }) => {
-    const baseH = 34;
-    const h = Math.round(baseH * kSize);
-    const common = "backdrop-blur rounded-full border";
-    const border = "rgba(255,255,255,.14)";
-    const bg = "rgba(255,255,255,.10)";
+  // tamanhos
+  const pillH   = Math.round(28 * kpiSize);
+  const boxH    = Math.round(32 * kpiSize);
+  const circleD = Math.round(36 * kpiSize);
+  const kpiH    = kpiShape === "circle" ? circleD : (kpiShape === "box" ? boxH : pillH);
+  const estKpiW = kpiShape === "circle" ? circleD : Math.round(112 * kpiSize); // reserva lateral
 
-    if (kShape === "circle") {
-      return (
-        <div
-          className={cn(common, "flex items-center justify-center")}
-          style={{
-            height: h,
-            width: h,
-            background: bg,
-            borderColor: border,
-          }}
-          title={label}
-        >
-          {showIcon ? (
-            icon
-          ) : (
-            <span className="text-[11px] font-semibold">{value}</span>
-          )}
-        </div>
-      );
-    }
+  // quando kpiPos = side, reservamos espaço à esquerda/direita para não cortar cards
+  const reserveSide = kpiPos === "side" ? estKpiW + kpiSideSpace + 6 : 0;
 
-    const rounded = kShape === "pill" ? "rounded-full" : "rounded-lg";
-    return (
-      <div
-        className={cn(
-          "px-3 py-1.5 text-[12px] flex items-center gap-2",
-          "border",
-          rounded
-        )}
-        style={{
-          transform: `scale(${kSize})`,
-          transformOrigin: "left center",
-          background: bg,
-          borderColor: border,
-        }}
-        title={label}
-      >
-        <span className="opacity-90">{label}:</span>
-        <b className={numCls}>{value}</b>
-      </div>
-    );
-  };
-
-  const KPIsRow = () => {
-    const rowCls = cn(
-      "flex gap-2 px-3 py-2",
-      kAlign === "left" && "justify-start",
-      kAlign === "center" && "justify-center",
-      kAlign === "right" && "justify-end"
-    );
-    const sizeIcon = Math.round(16 * kSize);
-    return (
-      <div className={rowCls} style={{ gap: kGap }}>
-        <KPIItem
-          label={t("startCost")}
-          value={fmtMoney(start)}
-          icon={<Wallet className="w-[16px] h-[16px]" style={{ width: sizeIcon, height: sizeIcon }} />}
-        />
-        <KPIItem
-          label={t("kpiBE")}
-          value={fmtMoney(beLeft)}
-          icon={<Scale className="w-[16px] h-[16px]" style={{ width: sizeIcon, height: sizeIcon }} />}
-        />
-        <KPIItem
-          label={t("kpiBonus")}
-          value={String(slots.length)}
-          icon={<Gift className="w-[16px] h-[16px]" style={{ width: sizeIcon, height: sizeIcon }} />}
-        />
-      </div>
-    );
-  };
-
-  const KPIsSide = ({ side = "right" }) => {
-    const sizeIcon = Math.round(18 * kSize);
-    const h = Math.round(34 * kSize);
-    // largura que ocupamos para reservar espaço aos cards
-    const reserve =
-      kShape === "circle" ? h : Math.round(90 * kSize);
-
-    return {
-      node: (
-        <div
-          className="absolute top-1/2 -translate-y-1/2"
-          style={{
-            [side]: pad + kSideSpace,
-            display: "flex",
-            flexDirection: "column",
-            gap: kGap,
-          }}
-        >
-          <KPIItem
-            label={t("startCost")}
-            value={fmtMoney(start)}
-            icon={<Wallet style={{ width: sizeIcon, height: sizeIcon }} />}
-          />
-          <KPIItem
-            label={t("kpiBE")}
-            value={fmtMoney(beLeft)}
-            icon={<Scale style={{ width: sizeIcon, height: sizeIcon }} />}
-          />
-          <KPIItem
-            label={t("kpiBonus")}
-            value={String(slots.length)}
-            icon={<Gift style={{ width: sizeIcon, height: sizeIcon }} />}
-          />
-        </div>
-      ),
-      reserve,
-    };
-  };
-
-  const bg1 = opts.panelBgStart || "#0b1020";
-  const bg2 = opts.panelBgEnd || "#111827";
-
-  // quando KPIs estão no lado, reservamos espaço à esquerda/direita
-  const sidePack =
-    kPos === "side" ? KPIsSide({ side: kSide }) : null;
-  const leftPad =
-    kPos === "side" && kSide === "left" ? (sidePack?.reserve || 0) + kSideSpace : 0;
-  const rightPad =
-    kPos === "side" && kSide === "right" ? (sidePack?.reserve || 0) + kSideSpace : 0;
-
-  return (
-    <div
-      className="rounded-xl overflow-hidden relative"
-      style={{
-        width: baseW,
-        height: baseH,
-        border: showBox ? "1px solid rgba(255,255,255,.10)" : "none",
-        background: showBox
-          ? `linear-gradient(135deg, ${bg1} 0%, ${bg2} 100%)`
-          : "transparent",
-      }}
-    >
-      <style>{`
-        @keyframes sweep { 0% { transform: translateX(-120%);} 100% { transform: translateX(120%);} }
-        @keyframes marquee { 0% { transform: translateX(0%); } 100% { transform: translateX(-50%); } }
-        .marquee { will-change: transform; }
-        .marquee:hover { animation-play-state: paused; }
-      `}</style>
-
-      {kPos === "top" && <KPIsRow />}
-
-      {kPos === "side" && sidePack?.node}
-
-      {/* Conteúdo (com acolchoamento lateral quando side) */}
-      <div
-        className="px-3"
-        style={{ paddingLeft: pad + leftPad, paddingRight: pad + rightPad }}
-      >
-        {layout === "grid" ? (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(8,minmax(0,1fr))",
-              gap,
-            }}
-          >
-            {slots.slice(0, 16).map((s, i) => (
-              <Card key={s.id} />
-            ))}
-          </div>
-        ) : (
-          <div className="overflow-hidden w-full">
-            <div
-              className="flex marquee"
-              style={{
-                gap,
-                width: "max-content",
-                animation:
-                  autoScroll && slots.length > visible
-                    ? `marquee ${speedSec}s linear infinite`
-                    : undefined,
-              }}
-            >
-              {[...slots, ...slots].map((s, i) => (
-                <Card
-                  key={`${s.id}-${i}`}
-                  s={s}
-                  i={i % slots.length}
-                  width={cardW}
-                  baseH={baseH}
-                  pad={pad}
-                  opts={opts}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {kPos === "bottom" && <KPIsRow />}
-    </div>
-  );
-
-  function Card({ s, i, width, baseH, pad, opts }) {
+  // ----- Card -----
+  function Card({ s, i, width, tall }) {
     const superB = getIsSuper(s);
-    const showIdx = !!opts.showIdx;
-    const showBet = !!opts.showBet;
-    const showSuper = !!opts.showSuper && superB;
-    const showBetInBadge =
-      showBet && (opts.betStyle === "chip" || !!opts.vInfo);
-
-    const h = Math.max(120, Number(opts.cardH || 140));
+    const h = tall ? Math.max(180, Math.round(baseH - 84 - pad)) : Math.max(120, Number(opts.cardH || 140));
     const captionIsBar = opts.nameStyle === "bar";
     const captionIsFloat = opts.nameStyle === "float";
     const showName = opts.nameStyle !== "hidden";
@@ -673,14 +498,9 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     const infoRight = String(opts.infoPos || "left") === "right";
 
     const glowColor = opts.superGlowColor || "#e879f9";
-    const glowAlpha = Math.max(
-      0,
-      Math.min(1, Number(opts.superGlowStrength ?? 0.6))
-    );
+    const glowAlpha = Math.max(0, Math.min(1, Number(opts.superGlowStrength ?? 0.6)));
     const borderCol = hexToRgba(glowColor, 0.45 + glowAlpha * 0.35);
-    const shadowSoft = `0 0 ${
-      18 + 30 * glowAlpha
-    }px ${hexToRgba(glowColor, 0.35 * glowAlpha)}, 0 12px 28px rgba(0,0,0,.35)`;
+    const shadowSoft = `0 0 ${18 + 30 * glowAlpha}px ${hexToRgba(glowColor, 0.35 * glowAlpha)}, 0 12px 28px rgba(0,0,0,.35)`;
 
     return (
       <div
@@ -693,74 +513,40 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
         }}
         title={s?.name}
       >
-        {opts.shine && (
-          <div
-            className="absolute inset-y-0 left-0 w-1/3 pointer-events-none"
-            style={{
-              background:
-                "linear-gradient(90deg, transparent, rgba(255,255,255,.12), transparent)",
-              animation: "sweep 4.8s linear infinite",
-            }}
-          />
-        )}
         {s?.thumbnail ? (
-          <img
-            src={s.thumbnail}
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover object-center"
-          />
+          <img src={s.thumbnail} alt="" className="absolute inset-0 h-full w-full object-cover object-center" />
         ) : (
           <div className="absolute inset-0 bg-white/10" />
         )}
 
-        {/* AURA SUPER */}
+        {/* SUPER AURA */}
         {superB && opts.superGlow && (
           <>
-            <div
-              className="absolute -inset-1 rounded-xl pointer-events-none"
-              style={{
-                boxShadow: `0 0 ${
-                  22 + 40 * glowAlpha
-                }px ${hexToRgba(glowColor, 0.5 * glowAlpha)}`,
-              }}
-            />
-            <div
-              className="absolute inset-0 pointer-events-none"
-              style={{
-                background: `radial-gradient(60% 50% at 50% 40%, ${hexToRgba(
-                  glowColor,
-                  0.28 * glowAlpha
-                )} 0%, transparent 60%)`,
-              }}
-            />
+            <div className="absolute -inset-1 rounded-xl pointer-events-none"
+                 style={{ boxShadow: `0 0 ${22 + 40 * glowAlpha}px ${hexToRgba(glowColor, 0.5 * glowAlpha)}` }} />
+            <div className="absolute inset-0 pointer-events-none"
+                 style={{ background: `radial-gradient(60% 50% at 50% 40%, ${hexToRgba(glowColor, 0.28 * glowAlpha)} 0%, transparent 60%)` }} />
           </>
         )}
 
-        {/* gradientes topo/fundo */}
+        {/* fades */}
         <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/60 to-transparent pointer-events-none" />
         <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
 
-        {/* grupo info topo */}
+        {/* badges (top) */}
         <div
           className={cn(
             "absolute top-1.5 z-10",
             infoRight ? "right-1.5" : "left-1.5",
-            badgesVertical
-              ? "flex flex-col items-start gap-1"
-              : "flex items-center gap-1"
+            badgesVertical ? "flex flex-col items-start gap-1" : "flex items-center gap-1"
           )}
-          style={
-            infoRight
-              ? { alignItems: badgesVertical ? "flex-end" : "center", textAlign: "right" }
-              : {}
-          }
+          style={infoRight ? { alignItems: badgesVertical ? "flex-end" : "center", textAlign: "right" } : {}}
         >
-          {showIdx && (
-            <div className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-black/70">
-              #{i + 1}
-            </div>
+          {opts.showIdx && (
+            <div className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-black/70">#{i + 1}</div>
           )}
-          {showBetInBadge && (
+
+          {opts.showBet && (opts.betStyle === "chip" || !!opts.vInfo) && (
             <div className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-white/85 text-black/90 shadow">
               {fmtMoney(toNum(s.bet_size))}
             </div>
@@ -768,18 +554,14 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
         </div>
 
         {/* SUPER tag lado oposto */}
-        {showSuper && (
+        {opts.showSuper && superB && (
           <div
-            className={cn(
-              "absolute top-1.5 z-10 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide",
-              infoRight ? "left-1.5" : "right-1.5"
-            )}
+            className={cn("absolute top-1.5 z-10 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide",
+              infoRight ? "left-1.5" : "right-1.5")}
             style={{
               background: hexToRgba(opts.superTagColor || "#e879f9", 0.95),
               color: "#120614",
-              boxShadow: opts.superGlow
-                ? `0 0 22px ${hexToRgba(glowColor, 0.6 * glowAlpha)}`
-                : "none",
+              boxShadow: opts.superGlow ? `0 0 22px ${hexToRgba(glowColor, 0.6 * glowAlpha)}` : "none",
             }}
           >
             SUPER
@@ -787,43 +569,174 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
         )}
 
         {/* caption */}
-        {showName &&
-          (captionIsBar ? (
-            <div className="absolute left-2 right-2 bottom-2">
-              <div
-                className="px-2.5 py-1.5 rounded-lg border text-white shadow-[0_10px_30px_rgba(0,0,0,.45)] truncate"
-                style={{
-                  background: "rgba(0,0,0,.45)",
-                  borderColor: "rgba(255,255,255,.18)",
-                }}
-                title={s?.name || ""}
-              >
-                <div className="font-semibold leading-tight truncate">
-                  {s?.name || "—"}
-                </div>
-                {opts.betStyle === "inline" && !!opts.showBet && (
-                  <div className="mt-0.5 text-[11px] opacity-85 flex items-center gap-1">
-                    <span className="h-[6px] w-[6px] rounded-full bg-white/70" />
-                    {s?.bet_size != null ? fmtMoney(toNum(s.bet_size)) : "—"}
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : captionIsFloat ? (
-            <div className="absolute left-2 bottom-2 right-2 pointer-events-none">
-              <div className="font-semibold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,.8)] truncate">
-                {s?.name || "—"}
-              </div>
+        {showName && captionIsBar && (
+          <div className="absolute left-2 right-2 bottom-2">
+            <div
+              className="px-2.5 py-1.5 rounded-lg border text-white shadow-[0_10px_30px_rgba(0,0,0,.45)] truncate"
+              style={{ background: "rgba(0,0,0,.45)", borderColor: "rgba(255,255,255,.18)" }}
+              title={s?.name || ""}
+            >
+              <div className="font-semibold leading-tight truncate">{s?.name || "—"}</div>
               {opts.betStyle === "inline" && !!opts.showBet && (
-                <div className="text-[11px] text-white/85 drop-shadow-[0_2px_6px_rgba(0,0,0,.8)]">
+                <div className="mt-0.5 text-[11px] opacity-85 flex items-center gap-1">
+                  <span className="h-[6px] w-[6px] rounded-full bg-white/70" />
                   {s?.bet_size != null ? fmtMoney(toNum(s.bet_size)) : "—"}
                 </div>
               )}
             </div>
-          ) : null)}
+          </div>
+        )}
+
+        {showName && captionIsFloat && (
+          <div className="absolute left-2 bottom-2 right-2 pointer-events-none">
+            <div className="font-semibold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,.8)] truncate">
+              {s?.name || "—"}
+            </div>
+            {opts.betStyle === "inline" && !!opts.showBet && (
+              <div className="text-[11px] text-white/85 drop-shadow-[0_2px_6px_rgba(0,0,0,.8)]">
+                {s?.bet_size != null ? fmtMoney(toNum(s.bet_size)) : "—"}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }
+
+  // ===== KPIs render =====
+  function KPIsInline() {
+    // alinhamento horizontal/topo/fundo
+    const j = kpiAlign === "left" ? "justify-start" : kpiAlign === "right" ? "justify-end" : "justify-center";
+    const dir = kpiDir === "column" ? "flex-col" : "flex-row items-center";
+    const gapClass = kpiDir === "column" ? `gap-[${kpiGap}px]` : `gap-[${kpiGap}px]`; // mantemos via style
+
+    return (
+      <div className="px-3 py-2">
+        <div className={cn("flex", dir, j)} style={{ gap: kpiGap }}>
+          {items.map(({ key, label, value, Icon }) => {
+            if (kpiShape === "circle") {
+              return (
+                <div key={key}
+                     className="relative rounded-full border border-white/15 bg-white/10 text-[12px] flex items-center justify-center"
+                     style={{ width: circleD, height: circleD }}>
+                  {showIcons ? <Icon className="w-[60%] h-[60%]" /> : <span className={numCls}>{value}</span>}
+                </div>
+              );
+            }
+            const roundedClass = kpiShape === "pill" ? "rounded-full" : "rounded-lg";
+            return (
+              <div key={key}
+                   className={cn("border border-white/15 bg-white/10 px-3", roundedClass)}
+                   style={{ height: kpiH, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                {kpiShowLabels && <span className="opacity-70 text-[12px]">{label}:</span>}
+                <b className={cn(numCls, "text-[12px]")}>{value}</b>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  function KPIsSide() {
+    // pilha vertical centrada relativamente ao bloco de cards
+    const stackH = kpiH * items.length + kpiGap * (items.length - 1);
+    const top = Math.max(8, Math.round((baseH - stackH) / 2));
+
+    return (
+      <div
+        className="absolute z-20"
+        style={{
+          top,
+          left: kpiSide === "left" ? kpiSideSpace : undefined,
+          right: kpiSide === "right" ? kpiSideSpace : undefined,
+          display: "flex",
+          flexDirection: "column",
+          gap: kpiGap,
+        }}
+      >
+        {items.map(({ key, value, Icon, label }) =>
+          kpiShape === "circle" ? (
+            <div key={key}
+                 className="rounded-full border border-white/15 bg-white/10 text-[12px] flex items-center justify-center shadow-lg"
+                 style={{ width: circleD, height: circleD }}>
+              {showIcons ? <Icon className="w-[60%] h-[60%]" /> : <span className={numCls}>{value}</span>}
+            </div>
+          ) : (
+            <div key={key}
+                 className={cn("border border-white/15 bg-white/10 px-3", kpiShape === "pill" ? "rounded-full" : "rounded-lg")}
+                 style={{ height: kpiH, display: "inline-flex", alignItems: "center", gap: 6 }}>
+              {kpiShowLabels && <span className="opacity-70 text-[12px]">{label}:</span>}
+              <b className={cn(numCls, "text-[12px]")}>{value}</b>
+            </div>
+          )
+        )}
+      </div>
+    );
+  }
+
+  // ---- layout cards + reserva lateral quando side ----
+  const visibleW =
+    layout === "carousel"
+      ? Math.max(140, Math.floor((innerW - 6 - (visible - 1) * gapCards - reserveSide * 2) / visible))
+      : undefined;
+
+  const bg1 = opts.panelBgStart || "#0b1020";
+  const bg2 = opts.panelBgEnd || "#111827";
+
+  return (
+    <div
+      className="rounded-xl overflow-hidden relative"
+      style={{
+        width: baseW,
+        height: baseH,
+        border: showBox ? "1px solid rgba(255,255,255,.10)" : "none",
+        background: showBox ? `linear-gradient(135deg, ${bg1} 0%, ${bg2} 100%)` : "transparent",
+      }}
+    >
+      {/* KPIs TOP */}
+      {kpiPos === "top" && <KPIsInline />}
+
+      {/* KPIs SIDE (centrados verticalmente) */}
+      {kpiPos === "side" && <KPIsSide />}
+
+      {/* CARDS */}
+      {layout === "grid" ? (
+        <div className="px-3" style={{ display: "grid", gridTemplateColumns: "repeat(8,minmax(0,1fr))", gap: gapCards }}>
+          {slots.slice(0, 16).map((s, i) => (
+            <Card key={s.id} s={s} i={i} tall={false} />
+          ))}
+        </div>
+      ) : (
+        <div className="px-3">
+          <div className="overflow-hidden w-full">
+            <div
+              className={cn("flex")}
+              style={{
+                gap: gapCards,
+                width: "max-content",
+                paddingLeft: kpiPos === "side" && kpiSide === "left" ? reserveSide : 0,
+                paddingRight: kpiPos === "side" && kpiSide === "right" ? reserveSide : 0,
+                animation: autoScroll && slots.length > visible ? `marquee ${speedSec}s linear infinite` : undefined,
+              }}
+            >
+              {[...slots, ...slots].map((s, i) => (
+                <Card key={`${s.id}-${i}`} s={s} i={i % slots.length} tall={true} width={visibleW} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* KPIs BOTTOM */}
+      {kpiPos === "bottom" && <KPIsInline />}
+
+      {/* CSS auxiliares */}
+      <style>{`
+        @keyframes marquee { 0% { transform: translateX(0%); } 100% { transform: translateX(-50%); } }
+      `}</style>
+    </div>
+  );
 }
 
 /* ───────────────────────── Opening Preview (sem mudanças de KPI) ───────────────────────── */
@@ -1300,153 +1213,153 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                   </div>
                 </div>
 
-                {/* KPIs */}
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
-                  <div className="text-xs opacity-70">KPIs (Start • B/E • #Bonus)</div>
+{/* KPIs */}
+<div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
+  <div className="text-xs opacity-70">KPIs (Start • B/E • #Bonus)</div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">Posição</div>
-                      <select
-                        value={opts.kpiPos}
-                        onChange={(e) =>
-                          setOpts((o) => ({ ...o, kpiPos: e.target.value }))
-                        }
-                        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-                      >
-                        <option value="top">Topo</option>
-                        <option value="bottom">Fundo</option>
-                        <option value="side">Lado (vertical)</option>
-                        <option value="hidden">Ocultar</option>
-                      </select>
-                    </div>
+  <div className="grid grid-cols-2 gap-2">
+    <div>
+      <div className="text-xs opacity-70 mb-1">Posição</div>
+      <select
+        value={opts.kpiPos}
+        onChange={(e) => setOpts((o) => ({ ...o, kpiPos: e.target.value }))}
+        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+      >
+        <option value="top">Topo</option>
+        <option value="bottom">Fundo</option>
+        <option value="side">Vertical (lado)</option>
+        <option value="hidden">Ocultar</option>
+      </select>
+    </div>
 
-                    {opts.kpiPos !== "side" && (
-                      <div>
-                        <div className="text-xs opacity-70 mb-1">Alinhamento</div>
-                        <select
-                          value={opts.kpiAlign}
-                          onChange={(e) =>
-                            setOpts((o) => ({ ...o, kpiAlign: e.target.value }))
-                          }
-                          className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-                        >
-                          <option value="left">Left</option>
-                          <option value="center">Center</option>
-                          <option value="right">Right</option>
-                        </select>
-                      </div>
-                    )}
-                  </div>
+    <div>
+      <div className="text-xs opacity-70 mb-1">Orientação</div>
+      <select
+        value={opts.kpiDir}
+        onChange={(e) => setOpts((o) => ({ ...o, kpiDir: e.target.value }))}
+        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+        disabled={opts.kpiPos !== "top" && opts.kpiPos !== "bottom"}
+      >
+        <option value="row">Horizontal</option>
+        <option value="column">Vertical</option>
+      </select>
+    </div>
+  </div>
 
-                  {opts.kpiPos === "side" && (
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <div className="text-xs opacity-70 mb-1">Lado</div>
-                        <select
-                          value={opts.kpiSide}
-                          onChange={(e) =>
-                            setOpts((o) => ({ ...o, kpiSide: e.target.value }))
-                          }
-                          className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-                        >
-                          <option value="left">Esquerda</option>
-                          <option value="right">Direita</option>
-                        </select>
-                      </div>
-                      <div>
-                        <div className="text-xs opacity-70 mb-1">
-                          KPI side spacing
-                        </div>
-                        <Input
-                          type="number"
-                          value={opts.kpiSideSpacing}
-                          onChange={(e) =>
-                            setOpts((o) => ({
-                              ...o,
-                              kpiSideSpacing: Number(e.target.value) || 0,
-                            }))
-                          }
-                          className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-                        />
-                      </div>
-                    </div>
-                  )}
+  <div className="grid grid-cols-2 gap-2">
+    <div>
+      <div className="text-xs opacity-70 mb-1">Alinhamento</div>
+      <select
+        value={opts.kpiAlign}
+        onChange={(e) => setOpts((o) => ({ ...o, kpiAlign: e.target.value }))}
+        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+        disabled={opts.kpiPos !== "top" && opts.kpiPos !== "bottom"}
+      >
+        <option value="left">Esquerda</option>
+        <option value="center">Centro</option>
+        <option value="right">Direita</option>
+      </select>
+    </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">KPI gap</div>
-                      <Input
-                        type="number"
-                        value={opts.kpiGap}
-                        onChange={(e) =>
-                          setOpts((o) => ({
-                            ...o,
-                            kpiGap: Number(e.target.value) || 0,
-                          }))
-                        }
-                        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-                      />
-                    </div>
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">
-                        KPI size (0.7–1.4)
-                      </div>
-                      <input
-                        type="range"
-                        min={0.7}
-                        max={1.4}
-                        step={0.05}
-                        value={opts.kpiSize}
-                        onChange={(e) =>
-                          setOpts((o) => ({
-                            ...o,
-                            kpiSize: Number(e.target.value),
-                          }))
-                        }
-                        className="w-full"
-                      />
-                    </div>
-                  </div>
+    <div>
+      <div className="text-xs opacity-70 mb-1">Lado</div>
+      <select
+        value={opts.kpiSide}
+        onChange={(e) => setOpts((o) => ({ ...o, kpiSide: e.target.value }))}
+        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+        disabled={opts.kpiPos !== "side"}
+      >
+        <option value="left">Esquerda</option>
+        <option value="right">Direita</option>
+      </select>
+    </div>
+  </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">KPI shape</div>
-                      <select
-                        value={opts.kpiShape}
-                        onChange={(e) =>
-                          setOpts((o) => ({ ...o, kpiShape: e.target.value }))
-                        }
-                        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-                      >
-                        <option value="pill">Pill</option>
-                        <option value="box">Box</option>
-                        <option value="circle">Circle</option>
-                      </select>
-                    </div>
-                    {opts.kpiShape === "circle" && (
-                      <div>
-                        <div className="text-xs opacity-70 mb-1">
-                          Alternar ícone/valor (ms)
-                        </div>
-                        <Input
-                          type="number"
-                          value={opts.kpiFlipMs}
-                          onChange={(e) =>
-                            setOpts((o) => ({
-                              ...o,
-                              kpiFlipMs: Math.max(
-                                500,
-                                Number(e.target.value) || 1200
-                              ),
-                            }))
-                          }
-                          className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
+  <div className="grid grid-cols-2 gap-2">
+    <div>
+      <div className="text-xs opacity-70 mb-1">KPI gap</div>
+      <Input
+        type="number"
+        value={opts.kpiGap}
+        onChange={(e) => setOpts((o) => ({ ...o, kpiGap: Number(e.target.value) || 0 }))}
+        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+      />
+    </div>
+
+    <div>
+      <div className="text-xs opacity-70 mb-1">KPI side spacing</div>
+      <Input
+        type="number"
+        value={opts.kpiSideSpace}
+        onChange={(e) => setOpts((o) => ({ ...o, kpiSideSpace: Number(e.target.value) || 0 }))}
+        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+        disabled={opts.kpiPos !== "side"}
+      />
+    </div>
+  </div>
+
+  <div>
+    <div className="text-xs opacity-70 mb-1">KPI size (0.7–1.6)</div>
+    <input
+      type="range"
+      min={0.7}
+      max={1.6}
+      step={0.05}
+      value={opts.kpiSize}
+      onChange={(e) => setOpts((o) => ({ ...o, kpiSize: Number(e.target.value) }))}
+      className="w-full"
+    />
+  </div>
+
+  <div className="grid grid-cols-2 gap-2">
+    <div>
+      <div className="text-xs opacity-70 mb-1">KPI shape</div>
+      <select
+        value={opts.kpiShape}
+        onChange={(e) => setOpts((o) => ({ ...o, kpiShape: e.target.value }))}
+        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+      >
+        <option value="box">Box</option>
+        <option value="pill">Pill</option>
+        <option value="circle">Circle</option>
+      </select>
+    </div>
+
+    <div>
+      <div className="text-xs opacity-70 mb-1">Arredondar valores</div>
+      <select
+        value={opts.kpiRound}
+        onChange={(e) => setOpts((o) => ({ ...o, kpiRound: Number(e.target.value) }))}
+        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+      >
+        <option value={0}>Unidades</option>
+        <option value={1}>Décimas</option>
+        <option value={2}>Centesimas</option>
+      </select>
+    </div>
+  </div>
+
+  <div className="grid grid-cols-2 gap-2">
+    <div>
+      <div className="text-xs opacity-70 mb-1">Alternância (círculo) ms</div>
+      <Input
+        type="number"
+        value={opts.kpiAltMs}
+        onChange={(e) => setOpts((o) => ({ ...o, kpiAltMs: Math.max(0, Number(e.target.value) || 0) }))}
+        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+      />
+    </div>
+    <label className="flex items-center gap-2 text-sm mt-6">
+      <input
+        type="checkbox"
+        checked={!!opts.kpiShowLabels}
+        onChange={(e) => setOpts((o) => ({ ...o, kpiShowLabels: !!e.target.checked }))}
+        disabled={opts.kpiShape === "circle"}
+      />
+      Mostrar labels (box/pill)
+    </label>
+  </div>
+</div>
 
                 {/* SUPER glow/tag */}
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
