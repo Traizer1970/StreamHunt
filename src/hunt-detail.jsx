@@ -318,36 +318,36 @@ const DEFAULT_HUNT_OVERLAY = {
 
   // KPIs (Start • B/E • #Bonus)
   kpiPos: "top",         // "top" | "bottom" | "side" | "hidden"
-  kpiDir: "row",         // "row" | "column"   (usado quando kpiPos = top/bottom)
-  kpiAlign: "center",    // "left" | "center" | "right" (top/bottom)
-  kpiSide: "right",      // "left" | "right"   (usado quando kpiPos = side)
-  kpiGap: 8,             // gap entre KPIs
-  kpiSideSpace: 18,      // afastamento do lado (quando side)
-  kpiSize: 1.0,          // escala 0.7 a 1.6
+  kpiDir: "row",         // "row" | "column"
+  kpiAlign: "center",    // "left" | "center" | "right"
+  kpiSide: "right",      // "left" | "right"
+  kpiGap: 8,
+  kpiSideSpace: 18,
+  kpiSize: 1.0,          // 0.7 a 1.6
   kpiShape: "box",       // "box" | "pill" | "circle"
-  kpiRound: 2,           // 0 = unidades, 1 = décimas, 2 = centésimas
-  kpiShowLabels: true,   // para box/pill mostrar texto "Start", "B/E", "# Bonus"
+  kpiRound: 2,           // 0,1,2
+  kpiShowLabels: true,
 
-  // NOVO: alternância e cores
-  kpiAltIconMs: 1200,     // tempo do ÍCONE (ms) quando círculo
-  kpiAltValueMs: 1800,     // tempo do VALOR (ms) quando círculo
-  kpiAnim: "fade",         // "fade" | "scale" | "slide" | "flip"
-  kpiColorPreset: "glass", // preset de cor
-  kpiBg: "",               // overrides opcionais
+  // alternância + cores
+  kpiAltIconMs: 1200,
+  kpiAltValueMs: 1800,
+  kpiAnim: "fade",
+  kpiColorPreset: "glass",
+  kpiBg: "",
   kpiBorder: "",
   kpiText: "",
 
   // Cards
   cardH: 160,
-  nameStyle: "bar",      // "bar" | "float" | "hidden"
-  betStyle: "inline",    // "inline" | "chip" | "none"
+  nameStyle: "bar",
+  betStyle: "inline",
   showIdx: true,
   showBet: true,
   showSuper: true,
 
-  // Infos verticais no topo do card
+  // Infos verticais
   vInfo: false,
-  infoPos: "left",       // "left" | "right"
+  infoPos: "left",
 
   // SUPER glow
   superGlow: true,
@@ -404,7 +404,7 @@ function buildHuntOverlayUrl(base, huntNumberId, o) {
   qs.set("infoside", String(o.infoPos || "left"));
 
   // KPIs
-  qs.set("kpos", String(o.kpiPos || "top"));            // top | bottom | side | hidden
+  qs.set("kpos", String(o.kpiPos || "top"));
   qs.set("kdir", String(o.kpiDir || "row"));
   qs.set("kalign", String(o.kpiAlign || "center"));
   qs.set("kside", String(o.kpiSide || "right"));
@@ -534,6 +534,15 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
   const estKpiW = kpiShape === "circle" ? circleD : Math.round(112 * kpiSize);
   const reserveSide = kpiPos === "side" ? estKpiW + kpiSideSpace + 6 : 0;
 
+  // estilos consistentes para todos os badges
+  const kStyle = {
+    background: kColors.bg,
+    borderColor: kColors.border,
+    color: kColors.text,
+  };
+  const iconPxCircle = Math.max(12, Math.round(circleD * 0.56));
+  const valueFontCircle = Math.max(10, Math.round(circleD * 0.36));
+
   // >>> NÃO mexemos no tamanho dos cards – só usamos opts.cardH <<<
   const cardHeight = Math.max(120, Number(opts.cardH || 140));
 
@@ -622,43 +631,66 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     );
   }
 
-  // KPIs horizontais
+  /* ───────── KPI BADGE NORMALIZADO ───────── */
+  function KpiBadge({ shape, label, value, Icon }) {
+    if (shape === "circle") {
+      return (
+        <div
+          className="rounded-full border shadow-lg grid place-items-center"
+          style={{ width: circleD, height: circleD, lineHeight: 0, ...kStyle }}
+        >
+          {showIcons ? (
+            <Icon size={iconPxCircle} strokeWidth={2} className="block" />
+          ) : (
+            <span className={numCls} style={{ fontSize: valueFontCircle, lineHeight: 1 }}>
+              {value}
+            </span>
+          )}
+        </div>
+      );
+    }
+    // pill/box
+    return (
+      <div
+        className={cn(
+          "border px-3 inline-flex items-center",
+          shape === "pill" ? "rounded-full" : "rounded-lg"
+        )}
+        style={{ height: kpiH, gap: 6, ...kStyle }}
+      >
+        {kpiShowLabels && (
+          <span className="opacity-80 text-[12px]" style={{ lineHeight: 1 }}>
+            {label}:
+          </span>
+        )}
+        <b className={cn(numCls, "text-[12px]")} style={{ lineHeight: 1 }}>
+          {value}
+        </b>
+      </div>
+    );
+  }
+
+  // KPIs horizontais (top/bottom)
   function KPIsInline() {
-    const j = kpiAlign === "left" ? "justify-start" : kpiAlign === "right" ? "justify-end" : "justify-center";
+    const j =
+      kpiAlign === "left"
+        ? "justify-start"
+        : kpiAlign === "right"
+        ? "justify-end"
+        : "justify-center";
     const dir = kpiDir === "column" ? "flex-col" : "flex-row items-center";
     return (
       <div className="px-3 py-2">
         <div className={cn("flex", dir, j)} style={{ gap: kpiGap }}>
-          {items.map(({ key, label, value, Icon }) =>
-            kpiShape === "circle" ? (
-              <div
-                key={key}
-                className="relative rounded-full border text-[12px] flex items-center justify-center"
-                style={{ width: circleD, height: circleD, background: kColors.bg, borderColor: kColors.border, color: kColors.text }}
-              >
-                <div key={showIcons ? "icon" : "val"} className={`kpi-swap anim-${kpiAnim}`}>
-                  {showIcons ? <Icon className="w-[60%] h-[60%]" /> : <span className={numCls}>{value}</span>}
-                </div>
-              </div>
-            ) : (
-              <div
-                key={key}
-                className={cn("px-3", kpiShape === "pill" ? "rounded-full" : "rounded-lg")}
-                style={{
-                  height: kpiH,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  background: kColors.bg,
-                  border: `1px solid ${kColors.border}`,
-                  color: kColors.text,
-                }}
-              >
-                {kpiShowLabels && <span className="opacity-80 text-[12px]">{label}:</span>}
-                <b className={cn(numCls, "text-[12px]")}>{value}</b>
-              </div>
-            )
-          )}
+          {items.map(({ key, label, value, Icon }) => (
+            <KpiBadge
+              key={key}
+              shape={kpiShape}
+              label={label}
+              value={value}
+              Icon={Icon}
+            />
+          ))}
         </div>
       </div>
     );
@@ -679,36 +711,15 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
           gap: kpiGap,
         }}
       >
-        {items.map(({ key, value, Icon, label }) =>
-          kpiShape === "circle" ? (
-            <div
-              key={key}
-              className="rounded-full border text-[12px] flex items-center justify-center shadow-lg"
-              style={{ width: circleD, height: circleD, background: kColors.bg, borderColor: kColors.border, color: kColors.text }}
-            >
-              <div key={showIcons ? "icon" : "val"} className={`kpi-swap anim-${kpiAnim}`}>
-                {showIcons ? <Icon className="w-[60%] h-[60%]" /> : <span className={numCls}>{value}</span>}
-              </div>
-            </div>
-          ) : (
-            <div
-              key={key}
-              className={cn("px-3", kpiShape === "pill" ? "rounded-full" : "rounded-lg")}
-              style={{
-                height: kpiH,
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                background: kColors.bg,
-                border: `1px solid ${kColors.border}`,
-                color: kColors.text,
-              }}
-            >
-              {kpiShowLabels && <span className="opacity-80 text-[12px]">{label}:</span>}
-              <b className={cn(numCls, "text-[12px]")}>{value}</b>
-            </div>
-          )
-        )}
+        {items.map(({ key, label, value, Icon }) => (
+          <KpiBadge
+            key={key}
+            shape={kpiShape}
+            label={label}
+            value={value}
+            Icon={Icon}
+          />
+        ))}
       </div>
     );
   }
@@ -778,21 +789,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
 
       {kpiPos === "bottom" && <KPIsInline />}
 
-      <style>{`
-        @keyframes marquee{0%{transform:translateX(0%)}100%{transform:translateX(-50%)}}
-
-        /* animações do swap KPI */
-        .kpi-swap{will-change:transform,opacity}
-        .anim-fade{animation:kpiFade .22s ease}
-        .anim-scale{animation:kpiScale .22s ease}
-        .anim-slide{animation:kpiSlide .28s ease}
-        .anim-flip{animation:kpiFlip .32s ease;transform-style:preserve-3d}
-
-        @keyframes kpiFade{from{opacity:0}to{opacity:1}}
-        @keyframes kpiScale{from{opacity:0;transform:scale(.86)}to{opacity:1;transform:scale(1)}}
-        @keyframes kpiSlide{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-        @keyframes kpiFlip{from{opacity:.0;transform:rotateX(90deg)}to{opacity:1;transform:rotateX(0)}}
-      `}</style>
+      <style>{`@keyframes marquee{0%{transform:translateX(0%)}100%{transform:translateX(-50%)}}`}</style>
     </div>
   );
 }
@@ -1912,7 +1909,7 @@ function AddBonusModal({ open, onClose, numberId, onAdded }) {
                 <Search className="h-4 w-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-white/60" />
               </div>
 
-              <div className="max-h[320px] max-h-[320px] overflow-auto rounded-xl border border-white/10 bg-zinc-900">
+              <div className="max-h-[320px] overflow-auto rounded-xl border border-white/10 bg-zinc-900">
                 {busy && (
                   <div className="px-3 py-3 text-sm flex items-center gap-2 opacity-80">
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -2202,11 +2199,11 @@ export default function HuntDetail({ numberId }) {
   const { isDark } = useTheme();
   const { t } = useLang();
 
-const [nId, setNId] = React.useState(() => {
-  const m = (typeof location !== "undefined" && location.hash) || "";
-  const mm = m.match(/#\/hunts\/(\d+)/i);
-  return Number(numberId ?? (mm && mm[1])) || 0;
-});
+  const [nId, setNId] = React.useState(() => {
+    const m = (typeof location !== "undefined" && location.hash) || "";
+    const mm = m.match(/#\/hunts\/(\d+)/i);
+    return Number(numberId ?? (mm && mm[1])) || 0;
+  });
   React.useEffect(() => {
     const onHash = () => {
       const m = (location.hash || "").match(/#\/hunts\/(\d+)/i);
