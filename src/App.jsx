@@ -356,37 +356,34 @@ function QuickStats({ stats }) {
 function BareModal({ open, onClose, children }) {
   const { isDark } = useTheme();
 
-  React.useEffect(() => {
-    if (!open) return;
+React.useEffect(() => {
+  const html = document.documentElement;
+  const body = document.body;
+  const sbw = window.innerWidth - html.clientWidth;
 
-    const html = document.documentElement;
-    const body = document.body;
+  const prev = {
+    htmlBg: html.style.background,
+    bodyBg: body.style.background,
+    bodyMargin: body.style.margin,
+    overflow: body.style.overflow,
+    marginRight: body.style.marginRight,
+  };
 
-    // calcula a largura da scrollbar para evitar “jump” do layout
-    const sbw = window.innerWidth - html.clientWidth;
+  html.style.background = "transparent";
+  body.style.background = "transparent";
+  body.style.margin = "0";
+  body.style.overflow = "hidden";
+  if (sbw > 0) body.style.marginRight = `${sbw}px`;
 
-    // guarda os estilos anteriores para restaurar no cleanup
-    const prev = {
-      htmlOverflow: html.style.overflow,
-      bodyOverflow: body.style.overflow,
-      htmlPad: html.style.paddingRight,
-      bodyPad: body.style.paddingRight,
-    };
+  return () => {
+    html.style.background = prev.htmlBg;
+    body.style.background = prev.bodyBg;
+    body.style.margin = prev.bodyMargin;
+    body.style.overflow = prev.overflow;
+    body.style.marginRight = prev.marginRight;
+  };
+}, []);
 
-    html.style.overflow = "hidden";
-    body.style.overflow = "hidden";
-    if (sbw > 0) {
-      html.style.paddingRight = `${sbw}px`;
-      body.style.paddingRight = `${sbw}px`;
-    }
-
-    return () => {
-      html.style.overflow = prev.htmlOverflow;
-      body.style.overflow = prev.bodyOverflow;
-      html.style.paddingRight = prev.htmlPad;
-      body.style.paddingRight = prev.bodyPad;
-    };
-  }, [open]);
 
   if (!open) return null;
   return (
