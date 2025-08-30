@@ -325,11 +325,11 @@ const DEFAULT_HUNT_OVERLAY = {
   kpiSide: "right",      // "left" | "right"
   kpiGap: 8,
   kpiSideSpace: 18,
-  kpiSize: 1.0,          // 0.7 a 1.6
+  kpiSize: 1.0,          // 0.7 a 1.6 (tamanho do badge)
   kpiShape: "box",       // "box" | "pill" | "circle"
   kpiRound: 2,           // 0,1,2
   kpiShowLabels: true,
-  kpiBold: false,        // << NOVO
+  kpiFont: 1.0,          // << NOVO — escala do tamanho da letra (0.8–1.6)
 
   // alternância + cores
   kpiAltIconMs: 1200,
@@ -382,7 +382,7 @@ const DEFAULT_OPENING_OVERLAY = {
   baseH: 320,
   showTitle: true,
   showCurrent: true,
-  kpiBold: false, // por consistência
+  kpiFont: 1.0, // para consistência (se usar heading com números no futuro)
 };
 
 /* ───────────────────────── URLs ───────────────────────── */
@@ -418,7 +418,7 @@ function buildHuntOverlayUrl(base, huntNumberId, o) {
   qs.set("kshape", String(o.kpiShape || "box"));
   qs.set("kround", String(o.kpiRound ?? 2));
   qs.set("klabels", o.kpiShowLabels ? "1" : "0");
-  if (o.kpiBold) qs.set("kbold", "1"); // << NOVO
+  qs.set("kfont", String(o.kpiFont ?? 1)); // << NOVO
 
   // tempos/animação + cores
   qs.set("kicon", String(o.kpiAltIconMs ?? 0));
@@ -487,6 +487,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
   const kpiShape = String(opts.kpiShape || "box");     // "box" | "pill" | "circle"
   const kpiRound = Math.max(0, Math.min(2, Number(opts.kpiRound ?? 2)));
   const kpiShowLabels = !!opts.kpiShowLabels;
+  const kpiFont = Math.max(0.6, Math.min(2, Number(opts.kpiFont ?? 1))); // segurança
 
   // alternância + cores
   const kpiAltIconMs  = Math.max(0, Number(opts.kpiAltIconMs ?? 0));
@@ -544,9 +545,10 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     background: kColors.bg,
     borderColor: kColors.border,
     color: kColors.text,
+    fontFamily: RUBIK_STACK,
   };
   const iconPxCircle = Math.max(12, Math.round(circleD * 0.56));
-  const valueFontCircle = Math.max(10, Math.round(circleD * 0.36));
+  const valueFontCircle = Math.max(10, Math.round(circleD * 0.36 * kpiFont));
 
   // >>> NÃO mexemos no tamanho dos cards – só usamos opts.cardH <<<
   const cardHeight = Math.max(120, Number(opts.cardH || 140));
@@ -609,7 +611,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
         {showName && captionIsBar && (
           <div className="absolute left-2 right-2 bottom-2">
             <div className="px-2.5 py-1.5 rounded-lg border text-white shadow-[0_10px_30px_rgba(0,0,0,.45)] truncate"
-                 style={{ background: "rgba(0,0,0,.45)", borderColor: "rgba(255,255,255,.18)" }}
+                 style={{ background: "rgba(0,0,0,.45)", borderColor: "rgba(255,255,255,.18)", fontFamily: RUBIK_STACK }}
                  title={s?.name || ""}>
               <div className="font-semibold leading-tight truncate">{s?.name || "—"}</div>
               {opts.betStyle === "inline" && !!opts.showBet && (
@@ -623,7 +625,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
         )}
 
         {showName && captionIsFloat && (
-          <div className="absolute left-2 bottom-2 right-2 pointer-events-none">
+          <div className="absolute left-2 bottom-2 right-2 pointer-events-none" style={{ fontFamily: RUBIK_STACK }}>
             <div className="font-semibold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,.8)] truncate">{s?.name || "—"}</div>
             {opts.betStyle === "inline" && !!opts.showBet && (
               <div className="text-[11px] text-white/85 drop-shadow-[0_2px_6px_rgba(0,0,0,.8)]">
@@ -643,6 +645,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
         <div
           className="rounded-full border shadow-lg grid place-items-center"
           style={{ width: circleD, height: circleD, lineHeight: 0, ...kStyle }}
+          title={label}
         >
           {showIcons ? (
             <Icon size={iconPxCircle} strokeWidth={2} className="block" />
@@ -652,7 +655,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
               style={{
                 fontSize: valueFontCircle,
                 lineHeight: 1,
-                fontWeight: opts.kpiBold ? 700 : 600, // << NOVO
+                fontWeight: 700,             // sempre bold
               }}
             >
               {value}
@@ -676,8 +679,12 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
           </span>
         )}
         <b
-          className={cn(numCls, "text-[12px]")}
-          style={{ lineHeight: 1, fontWeight: opts.kpiBold ? 700 : 600 }} // << NOVO
+          className={cn(numCls)}
+          style={{
+            lineHeight: 1,
+            fontWeight: 700,                              // sempre bold
+            fontSize: Math.round(12 * kpiFont),          // << NOVO
+          }}
         >
           {value}
         </b>
@@ -695,7 +702,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
         : "justify-center";
     const dir = kpiDir === "column" ? "flex-col" : "flex-row items-center";
     return (
-      <div className="px-3 py-2">
+      <div className="px-3 py-2" style={{ fontFamily: RUBIK_STACK }}>
         <div className={cn("flex", dir, j)} style={{ gap: kpiGap }}>
           {items.map(({ key, label, value, Icon }) => (
             <KpiBadge
@@ -711,7 +718,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     );
   }
 
-  // KPIs verticais (lado) — fora dos cards, centrados
+  // KPIs verticais (lado)
   function KPIsSide() {
     return (
       <div
@@ -724,6 +731,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
           display: "flex",
           flexDirection: "column",
           gap: kpiGap,
+          fontFamily: RUBIK_STACK,
         }}
       >
         {items.map(({ key, label, value, Icon }) => (
@@ -739,7 +747,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     );
   }
 
-  // ➜ largura dos cards (NÃO reduzimos por causa da reserva lateral)
+  // ➜ largura dos cards
   const innerW = baseW;
   const visibleW =
     layout === "carousel"
@@ -755,13 +763,13 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
       style={{
         width: baseW,
         height: baseH,
-        fontFamily: RUBIK_STACK, // << NOVO
         border: showBox ? "1px solid rgba(255,255,255,.10)" : "none",
         background: showBox ? `linear-gradient(135deg, ${bg1} 0%, ${bg2} 100%)` : "transparent",
+        fontFamily: RUBIK_STACK,
       }}
     >
-      {/* importar Rubik */}
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap');`}</style>
+      {/* Importa Rubik para o preview/overlay */}
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap'); @keyframes marquee{0%{transform:translateX(0%)}100%{transform:translateX(-50%)}}`}</style>
 
       {kpiPos === "top" && <KPIsInline />}
       {kpiPos === "side" && <KPIsSide />}
@@ -807,8 +815,6 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
       )}
 
       {kpiPos === "bottom" && <KPIsInline />}
-
-      <style>{`@keyframes marquee{0%{transform:translateX(0%)}100%{transform:translateX(-50%)}}`}</style>
     </div>
   );
 }
@@ -825,14 +831,12 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
       style={{
         width: baseW,
         height: baseH,
-        fontFamily: RUBIK_STACK, // << NOVO
         background:
           "linear-gradient(135deg, rgba(15,16,33,1) 0%, rgba(24,16,40,1) 100%)",
+        fontFamily: RUBIK_STACK,
       }}
     >
-      {/* importar Rubik */}
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap');`}</style>
-
       <div className="px-3 pt-3 pb-2 flex items-center justify-between">
         {opts.showTitle !== false ? (
           <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
@@ -1417,7 +1421,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                     </div>
                   </div>
 
-                  {/* Alternância com tempos separados + animação */}
+                  {/* Alternância com tempos + animação */}
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <div className="text-xs opacity-70 mb-1">Ícone (ms, círculo)</div>
@@ -1439,48 +1443,27 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">Animação de swap</div>
-                      <select
-                        value={opts.kpiAnim}
-                        onChange={(e) => setOpts((o) => ({ ...o, kpiAnim: e.target.value }))}
-                        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-                      >
-                        <option value="fade">Fade</option>
-                        <option value="scale">Scale</option>
-                        <option value="slide">Slide</option>
-                        <option value="flip">Flip</option>
-                      </select>
-                    </div>
-
-                    <label className="flex items-center gap-2 text-sm mt-6">
-                      <input
-                        type="checkbox"
-                        checked={!!opts.kpiShowLabels}
-                        onChange={(e) => setOpts((o) => ({ ...o, kpiShowLabels: !!e.target.checked }))}
-                        disabled={opts.kpiShape === "circle"}
-                      />
-                      Mostrar labels (box/pill)
-                    </label>
-
-                    {/* NOVO: KPI em bold */}
-                    <div className="col-span-2">
-                      <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={!!opts.kpiBold}
-                          onChange={(e) =>
-                            setOpts((o) => ({ ...o, kpiBold: !!e.target.checked }))
-                          }
-                        />
-                        KPI em bold
-                      </label>
+                  {/* NOVO: Tamanho da letra do KPI */}
+                  <div>
+                    <div className="text-xs opacity-70 mb-1">Tamanho da letra do KPI (0.8–1.6)</div>
+                    <input
+                      type="range"
+                      min={0.8}
+                      max={1.6}
+                      step={0.05}
+                      value={opts.kpiFont}
+                      onChange={(e) =>
+                        setOpts((o) => ({ ...o, kpiFont: Number(e.target.value) }))
+                      }
+                      className="w-full"
+                    />
+                    <div className="text-[11px] opacity-60 mt-1">
+                      Ajusta apenas a letra (mantém o tamanho do círculo/box).
                     </div>
                   </div>
 
                   {/* Cores */}
-                  <div>
+                  <div className="mt-2">
                     <div className="text-xs opacity-70 mb-1">KPI color preset</div>
                     <select
                       value={opts.kpiColorPreset}
@@ -1841,7 +1824,8 @@ function OverlayCard({ type, hunt, slots, opts, setOpts }) {
   );
 }
 
-/* ───────────────────────── Redeem & CRUD (inalterado exceto importações) ───────────────────────── */
+/* ───────────────────────── Redeem & CRUD (inalterado) ───────────────────────── */
+
 function AddBonusModal({ open, onClose, numberId, onAdded }) {
   const { t } = useLang();
   const [query, setQuery] = React.useState("");
@@ -2432,7 +2416,7 @@ export default function HuntDetail({ numberId }) {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
+    <div className="max-w-7xl mx-auto px-4 py-6" style={{ fontFamily: RUBIK_STACK }}>
       {/* Top bar */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
