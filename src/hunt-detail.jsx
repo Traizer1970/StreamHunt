@@ -427,7 +427,6 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
 
   const baseW = Number(opts.baseW || 560);
   const baseH = Number(opts.baseH || 280);
-  const pad   = Number(opts.pad || 0);
   const showBox = opts.showBox !== false;
 
   const layout   = String(opts.layout || "carousel");
@@ -436,6 +435,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
   const speedSec = Math.max(5, Math.min(180, Number(opts.scrollDur || 30)));
   const gapCards = layout === "grid" ? 8 : 12;
 
+  // KPIs
   const kpiPos   = String(opts.kpiPos || "top");       // "top" | "bottom" | "side" | "hidden"
   const kpiDir   = String(opts.kpiDir || "row");
   const kpiAlign = String(opts.kpiAlign || "center");
@@ -448,49 +448,52 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
   const kpiRound = Math.max(0, Math.min(2, Number(opts.kpiRound ?? 2)));
   const kpiShowLabels = !!opts.kpiShowLabels;
 
-  const innerW = baseW - 0;
+  // formatos/ícones
+  const fmt = (n) => new Intl.NumberFormat(LOCALE, {
+    style: "currency", currency: CURRENCY,
+    minimumFractionDigits: kpiRound, maximumFractionDigits: kpiRound,
+  }).format(Number(n) || 0);
 
-  // ===== helpers =====
-  const formatMoneyRound = (n) => {
-    const num = Number(n) || 0;
-    return new Intl.NumberFormat(LOCALE, {
-      style: "currency",
-      currency: CURRENCY,
-      minimumFractionDigits: kpiRound,
-      maximumFractionDigits: kpiRound,
-    }).format(num);
-  };
-
-  // ícones (Lucide)
   const items = [
-    { key: "start",  label: "Start",  value: formatMoneyRound(start),  Icon: Wallet },
-    { key: "be",     label: "B/E",    value: formatMoneyRound(beLeft), Icon: Scale  },
-    { key: "bonus",  label: "# Bonus",value: String(slots.length),     Icon: Gift   },
+    { key: "start",  label: "Start",   value: fmt(start),  Icon: Wallet },
+    { key: "be",     label: "B/E",     value: fmt(beLeft), Icon: Scale  },
+    { key: "bonus",  label: "# Bonus", value: String(slots.length), Icon: Gift },
   ];
 
-  // alternância (só para círculos)
   const [showIcons, setShowIcons] = React.useState(kpiAltMs > 0);
   React.useEffect(() => {
     if (kpiAltMs <= 0 || kpiShape !== "circle") { setShowIcons(false); return; }
     setShowIcons(true);
-    const id = setInterval(() => setShowIcons(s => !s), kpiAltMs);
+    const id = setInterval(() => setShowIcons((s) => !s), kpiAltMs);
     return () => clearInterval(id);
   }, [kpiAltMs, kpiShape]);
 
-  // tamanhos
+  // tamanhos base
   const pillH   = Math.round(28 * kpiSize);
   const boxH    = Math.round(32 * kpiSize);
   const circleD = Math.round(36 * kpiSize);
   const kpiH    = kpiShape === "circle" ? circleD : (kpiShape === "box" ? boxH : pillH);
-  const estKpiW = kpiShape === "circle" ? circleD : Math.round(112 * kpiSize); // reserva lateral
+  const estKpiW = kpiShape === "circle" ? circleD : Math.round(112 * kpiSize);
 
-  // quando kpiPos = side, reservamos espaço à esquerda/direita para não cortar cards
+  // ➜ ALTURA REAL DOS CARDS (para centrar verticalmente os KPIs quando "side")
+  // Reservamos espaço caso os KPIs estejam em top/bottom.
+  const inlineBlockH = (kpiPos === "top" || kpiPos === "bottom")
+    ? kpiH + 16 /* py-2 + margem */
+    : 0;
+
+  // No carrossel usamos esta altura para TODOS os cards visíveis.
+  const cardsH = Math.max(
+    120,
+    baseH - (kpiPos === "top" ? inlineBlockH : 0) - (kpiPos === "bottom" ? inlineBlockH : 0) - 16 /* respiração */
+  );
+
+  // reserva lateral quando kpiPos = "side" para não sobrepor cards
   const reserveSide = kpiPos === "side" ? estKpiW + kpiSideSpace + 6 : 0;
 
-  // ----- Card -----
+  // CARD
   function Card({ s, i, width, tall }) {
     const superB = getIsSuper(s);
-    const h = tall ? Math.max(180, Math.round(baseH - 84 - pad)) : Math.max(120, Number(opts.cardH || 140));
+    const h = tall ? cardsH : Math.max(120, Number(opts.cardH || 140));
     const captionIsBar = opts.nameStyle === "bar";
     const captionIsFloat = opts.nameStyle === "float";
     const showName = opts.nameStyle !== "hidden";
@@ -505,47 +508,28 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     return (
       <div
         className="relative rounded-xl overflow-hidden border"
-        style={{
-          height: h,
-          width,
-          borderColor: superB ? borderCol : "rgba(255,255,255,.10)",
-          boxShadow: superB ? shadowSoft : "0 12px 28px rgba(0,0,0,.35)",
-        }}
+        style={{ height: h, width, borderColor: superB ? borderCol : "rgba(255,255,255,.10)", boxShadow: superB ? shadowSoft : "0 12px 28px rgba(0,0,0,.35)" }}
         title={s?.name}
       >
         {s?.thumbnail ? (
           <img src={s.thumbnail} alt="" className="absolute inset-0 h-full w-full object-cover object-center" />
-        ) : (
-          <div className="absolute inset-0 bg-white/10" />
-        )}
+        ) : <div className="absolute inset-0 bg-white/10" />}
 
-        {/* SUPER AURA */}
         {superB && opts.superGlow && (
           <>
-            <div className="absolute -inset-1 rounded-xl pointer-events-none"
-                 style={{ boxShadow: `0 0 ${22 + 40 * glowAlpha}px ${hexToRgba(glowColor, 0.5 * glowAlpha)}` }} />
-            <div className="absolute inset-0 pointer-events-none"
-                 style={{ background: `radial-gradient(60% 50% at 50% 40%, ${hexToRgba(glowColor, 0.28 * glowAlpha)} 0%, transparent 60%)` }} />
+            <div className="absolute -inset-1 rounded-xl pointer-events-none" style={{ boxShadow: `0 0 ${22 + 40 * glowAlpha}px ${hexToRgba(glowColor, 0.5 * glowAlpha)}` }} />
+            <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(60% 50% at 50% 40%, ${hexToRgba(glowColor, 0.28 * glowAlpha)} 0%, transparent 60%)` }} />
           </>
         )}
 
-        {/* fades */}
         <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/60 to-transparent pointer-events-none" />
         <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
 
-        {/* badges (top) */}
         <div
-          className={cn(
-            "absolute top-1.5 z-10",
-            infoRight ? "right-1.5" : "left-1.5",
-            badgesVertical ? "flex flex-col items-start gap-1" : "flex items-center gap-1"
-          )}
+          className={cn("absolute top-1.5 z-10", infoRight ? "right-1.5" : "left-1.5", badgesVertical ? "flex flex-col items-start gap-1" : "flex items-center gap-1")}
           style={infoRight ? { alignItems: badgesVertical ? "flex-end" : "center", textAlign: "right" } : {}}
         >
-          {opts.showIdx && (
-            <div className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-black/70">#{i + 1}</div>
-          )}
-
+          {opts.showIdx && <div className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-black/70">#{i + 1}</div>}
           {opts.showBet && (opts.betStyle === "chip" || !!opts.vInfo) && (
             <div className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-white/85 text-black/90 shadow">
               {fmtMoney(toNum(s.bet_size))}
@@ -553,29 +537,20 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
           )}
         </div>
 
-        {/* SUPER tag lado oposto */}
         {opts.showSuper && superB && (
           <div
-            className={cn("absolute top-1.5 z-10 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide",
-              infoRight ? "left-1.5" : "right-1.5")}
-            style={{
-              background: hexToRgba(opts.superTagColor || "#e879f9", 0.95),
-              color: "#120614",
-              boxShadow: opts.superGlow ? `0 0 22px ${hexToRgba(glowColor, 0.6 * glowAlpha)}` : "none",
-            }}
+            className={cn("absolute top-1.5 z-10 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide", infoRight ? "left-1.5" : "right-1.5")}
+            style={{ background: hexToRgba(opts.superTagColor || "#e879f9", 0.95), color: "#120614", boxShadow: opts.superGlow ? `0 0 22px ${hexToRgba(glowColor, 0.6 * glowAlpha)}` : "none" }}
           >
             SUPER
           </div>
         )}
 
-        {/* caption */}
         {showName && captionIsBar && (
           <div className="absolute left-2 right-2 bottom-2">
-            <div
-              className="px-2.5 py-1.5 rounded-lg border text-white shadow-[0_10px_30px_rgba(0,0,0,.45)] truncate"
-              style={{ background: "rgba(0,0,0,.45)", borderColor: "rgba(255,255,255,.18)" }}
-              title={s?.name || ""}
-            >
+            <div className="px-2.5 py-1.5 rounded-lg border text-white shadow-[0_10px_30px_rgba(0,0,0,.45)] truncate"
+                 style={{ background: "rgba(0,0,0,.45)", borderColor: "rgba(255,255,255,.18)" }}
+                 title={s?.name || ""}>
               <div className="font-semibold leading-tight truncate">{s?.name || "—"}</div>
               {opts.betStyle === "inline" && !!opts.showBet && (
                 <div className="mt-0.5 text-[11px] opacity-85 flex items-center gap-1">
@@ -589,9 +564,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
 
         {showName && captionIsFloat && (
           <div className="absolute left-2 bottom-2 right-2 pointer-events-none">
-            <div className="font-semibold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,.8)] truncate">
-              {s?.name || "—"}
-            </div>
+            <div className="font-semibold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,.8)] truncate">{s?.name || "—"}</div>
             {opts.betStyle === "inline" && !!opts.showBet && (
               <div className="text-[11px] text-white/85 drop-shadow-[0_2px_6px_rgba(0,0,0,.8)]">
                 {s?.bet_size != null ? fmtMoney(toNum(s.bet_size)) : "—"}
@@ -603,45 +576,36 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     );
   }
 
-  // ===== KPIs render =====
+  // KPIs horizontais (top/bottom)
   function KPIsInline() {
-    // alinhamento horizontal/topo/fundo
     const j = kpiAlign === "left" ? "justify-start" : kpiAlign === "right" ? "justify-end" : "justify-center";
     const dir = kpiDir === "column" ? "flex-col" : "flex-row items-center";
-    const gapClass = kpiDir === "column" ? `gap-[${kpiGap}px]` : `gap-[${kpiGap}px]`; // mantemos via style
-
     return (
       <div className="px-3 py-2">
         <div className={cn("flex", dir, j)} style={{ gap: kpiGap }}>
-          {items.map(({ key, label, value, Icon }) => {
-            if (kpiShape === "circle") {
-              return (
-                <div key={key}
-                     className="relative rounded-full border border-white/15 bg-white/10 text-[12px] flex items-center justify-center"
-                     style={{ width: circleD, height: circleD }}>
-                  {showIcons ? <Icon className="w-[60%] h-[60%]" /> : <span className={numCls}>{value}</span>}
-                </div>
-              );
-            }
-            const roundedClass = kpiShape === "pill" ? "rounded-full" : "rounded-lg";
-            return (
-              <div key={key}
-                   className={cn("border border-white/15 bg-white/10 px-3", roundedClass)}
+          {items.map(({ key, label, value, Icon }) =>
+            kpiShape === "circle" ? (
+              <div key={key} className="relative rounded-full border border-white/15 bg-white/10 text-[12px] flex items-center justify-center"
+                   style={{ width: circleD, height: circleD }}>
+                {showIcons ? <Icon className="w-[60%] h-[60%]" /> : <span className={numCls}>{value}</span>}
+              </div>
+            ) : (
+              <div key={key} className={cn("border border-white/15 bg-white/10 px-3", kpiShape === "pill" ? "rounded-full" : "rounded-lg")}
                    style={{ height: kpiH, display: "inline-flex", alignItems: "center", gap: 6 }}>
                 {kpiShowLabels && <span className="opacity-70 text-[12px]">{label}:</span>}
                 <b className={cn(numCls, "text-[12px]")}>{value}</b>
               </div>
-            );
-          })}
+            )
+          )}
         </div>
       </div>
     );
   }
 
+  // KPIs verticais (lado) — CENTRADOS PELA ALTURA DOS CARDS
   function KPIsSide() {
-    // pilha vertical centrada relativamente ao bloco de cards
     const stackH = kpiH * items.length + kpiGap * (items.length - 1);
-    const top = Math.max(8, Math.round((baseH - stackH) / 2));
+    const top = Math.max(8, Math.round((cardsH / 2) - (stackH / 2))); // << aqui é a correção
 
     return (
       <div
@@ -657,14 +621,12 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
       >
         {items.map(({ key, value, Icon, label }) =>
           kpiShape === "circle" ? (
-            <div key={key}
-                 className="rounded-full border border-white/15 bg-white/10 text-[12px] flex items-center justify-center shadow-lg"
+            <div key={key} className="rounded-full border border-white/15 bg-white/10 text-[12px] flex items-center justify-center shadow-lg"
                  style={{ width: circleD, height: circleD }}>
               {showIcons ? <Icon className="w-[60%] h-[60%]" /> : <span className={numCls}>{value}</span>}
             </div>
           ) : (
-            <div key={key}
-                 className={cn("border border-white/15 bg-white/10 px-3", kpiShape === "pill" ? "rounded-full" : "rounded-lg")}
+            <div key={key} className={cn("border border-white/15 bg-white/10 px-3", kpiShape === "pill" ? "rounded-full" : "rounded-lg")}
                  style={{ height: kpiH, display: "inline-flex", alignItems: "center", gap: 6 }}>
               {kpiShowLabels && <span className="opacity-70 text-[12px]">{label}:</span>}
               <b className={cn(numCls, "text-[12px]")}>{value}</b>
@@ -675,10 +637,10 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     );
   }
 
-  // ---- layout cards + reserva lateral quando side ----
+  // largura dos cards e reserva lateral
   const visibleW =
     layout === "carousel"
-      ? Math.max(140, Math.floor((innerW - 6 - (visible - 1) * gapCards - reserveSide * 2) / visible))
+      ? Math.max(140, Math.floor((baseW - 6 - (visible - 1) * gapCards - reserveSide * 2) / visible))
       : undefined;
 
   const bg1 = opts.panelBgStart || "#0b1020";
@@ -694,28 +656,22 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
         background: showBox ? `linear-gradient(135deg, ${bg1} 0%, ${bg2} 100%)` : "transparent",
       }}
     >
-      {/* KPIs TOP */}
       {kpiPos === "top" && <KPIsInline />}
-
-      {/* KPIs SIDE (centrados verticalmente) */}
       {kpiPos === "side" && <KPIsSide />}
 
-      {/* CARDS */}
       {layout === "grid" ? (
         <div className="px-3" style={{ display: "grid", gridTemplateColumns: "repeat(8,minmax(0,1fr))", gap: gapCards }}>
-          {slots.slice(0, 16).map((s, i) => (
-            <Card key={s.id} s={s} i={i} tall={false} />
-          ))}
+          {slots.slice(0, 16).map((s, i) => <Card key={s.id} s={s} i={i} tall={false} />)}
         </div>
       ) : (
         <div className="px-3">
           <div className="overflow-hidden w-full">
             <div
-              className={cn("flex")}
+              className="flex"
               style={{
                 gap: gapCards,
                 width: "max-content",
-                paddingLeft: kpiPos === "side" && kpiSide === "left" ? reserveSide : 0,
+                paddingLeft:  kpiPos === "side" && kpiSide === "left"  ? reserveSide : 0,
                 paddingRight: kpiPos === "side" && kpiSide === "right" ? reserveSide : 0,
                 animation: autoScroll && slots.length > visible ? `marquee ${speedSec}s linear infinite` : undefined,
               }}
@@ -728,16 +684,13 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
         </div>
       )}
 
-      {/* KPIs BOTTOM */}
       {kpiPos === "bottom" && <KPIsInline />}
 
-      {/* CSS auxiliares */}
-      <style>{`
-        @keyframes marquee { 0% { transform: translateX(0%); } 100% { transform: translateX(-50%); } }
-      `}</style>
+      <style>{`@keyframes marquee{0%{transform:translateX(0%)}100%{transform:translateX(-50%)}}`}</style>
     </div>
   );
 }
+
 
 /* ───────────────────────── Opening Preview (sem mudanças de KPI) ───────────────────────── */
 function OpeningOverlayPreview({ hunt, slots, opts }) {
