@@ -178,6 +178,16 @@ function fmtMoney(n) {
     maximumFractionDigits: 2,
   }).format(num);
 }
+// número sem símbolo de moeda (2 casas por omissão)
+function fmtPlain(n, decimals = 2) {
+  const num = Number(n);
+  if (!Number.isFinite(num)) return "—";
+  return new Intl.NumberFormat(LOCALE, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(num);
+}
+
 const toNum = (v) => {
   if (v == null || v === "") return 0;
   if (typeof v === "string") v = v.replace(",", ".");
@@ -357,6 +367,8 @@ const DEFAULT_HUNT_OVERLAY = {
   superGlowColor: "#e879f9",
   superGlowStrength: 0.6,
   superTagColor: "#e879f9",
+  superTextColor: "#120614",   // <<< cor do TEXTO do selo SUPER
+
 
   // Cores painel
   panelBgStart: "#0b1020",
@@ -436,6 +448,8 @@ function buildHuntOverlayUrl(base, huntNumberId, o) {
   if (o.superTagColor) qs.set("stc", String(o.superTagColor).replace("#",""));
   if (o.panelBgStart) qs.set("bg1", String(o.panelBgStart).replace("#",""));
   if (o.panelBgEnd)   qs.set("bg2", String(o.panelBgEnd).replace("#",""));
+  if (o.superTextColor) qs.set("stx", String(o.superTextColor).replace("#",""));
+
 
   // canvas
   qs.set("align", String(o.align || "center"));
@@ -495,20 +509,13 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
   const kpiAnim       = String(opts.kpiAnim || "fade");
   const kColors       = getKpiColors(opts);
 
-  const formatMoneyRound = (n) =>
-    new Intl.NumberFormat(LOCALE, {
-      style: "currency",
-      currency: CURRENCY,
-      minimumFractionDigits: kpiRound,
-      maximumFractionDigits: kpiRound,
-    }).format(Number(n) || 0);
+    const formatPlainRound = (n) => fmtPlain(n, kpiRound);
 
-  const items = [
-    { key: "start",  label: "Start",  value: formatMoneyRound(start),  Icon: Wallet },
-    { key: "be",     label: "B/E",    value: formatMoneyRound(beLeft), Icon: Scale  },
+ const items = [
+    { key: "start",  label: "Start",  value: formatPlainRound(start),  Icon: Wallet },
+    { key: "be",     label: "B/E",    value: formatPlainRound(beLeft), Icon: Scale  },
     { key: "bonus",  label: "# Bonus",value: String(slots.length),     Icon: Gift   },
   ];
-
   // Alternância círculo com tempos distintos
   const wantAlt = kpiShape === "circle" && (kpiAltIconMs > 0 || kpiAltValueMs > 0);
   const [phase, setPhase] = React.useState(0); // 0 = ícone, 1 = valor
@@ -595,7 +602,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
           {opts.showIdx && <div className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-black/70">#{i + 1}</div>}
           {opts.showBet && (opts.betStyle === "chip" || !!opts.vInfo) && (
             <div className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-white/85 text-black/90 shadow">
-              {fmtMoney(toNum(s.bet_size))}
+              {fmtPlain(toNum(s.bet_size))}
             </div>
           )}
         </div>
@@ -603,8 +610,8 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
         {opts.showSuper && superB && (
           <div className={cn("absolute top-1.5 z-10 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide",
                              infoRight ? "left-1.5" : "right-1.5")}
-               style={{ background: hexToRgba(opts.superTagColor || "#e879f9", 0.95), color: "#120614" }}>
-            SUPER
+style={{ background: hexToRgba(opts.superTagColor || "#e879f9", 0.95), color: opts.superTextColor || "#120614" }}>
+  SUPER
           </div>
         )}
 
@@ -617,7 +624,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
               {opts.betStyle === "inline" && !!opts.showBet && (
                 <div className="mt-0.5 text-[11px] opacity-85 flex items-center gap-1">
                   <span className="h-[6px] w-[6px] rounded-full bg-white/70" />
-                  {s?.bet_size != null ? fmtMoney(toNum(s.bet_size)) : "—"}
+                  {s?.bet_size != null ? fmtPlain(toNum(s.bet_size)) : "—"}
                 </div>
               )}
             </div>
@@ -629,7 +636,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
             <div className="font-semibold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,.8)] truncate">{s?.name || "—"}</div>
             {opts.betStyle === "inline" && !!opts.showBet && (
               <div className="text-[11px] text-white/85 drop-shadow-[0_2px_6px_rgba(0,0,0,.8)]">
-                {s?.bet_size != null ? fmtMoney(toNum(s.bet_size)) : "—"}
+                {s?.bet_size != null ? fmtPlain(toNum(s.bet_size)) : "—"}
               </div>
             )}
           </div>
