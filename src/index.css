@@ -1,51 +1,52 @@
 @import "tailwindcss";
 
+/* ===== One dark scrollbar (RIGHT side only) ===== */
+
+/* Cores escuras da barra */
 :root{
-  --sb-track: rgba(255,255,255,.06);   /* trilho */
-  --sb-thumb: rgba(255,255,255,.28);   /* polegar */
-  --sb-thumb-hover: rgba(255,255,255,.45);
+  --sb-track: rgba(14,14,16,.55);    /* trilho ~ preto transparente */
+  --sb-thumb: rgba(255,255,255,.22); /* polegar */
+  --sb-thumb-hover: rgba(255,255,255,.38);
 }
 
-/* Tema claro */
-[data-theme="light"]{
-  --sb-track: rgba(0,0,0,.06);
-  --sb-thumb: rgba(0,0,0,.28);
-  --sb-thumb-hover: rgba(0,0,0,.45);
+/* 1) Esconde scrollbars de QUALQUER contentor interno
+      (tabelas, cards, wrappers com overflow), mantendo o scroll. */
+*{
+  scrollbar-width: none;              /* Firefox */
 }
-
-/* Tema escuro */
-[data-theme="dark"]{
-  --sb-track: rgba(255,255,255,.06);
-  --sb-thumb: rgba(255,255,255,.28);
-  --sb-thumb-hover: rgba(255,255,255,.45);
-}
-
-/* Firefox */
-html, body, * {
-  scrollbar-width: thin;
-  scrollbar-color: var(--sb-thumb) var(--sb-track);
-}
-
-/* WebKit / Chromium */
 *::-webkit-scrollbar{
+  width: 0;
+  height: 0;                          /* WebKit/Chromium */
+  background: transparent;
+}
+
+/* 2) Reativa e estiliza APENAS a do viewport (html),
+      ficando só uma barra e do lado direito. */
+html{
+  scrollbar-gutter: stable;           /* reserva espaço só à direita */
+  scrollbar-width: thin;              /* Firefox */
+  scrollbar-color: var(--sb-thumb) transparent;
+}
+html::-webkit-scrollbar{
   width: 12px;
   height: 12px;
 }
-*::-webkit-scrollbar-track{
+html::-webkit-scrollbar-track{
   background: var(--sb-track);
   border-radius: 9999px;
-  margin: 6px;                 /* afasta do bordo */
+  margin: 6px;
 }
-*::-webkit-scrollbar-thumb{
+html::-webkit-scrollbar-thumb{
   background-color: var(--sb-thumb);
   border-radius: 9999px;
   border: 3px solid transparent;
-  background-clip: content-box; /* “almofada” */
+  background-clip: content-box;
 }
-*::-webkit-scrollbar-thumb:hover{
+html::-webkit-scrollbar-thumb:hover{
   background-color: var(--sb-thumb-hover);
 }
-*::-webkit-scrollbar-corner{ background: transparent; }
+html::-webkit-scrollbar-corner{ background: transparent; }
 
-/* Evita “salto” do layout quando aparece a barra */
-html { scrollbar-gutter: stable both-edges; }
+/* 3) Garante que wrappers comuns não criem uma 2ª barra. */
+body{ overflow-y: auto; overflow-x: hidden; background: #0a0a0a; }
+#root, main, header, footer{ overflow: visible !important; }
