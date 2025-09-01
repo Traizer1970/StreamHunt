@@ -526,22 +526,15 @@ const Shell = ({ route, navigate, children }) => {
   // >>> NOVO: login com Twitch (único método)
 const handleTwitchLogin = async () => {
   try {
-    await supabase.auth.signInWithOAuth({
-  provider: "twitch",
-  options: {
-    redirectTo: REDIRECT_TO,
-    scopes: "user:read:email"
-  }
-});
-
-// Usa o domínio atual em runtime; cai para a env var; e por fim para localhost.
-const ORIGIN =
-  (typeof window !== "undefined" && window.location.origin) ||
-  import.meta.env.VITE_SITE_URL ||
-  "http://localhost:5173";
-
-const REDIRECT_TO = `${ORIGIN}/#/auth`;
-
+    const SITE_URL = import.meta.env.VITE_SITE_URL || window.location.origin;
+    const redirectTo = `${SITE_URL}/#/auth`; // o nosso callback já existe (AuthCallback)
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "twitch",
+      options: {
+        redirectTo,
+        scopes: "user:read:email" // escopo recomendado
+      }
+    });
     if (error) throw error;
     // o Supabase redireciona automaticamente; não precisamos fazer mais nada aqui.
   } catch (err) {
