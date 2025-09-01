@@ -6,7 +6,6 @@ import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-// (Input/Label ainda podem ser usados noutros ecrãs; manter import é seguro)
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase, safeSignOut } from "@/lib/supabase";
@@ -31,15 +30,13 @@ import TournamentDetail from "@/tournament-detail.jsx";
 import BattlesPage from "./battlespage.jsx";
 import BattleView  from "./battle-view.jsx";
 import WidgetByToken from "./widget-by-token.jsx";
-
-// >>> NOVO: Overlay do widget
 import WidgetOverlay from "./widget-overlay.jsx";
 
 /* =================== CONFIG =================== */
 const TELEGRAM_URL = "https://t.me/gsousa70";
 const DISCORD_URL = import.meta.env.VITE_DISCORD_URL || "https://discord.gg/your-invite";
 
-// Minimal Discord logo
+// Minimal Discord logo (usa currentColor)
 const DiscordIcon = ({ className = "", title = "Discord" }) => (
   <svg className={className} role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-label={title}>
     <title>{title}</title>
@@ -50,16 +47,9 @@ const DiscordIcon = ({ className = "", title = "Discord" }) => (
   </svg>
 );
 
-/* NOVO: ícone Twitch simples */
 // Minimal Twitch logo (usa currentColor)
 const TwitchIcon = ({ className = "", title = "Twitch" }) => (
-  <svg
-    className={className}
-    role="img"
-    viewBox="0 0 24 24"
-    xmlns="http://www.w3.org/2000/svg"
-    aria-label={title}
-  >
+  <svg className={className} role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-label={title}>
     <title>{title}</title>
     <path
       fill="currentColor"
@@ -67,7 +57,6 @@ const TwitchIcon = ({ className = "", title = "Twitch" }) => (
     />
   </svg>
 );
-
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 async function api(path, payload) {
@@ -297,7 +286,6 @@ function useHashRoute(defaultRoute = "home") {
   return [route, navigate];
 }
 
-// Replace your current NavLink with this
 const NavLink = ({ to, current, onClick, children }) => {
   const { isDark } = useTheme();
   return (
@@ -306,12 +294,8 @@ const NavLink = ({ to, current, onClick, children }) => {
       className={[
         "px-4 py-2 text-sm rounded-xl transition font-medium",
         current === to
-          ? (isDark
-              ? "bg-sky-500 text-black shadow"
-              : "bg-sky-600 text-white shadow")
-          : (isDark
-              ? "text-white/80 hover:bg-white/5 hover:text-white"
-              : "text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"),
+          ? (isDark ? "bg-sky-500 text-black shadow" : "bg-sky-600 text-white shadow")
+          : (isDark ? "text-white/80 hover:bg-white/5 hover:text-white" : "text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"),
       ].join(" ")}
     >
       {children}
@@ -410,7 +394,6 @@ const getHashParams = () => {
 function getPlanLabel(user, profile) {
   if (!user) return null;
   const plan = String(profile?.plan || "Free").toLowerCase();
-  if (plan === "free") return "Free";
   if (["premium", "pro", "plus", "valek", "cig_pais", "mossdiboss"].includes(plan)) return "Premium";
   return plan.charAt(0).toUpperCase() + plan.slice(1);
 }
@@ -485,6 +468,10 @@ const Shell = ({ route, navigate, children }) => {
   // Auth modal
   const [showAuth, setShowAuth] = useState(false);
 
+  // >>> estados para login por email (faltavam)
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPass, setLoginPass] = useState("");
+
   // toast
   const [toast, setToast] = useState(null);
   const showToast = (payload) => setToast(payload);
@@ -517,35 +504,51 @@ const Shell = ({ route, navigate, children }) => {
     return () => sub.subscription.unsubscribe();
   }, []);
 
+  // >>> login por email/senha (só para contas já existentes)
+  const handleLogin = async () => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: loginEmail,
+        password: loginPass,
+      });
+      if (error) throw error;
+      if (data?.user) await refreshProfile(data.user);
+      showToast({ title: "Bem-vindo!", message: "Login efetuado.", success: true });
+      setShowAuth(false);
+      setLoginPass("");
+      navigate("dashboard");
+    } catch (err) {
+      showToast({ title: "Erro no login", message: mapAuthErrorInfo(err), success: false });
+    }
+  };
+
   const handleLogout = async () => {
     await safeSignOut();
     setProfile(null);
     navigate("home");
   };
 
-  // >>> NOVO: login com Twitch (único método)
-const handleTwitchLogin = async () => {
-  try {
-    const SITE_URL = import.meta.env.VITE_SITE_URL || window.location.origin;
-    const redirectTo = `${SITE_URL}/#/auth`; // o nosso callback já existe (AuthCallback)
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "twitch",
-      options: {
-        redirectTo,
-        scopes: "user:read:email" // escopo recomendado
-      }
-    });
-    if (error) throw error;
-    // o Supabase redireciona automaticamente; não precisamos fazer mais nada aqui.
-  } catch (err) {
-    showToast({
-      title: "Falha no login com Twitch",
-      message: err?.message || "Tenta outra vez.",
-      success: false,
-    });
-  }
-};
-
+  // Twitch OAuth
+  const handleTwitchLogin = async () => {
+    try {
+      const SITE_URL =
+        (typeof window !== "undefined" && window.location.origin) ||
+        import.meta.env.VITE_SITE_URL ||
+        "http://localhost:5173";
+      const redirectTo = `${SITE_URL}/#/auth`;
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "twitch",
+        options: { redirectTo, scopes: "user:read:email" },
+      });
+      if (error) throw error;
+    } catch (err) {
+      showToast({
+        title: "Falha no login com Twitch",
+        message: err?.message || "Tenta outra vez.",
+        success: false,
+      });
+    }
+  };
 
   useEffect(() => {
     const p = getHashParams();
@@ -558,7 +561,6 @@ const handleTwitchLogin = async () => {
     }
   }, []);
 
-  // Evento global para abrir o modal (continua a funcionar)
   useEffect(() => {
     const onOpenAuth = () => setShowAuth(true);
     window.addEventListener("open-auth", onOpenAuth);
@@ -650,9 +652,8 @@ const handleTwitchLogin = async () => {
                       <Button
                         size="sm"
                         className={cn(
-                          isDark
-                            ? "bg-sky-500 text-black hover:bg-sky-400 shadow"
-                            : "bg-sky-600 text-white hover:bg-sky-500 shadow"
+                          isDark ? "bg-sky-500 text-black hover:bg-sky-400 shadow"
+                                : "bg-sky-600 text-white hover:bg-sky-500 shadow"
                         )}
                         onClick={() => navigate("premium")}
                       >
@@ -678,9 +679,7 @@ const handleTwitchLogin = async () => {
                 <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap gap-2">
                   {!user ? (
                     <>
-                      {[
-                        ["home","Home"],["widgets","Widgets"],["games","Games"],["premium","Premium"]
-                      ].map(([to, label]) => (
+                      {[["home","Home"],["widgets","Widgets"],["games","Games"],["premium","Premium"]].map(([to, label]) => (
                         <Button
                           key={to}
                           variant="ghost"
@@ -724,9 +723,7 @@ const handleTwitchLogin = async () => {
                 <span>Play responsibly. 18+.</span>
               </div>
 
-              {/* Ações do rodapé */}
               <div className="flex items-center gap-3">
-                {/* Terms */}
                 <a
                   href="#/terms"
                   className={cn(
@@ -740,7 +737,6 @@ const handleTwitchLogin = async () => {
                   Terms &amp; Conditions
                 </a>
 
-                {/* Discord */}
                 <a
                   href={DISCORD_URL}
                   target="_blank"
@@ -761,79 +757,65 @@ const handleTwitchLogin = async () => {
             </div>
           </footer>
 
-          {/* Auth Modal — APENAS TWITCH */}
-         {/* Auth Modal (sem criar conta) */}
-<BareModal open={showAuth} onClose={() => setShowAuth(false)}>
-  <div className={cn(
-    "mb-4 text-lg font-semibold",
-    isDark ? "text-white" : "text-zinc-900"
-  )}>
-    Login
-  </div>
+          {/* Auth Modal (login existente + Twitch) */}
+          <BareModal open={showAuth} onClose={() => setShowAuth(false)}>
+            <div className={cn("mb-4 text-lg font-semibold", isDark ? "text-white" : "text-zinc-900")}>
+              Login
+            </div>
 
-  <p className={cn(
-    "text-sm mb-4",
-    isDark ? "text-white/70" : "text-zinc-600"
-  )}>
-    Se já tinhas conta, entra com email e palavra-passe. Também podes entrar com a tua conta <strong>Twitch</strong>.
-  </p>
+            <p className={cn("text-sm mb-4", isDark ? "text-white/70" : "text-zinc-600")}>
+              Se já tinhas conta, entra com email e palavra-passe. Também podes entrar com a tua conta <strong>Twitch</strong>.
+            </p>
 
-  {/* Email + password (só login; sem criar conta) */}
-  <div className="space-y-3">
-    <div className="space-y-2">
-      <Label htmlFor="login-email">Email</Label>
-      <Input
-        id="login-email"
-        type="email"
-        value={loginEmail}
-        onChange={(e) => setLoginEmail(e.target.value)}
-        placeholder="you@example.com"
-        className="w-full h-11 rounded-xl px-4 bg-zinc-100 text-zinc-900 placeholder:text-zinc-500 dark:bg-zinc-800 dark:text-white dark:placeholder:text-white/50 border border-transparent focus-visible:ring-2 focus-visible:ring-sky-500"
-      />
-    </div>
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="login-email">Email</Label>
+                <Input
+                  id="login-email"
+                  type="email"
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full h-11 rounded-xl px-4 bg-zinc-100 text-zinc-900 placeholder:text-zinc-500 dark:bg-zinc-800 dark:text-white dark:placeholder:text-white/50 border border-transparent focus-visible:ring-2 focus-visible:ring-sky-500"
+                />
+              </div>
 
-    <div className="space-y-2">
-      <Label htmlFor="login-password">Password</Label>
-      <Input
-        id="login-password"
-        type="password"
-        value={loginPass}
-        onChange={(e) => setLoginPass(e.target.value)}
-        placeholder="••••••••"
-        className="w-full h-11 rounded-xl px-4 bg-zinc-100 text-zinc-900 placeholder:text-zinc-500 dark:bg-zinc-800 dark:text-white dark:placeholder:text-white/50 border border-transparent focus-visible:ring-2 focus-visible:ring-sky-500"
-      />
-    </div>
+              <div className="space-y-2">
+                <Label htmlFor="login-password">Password</Label>
+                <Input
+                  id="login-password"
+                  type="password"
+                  value={loginPass}
+                  onChange={(e) => setLoginPass(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full h-11 rounded-xl px-4 bg-zinc-100 text-zinc-900 placeholder:text-zinc-500 dark:bg-zinc-800 dark:text-white dark:placeholder:text-white/50 border border-transparent focus-visible:ring-2 focus-visible:ring-sky-500"
+                />
+              </div>
 
-    <Button
-      className="w-full h-11 rounded-xl bg-sky-600 text-white hover:bg-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400"
-      onClick={handleLogin}
-    >
-      Login com email
-    </Button>
-  </div>
+              <Button
+                className="w-full h-11 rounded-xl bg-sky-600 text-white hover:bg-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400"
+                onClick={handleLogin}
+              >
+                Login com email
+              </Button>
+            </div>
 
-  {/* divisor */}
-  <div className={cn("mt-6 mb-4 flex items-center gap-3 text-xs",
-    isDark ? "text-white/40" : "text-zinc-400")}>
-    <div className="h-px flex-1 bg-current/30" />
-    <span>ou</span>
-    <div className="h-px flex-1 bg-current/30" />
-  </div>
+            <div className={cn("mt-6 mb-4 flex items-center gap-3 text-xs", isDark ? "text-white/40" : "text-zinc-400")}>
+              <div className="h-px flex-1 bg-current/30" /><span>ou</span><div className="h-px flex-1 bg-current/30" />
+            </div>
 
-  {/* Twitch OAuth */}
-  <Button
-    variant="outline"
-    onClick={handleTwitchLogin}
-    className={cn(
-      "w-full h-11 rounded-xl flex items-center justify-center gap-2",
-      isDark ? "border-white/15 text-white hover:bg-white/10"
-             : "border-zinc-300 text-zinc-800 hover:bg-zinc-100"
-    )}
-  >
-    <TwitchIcon className="h-4 w-4" /> Entrar com Twitch
-  </Button>
-</BareModal>
-
+            <Button
+              variant="outline"
+              onClick={handleTwitchLogin}
+              className={cn(
+                "w-full h-11 rounded-xl flex items-center justify-center gap-2",
+                isDark ? "border-white/15 text-white hover:bg-white/10"
+                       : "border-zinc-300 text-zinc-800 hover:bg-zinc-100"
+              )}
+            >
+              <TwitchIcon className="h-4 w-4" /> Entrar com Twitch
+            </Button>
+          </BareModal>
 
           {toast && (
             <Toast
@@ -883,7 +865,6 @@ const Home = ({ goPremium, navigate }) => {
     <>
       <Section id="hero" className="pt-10 md:pt-16">
         <div className="grid md:grid-cols-2 gap-10 items-center">
-          {/* Left: copy + CTAs */}
           <div>
             <motion.h1
               initial={{ opacity: 0, y: 8 }}
@@ -900,10 +881,7 @@ const Home = ({ goPremium, navigate }) => {
             <div className="mt-6 flex flex-wrap gap-3">
               <Button
                 size="lg"
-                className={cn(
-                  "shadow-lg",
-                  isDark ? "bg-sky-500 text-white hover:bg-sky-400" : "bg-sky-600 text-white hover:bg-sky-500"
-                )}
+                className={cn("shadow-lg", isDark ? "bg-sky-500 text-white hover:bg-sky-400" : "bg-sky-600 text-white hover:bg-sky-500")}
                 onClick={goPremium}
               >
                 <Star className="h-4 w-4 mr-2" /> Get started
@@ -912,10 +890,7 @@ const Home = ({ goPremium, navigate }) => {
               <Button
                 size="lg"
                 variant="outline"
-                className={cn(
-                  "shadow-sm",
-                  isDark ? "border-white/20 hover:bg-white/5" : "border-zinc-300 text-zinc-800 hover:bg-zinc-100"
-                )}
+                className={cn("shadow-sm", isDark ? "border-white/20 hover:bg-white/5" : "border-zinc-300 text-zinc-800 hover:bg-zinc-100")}
                 onClick={() => navigate("widgets")}
               >
                 View widgets
@@ -929,7 +904,6 @@ const Home = ({ goPremium, navigate }) => {
             </div>
           </div>
 
-          {/* Right: compact hero metrics card */}
           <Card className={cn(glassCls(isDark), "relative overflow-hidden")}>
             <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-sky-400/40 to-transparent" />
             <CardHeader>
@@ -953,7 +927,6 @@ const Home = ({ goPremium, navigate }) => {
         </div>
       </Section>
 
-      {/* Included tiles */}
       <Section>
         <H2 className="text-sky-600">Included</H2>
         <p className={cn("mt-2 max-w-2xl", isDark ? "text-white/70" : "text-zinc-600")}>
@@ -961,27 +934,9 @@ const Home = ({ goPremium, navigate }) => {
         </p>
 
         <div className="grid md:grid-cols-3 gap-5 mt-6">
-          <HomeTile
-            icon={<GaugeCircle className="h-5 w-5" />}
-            title="Widgets"
-            desc="Copy to OBS and you're done."
-            onClick={() => navigate("widgets")}
-            tone="neutral"
-          />
-          <HomeTile
-            icon={<Users className="h-5 w-5" />}
-            title="Games"
-            desc="Mini-games for your stream."
-            onClick={() => navigate("games")}
-            tone="gold"
-          />
-          <HomeTile
-            icon={<Star className="h-5 w-5" />}
-            title="Premium"
-            desc="Unlock all features."
-            onClick={() => navigate("premium")}
-            tone="sky"
-          />
+          <HomeTile icon={<GaugeCircle className="h-5 w-5" />} title="Widgets" desc="Copy to OBS and you're done." onClick={() => navigate("widgets")} tone="neutral" />
+          <HomeTile icon={<Users className="h-5 w-5" />} title="Games" desc="Mini-games for your stream." onClick={() => navigate("games")} tone="gold" />
+          <HomeTile icon={<Star className="h-5 w-5" />} title="Premium" desc="Unlock all features." onClick={() => navigate("premium")} tone="sky" />
         </div>
       </Section>
     </>
@@ -1089,40 +1044,9 @@ const WidgetsPage = () => {
 
 /* -------- Games page -------- */
 const gamesList = [
-  {
-    id: "deal",
-    title: "deal",
-    desc: "Deal or no deal mini-game.",
-    free: true,
-    icon: <Coins className="h-5 w-5" />,
-    features: [
-      { icon: Link2, text: "Overlay-ready" },
-      { icon: Type, text: "Clean typography" },
-    ],
-  },
-  {
-    id: "wheel",
-    title: "wheel",
-    desc: "Spin the wheel with prizes.",
-    free: false,
-    icon: <Trophy className="h-5 w-5" />,
-    features: [
-      { icon: Link2, text: "Overlay-ready" },
-      { icon: Crown, text: "Pro feature" },
-    ],
-    highlight: true,
-  },
-  {
-    id: "cards",
-    title: "cards",
-    desc: "Pick a card, win a reward.",
-    free: true,
-    icon: <ListChecks className="h-5 w-5" />,
-    features: [
-      { icon: Link2, text: "Overlay-ready" },
-      { icon: Type, text: "Clean typography" },
-    ],
-  },
+  { id: "deal", title: "deal", desc: "Deal or no deal mini-game.", free: true, icon: <Coins className="h-5 w-5" />, features: [{ icon: Link2, text: "Overlay-ready" }, { icon: Type, text: "Clean typography" }] },
+  { id: "wheel", title: "wheel", desc: "Spin the wheel with prizes.", free: false, icon: <Trophy className="h-5 w-5" />, features: [{ icon: Link2, text: "Overlay-ready" }, { icon: Crown, text: "Pro feature" }], highlight: true },
+  { id: "cards", title: "cards", desc: "Pick a card, win a reward.", free: true, icon: <ListChecks className="h-5 w-5" />, features: [{ icon: Link2, text: "Overlay-ready" }, { icon: Type, text: "Clean typography" }] },
 ];
 
 const GamesPage = () => {
@@ -1133,15 +1057,7 @@ const GamesPage = () => {
       <p className={cn("mt-2", isDark ? "text-white/70" : "text-zinc-600")}>Mini-games for stream</p>
       <div className="grid md:grid-cols-3 gap-5 mt-6">
         {gamesList.map((g) => (
-          <GameCard
-            key={g.id}
-            title={g.title}
-            desc={g.desc}
-            free={g.free}
-            icon={g.icon}
-            features={g.features}
-            highlight={g.highlight}
-          />
+          <GameCard key={g.id} title={g.title} desc={g.desc} free={g.free} icon={g.icon} features={g.features} highlight={g.highlight} />
         ))}
       </div>
     </Section>
@@ -1167,13 +1083,7 @@ const BadgeTag = ({ color = "primary", icon: Icon, children }) => {
   };
   const cls = palette[color] || palette.primary;
   return (
-    <span
-      className={cn(
-        "inline-flex h-6 items-center gap-1.5 rounded-full px-2 text-[11px] font-semibold border",
-        "backdrop-blur-sm",
-        cls
-      )}
-    >
+    <span className={cn("inline-flex h-6 items-center gap-1.5 rounded-full px-2 text-[11px] font-semibold border", "backdrop-blur-sm", cls)}>
       {Icon && <Icon className="h-3.5 w-3.5" />}
       {children}
     </span>
@@ -1184,21 +1094,8 @@ const PriceTag = ({ value, note, old }) => {
   const { isDark } = useTheme();
   return (
     <div className="mb-2">
-      {old && (
-        <div className={cn(
-          "text-sm line-through mb-1",
-          isDark ? "text-white/60" : "text-zinc-500"
-        )}>
-          {old}
-        </div>
-      )}
-      <div
-        className={cn(
-          "text-4xl font-extrabold tracking-tight bg-clip-text text-transparent",
-          isDark ? "bg-gradient-to-r from-sky-300 to-sky-100"
-                 : "bg-gradient-to-r from-sky-700 to-sky-500"
-        )}
-      >
+      {old && <div className={cn("text-sm line-through mb-1", isDark ? "text-white/60" : "text-zinc-500")}>{old}</div>}
+      <div className={cn("text-4xl font-extrabold tracking-tight bg-clip-text text-transparent", isDark ? "bg-gradient-to-r from-sky-300 to-sky-100" : "bg-gradient-to-r from-sky-700 to-sky-500")}>
         {value}
       </div>
       {note && <div className={cn("text-xs", isDark ? "text-white/60" : "text-zinc-500")}>{note}</div>}
@@ -1224,7 +1121,7 @@ const PricingCard = ({
   const ringByTone = {
     free:   isDark ? "ring-1 ring-white/8" : "ring-1 ring-zinc-200/80",
     pro:    isDark ? "ring-1 ring-sky-400/35" : "ring-1 ring-sky-600/25",
-    custom: isDark ? "ring-1 ring-sky-400/35"   : "ring-1 ring-sky-600/25",
+    custom: isDark ? "ring-1 ring-sky-400/35" : "ring-1 ring-sky-600/25",
   }[tone];
 
   const glowByTone = {
@@ -1238,27 +1135,16 @@ const PricingCard = ({
     : "border-zinc-300 text-zinc-800 hover:bg-zinc-100";
 
   return (
-    <Card className={cn(
-      glassCls(isDark),
-      "relative overflow-hidden", ringByTone,
-      "transition-all duration-200 hover:-translate-y-0.5 hover:shadow-2xl h-full flex flex-col"
-    )}>
-      <div className={cn(
-        "pointer-events-none absolute -top-24 -right-24 w-72 h-72 rounded-full blur-3xl",
-        "bg-gradient-to-b", glowByTone
-      )} />
-
+    <Card className={cn(glassCls(isDark), "relative overflow-hidden", ringByTone, "transition-all duration-200 hover:-translate-y-0.5 hover:shadow-2xl h-full flex flex-col")}>
+      <div className={cn("pointer-events-none absolute -top-24 -right-24 w-72 h-72 rounded-full blur-3xl", "bg-gradient-to-b", glowByTone)} />
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div>
             <CardTitle>{plan}</CardTitle>
             <div className={cn("text-sm", isDark ? "text-white/60" : "text-zinc-600")}>{subtitle}</div>
           </div>
-
           <div className="flex h-6 items-center gap-2">
-            {tags.map((TagEl, i) => (
-              <div key={i} className="shrink-0">{TagEl}</div>
-            ))}
+            {tags.map((TagEl, i) => (<div key={i} className="shrink-0">{TagEl}</div>))}
           </div>
         </div>
       </CardHeader>
@@ -1267,27 +1153,17 @@ const PricingCard = ({
         {price && <PriceTag value={price} note={priceNote} old={oldPrice} />}
 
         <div className="space-y-2">
-          {features.map((f, i) => (
-            <FeatureBullet key={i}>{f}</FeatureBullet>
-          ))}
+          {features.map((f, i) => (<FeatureBullet key={i}>{f}</FeatureBullet>))}
         </div>
 
         <div className="grow" />
 
         {ctaHref ? (
-          <Button
-            asChild
-            variant="outline"
-            className={cn("w-full h-10 rounded-xl mt-2", unifiedBtnClass)}
-          >
+          <Button asChild variant="outline" className={cn("w-full h-10 rounded-xl mt-2", unifiedBtnClass)}>
             <a href={ctaHref} target="_blank" rel="noopener noreferrer">{ctaText}</a>
           </Button>
         ) : (
-          <Button
-            variant="outline"
-            className={cn("w-full h-10 rounded-xl mt-2", unifiedBtnClass)}
-            onClick={onClick}
-          >
+          <Button variant="outline" className={cn("w-full h-10 rounded-xl mt-2", unifiedBtnClass)} onClick={onClick}>
             {ctaText}
           </Button>
         )}
@@ -1304,36 +1180,23 @@ const PremiumPage = () => {
       <p className={cn("mt-2", isDark ? "text-white/70" : "text-zinc-600")}>Choose your plan</p>
 
       <div className="grid md:grid-cols-3 gap-5 mt-6">
-        {/* Free */}
         <PricingCard
           tone="free"
           plan="Trial"
           oldPrice="€9.99/mo"
           price="$0"
           subtitle="Get started"
-          features={[
-            "Basic widgets",
-            "OBS-ready links",
-            "Community themes",
-            "Email support",
-          ]}
+          features={["Basic widgets","OBS-ready links","Community themes","Email support"]}
           ctaText="Stay on Free"
           onClick={() => window.dispatchEvent(new CustomEvent("open-auth"))}
           tags={[]}
         />
-
-        {/* Plus */}
         <PricingCard
           tone="pro"
           plan="Plus"
           subtitle="Everything included"
           price="€15/mo"
-          features={[
-            "Premium widgets",
-            "Theme builder",
-            "Priority support",
-            "Early access features",
-          ]}
+          features={["Premium widgets","Theme builder","Priority support","Early access features"]}
           ctaText="Subscribe"
           onClick={() => {}}
           tags={[
@@ -1341,24 +1204,15 @@ const PremiumPage = () => {
             <BadgeTag key="top" color="primary" icon={Flame}>Top seller</BadgeTag>,
           ]}
         />
-
-        {/* Premium */}
         <PricingCard
           tone="custom"
           plan="Premium"
           subtitle="Teams & integrations"
           price="Contact us"
-          features={[
-            "Custom integrations",
-            "Team access",
-            "Dedicated channels",
-            "Service-level options",
-          ]}
+          features={["Custom integrations","Team access","Dedicated channels","Service-level options"]}
           ctaText="Talk to us"
           ctaHref={TELEGRAM_URL}
-          tags={[
-            <BadgeTag key="ex" color="sky" icon={Gem}>Exclusive</BadgeTag>,
-          ]}
+          tags={[<BadgeTag key="ex" color="sky" icon={Gem}>Exclusive</BadgeTag>]}
         />
       </div>
     </Section>
@@ -1453,15 +1307,7 @@ function BareOverlayContainer({ children }) {
   }, []);
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "transparent",
-        display: "grid",
-        placeItems: "center",
-      }}
-    >
+    <div style={{ position: "fixed", inset: 0, background: "transparent", display: "grid", placeItems: "center" }}>
       {children}
     </div>
   );
@@ -1471,20 +1317,15 @@ function BareOverlayContainer({ children }) {
 export default function App() {
   const [route, navigate] = useHashRoute("home");
 
-  // detail routes
   const huntDetailMatch = route.match(/^\/?hunts\/([^\/?#]+)$/);
   const tournamentDetailMatch = route.match(/^\/?tournaments\/([^\/?#]+)$/);
 
-  // overlay: battle OU token fixo para a conta
-  const isOverlay =
-    route.startsWith("overlay/battle/") || route.startsWith("w/");
+  const isOverlay = route.startsWith("overlay/battle/") || route.startsWith("w/");
 
   if (isOverlay) {
     return (
       <BareOverlayContainer>
-        {route.startsWith("overlay/battle/")
-          ? <WidgetOverlay />
-          : <WidgetByToken />}
+        {route.startsWith("overlay/battle/") ? <WidgetOverlay /> : <WidgetByToken />}
       </BareOverlayContainer>
     );
   }
@@ -1524,19 +1365,12 @@ export default function App() {
         {route === "battles" && <BattlesPage />}
         {route.startsWith("battles/") && <BattleView />}
 
-        {/* fallback limpo */}
         {!(
-          [
-            "home","widgets","games","premium","auth","dashboard","settings","about","hunts","tournaments","battles","terms"
-          ].includes(route) || isDetailRoute
+          ["home","widgets","games","premium","auth","dashboard","settings","about","hunts","tournaments","battles","terms"].includes(route) || isDetailRoute
         ) && <Home goPremium={() => navigate("premium")} navigate={navigate} />}
       </>
     );
   }
 
-  return (
-    <Shell route={route} navigate={navigate}>
-      {content}
-    </Shell>
-  );
+  return <Shell route={route} navigate={navigate}>{content}</Shell>;
 }
