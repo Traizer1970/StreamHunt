@@ -6,7 +6,7 @@ import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+// (Input/Label ainda podem ser usados noutros ecrãs; manter import é seguro)
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase, safeSignOut } from "@/lib/supabase";
@@ -39,20 +39,22 @@ import WidgetOverlay from "./widget-overlay.jsx";
 const TELEGRAM_URL = "https://t.me/gsousa70";
 const DISCORD_URL = import.meta.env.VITE_DISCORD_URL || "https://discord.gg/your-invite";
 
-// Minimal Discord logo (usa currentColor)
+// Minimal Discord logo
 const DiscordIcon = ({ className = "", title = "Discord" }) => (
-  <svg
-    className={className}
-    role="img"
-    viewBox="0 0 24 24"
-    xmlns="http://www.w3.org/2000/svg"
-    aria-label={title}
-  >
+  <svg className={className} role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-label={title}>
     <title>{title}</title>
     <path
       fill="currentColor"
       d="M20.317 4.369a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.211.375-.444.864-.608 1.249-1.844-.276-3.68-.276-5.486 0-.164-.404-.407-.874-.62-1.249a.077.077 0 0 0-.079-.037 19.736 19.736 0 0 0-4.885 1.515.07.07 0 0 0-.032.027C.533 9.045-.319 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.077.077 0 0 0 .084-.027c.461-.63.873-1.295 1.226-1.994a.076.076 0 0 0-.041-.105 12.34 12.34 0 0 1-1.859-.89.077.077 0 0 1-.008-.127c.125-.094.25-.191.368-.291a.074.074 0 0 1 .077-.01c3.927 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.009c.119.1.243.198.368.292a.077.077 0 0 1-.007.127c-.585.346-1.207.643-1.86.89a.076.076 0 0 0-.041.106c.36.698.773 1.363 1.225 1.993a.076.076 0 0 0 .084.028 19.876 19.876 0 0 0 6.002-3.03.077.077 0 0 0 .031-.057c.5-5.177-.838-9.673-3.548-13.661a.061.061 0 0 0-.031-.028zM7.827 14.605c-1.182 0-2.158-1.085-2.158-2.419 0-1.333.955-2.419 2.158-2.419 1.21 0 2.181 1.096 2.159 2.419 0 1.334-.955 2.419-2.159 2.419zm8.334 0c-1.182 0-2.159-1.085-2.159-2.419 0-1.333.955-2.419 2.159-2.419 1.21 0 2.181 1.096 2.158 2.419 0 1.334-.948 2.419-2.158 2.419z"
     />
+  </svg>
+);
+
+/* NOVO: ícone Twitch simples */
+const TwitchIcon = ({ className = "", title = "Twitch" }) => (
+  <svg className={className} viewBox="0 0 240 240" role="img" xmlns="http://www.w3.org/2000/svg" aria-label={title}>
+    <title>{title}</title>
+    <path fill="currentColor" d="M30 20h180v110l-40 40h-40l-20 20H80v-20H50L30 150V20zm30 30v90h30v30h20l30-30h40V50H60zm80 20h20v50h-20V70zm-40 0h20v50h-20V70z"/>
   </svg>
 );
 
@@ -85,7 +87,6 @@ const Section = ({ id, className = "", children }) => (
 const H2 = ({ children, className = "" }) => (
   <h2 className={cn("text-3xl md:text-4xl font-extrabold tracking-tight", className)}>{children}</h2>
 );
-// Replace your current Pill with this
 const Pill = ({ children }) => (
   <span className="text-xs px-2 py-1 rounded-full bg-gradient-to-r from-sky-500/30 to-cyan-400/20 text-foreground/80 border border-sky-400/40 shadow-sm">
     {children}
@@ -126,7 +127,7 @@ function HeroMetric({ label, value, subtitle }) {
 function HomeTile({ icon, title, desc, onClick, tone = "neutral" }) {
   const { isDark } = useTheme();
   const toneGrad =
-    tone === "gold" // usamos azul mesmo no "gold"
+    tone === "gold"
       ? "from-sky-400/60 via-sky-300/20"
       : tone === "sky"
       ? "from-sky-400/50 via-sky-300/20"
@@ -307,7 +308,7 @@ const NavLink = ({ to, current, onClick, children }) => {
   );
 };
 
-/* ---------- Theme toggle (FIXED) ---------- */
+/* ---------- Theme toggle ---------- */
 function ThemeIconToggle() {
   const { isDark, toggle } = useTheme();
   return (
@@ -324,40 +325,11 @@ function ThemeIconToggle() {
   );
 }
 
-/* ---------- Quick stats (kept for future use) ---------- */
-function QuickStats({ stats }) {
-  const { isDark } = useTheme();
-  const Stat = ({ title, value, tone = "" }) => (
-    <div
-      className={cn(
-        "px-3 py-2 rounded-xl text-sm border",
-        isDark ? "border-white/10 bg-white/5" : "border-zinc-200 bg-white",
-        tone
-      )}
-    >
-      <div className={cn("text-xs", isDark ? "text-white/60" : "text-zinc-600")}>{title}</div>
-      <div className="font-semibold">{value}</div>
-    </div>
-  );
-  return (
-    <div className="hidden md:flex items-center gap-2 ml-4">
-      <Stat title="Bonus hunts" value={stats.hunts ?? 0} />
-      <Stat title="Total cost" value={stats.cost ?? "—"} />
-      <Stat title="Winnings" value={stats.winnings ?? "—"} />
-      <Stat
-        title="P/L"
-        value={stats.profit ?? "—"}
-      />
-    </div>
-  );
-}
-
 /* ---------- Simple modal ---------- */
 function BareModal({ open, onClose, children }) {
   const { isDark } = useTheme();
 
-  useEffect(() => {
-    if (!open) return; // só aplica quando estiver aberto
+  React.useEffect(() => {
     const html = document.documentElement;
     const body = document.body;
     const sbw = window.innerWidth - html.clientWidth;
@@ -383,16 +355,16 @@ function BareModal({ open, onClose, children }) {
       body.style.overflow = prev.overflow;
       body.style.marginRight = prev.marginRight;
     };
-  }, [open]);
+  }, []);
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[60] overflow-hidden">   {/* evita scroll no overlay */}
+    <div className="fixed inset-0 z-[60] overflow-hidden">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden />
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-[520px]">
         <div
           className={cn(
-            "rounded-2xl p-6 border shadow-2xl max-h-[90vh] overflow-auto",  // ⬅️ rolagem só aqui
+            "rounded-2xl p-6 border shadow-2xl max-h-[90vh] overflow-auto",
             isDark ? "bg-gradient-to-b from-zinc-900 to-zinc-950 border-white/10" : "bg-white border-zinc-200"
           )}
         >
@@ -428,7 +400,7 @@ function getPlanLabel(user, profile) {
   if (!user) return null;
   const plan = String(profile?.plan || "Free").toLowerCase();
   if (plan === "free") return "Free";
-  if (plan === "premium" || plan === "pro" || plan === "plus"|| plan === "Valek" || plan === "Cig_Pais" || plan === "MossDiBoss") return "Premium";
+  if (["premium", "pro", "plus", "valek", "cig_pais", "mossdiboss"].includes(plan)) return "Premium";
   return plan.charAt(0).toUpperCase() + plan.slice(1);
 }
 
@@ -499,21 +471,8 @@ const Shell = ({ route, navigate, children }) => {
   const [isDark, setIsDark] = useState(true);
   const toggle = () => setIsDark((v) => !v);
 
-  // >>> mantém o atributo no <html> para CSS global (scrollbar, etc.)
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
-  }, [isDark]);
-
   // Auth modal
   const [showAuth, setShowAuth] = useState(false);
-  const [authMode, setAuthMode] = useState("login");
-  const openAuth = (mode) => { setAuthMode(mode); setShowAuth(true); };
-  const [loginEmail, setLoginEmail] = useState("");
-  const [loginPass,  setLoginPass]  = useState("");
-
-  const [regName,  setRegName]  = useState("");
-  const [regEmail, setRegEmail] = useState("");
-  const [regPass,  setRegPass]  = useState("");
 
   // toast
   const [toast, setToast] = useState(null);
@@ -547,54 +506,28 @@ const Shell = ({ route, navigate, children }) => {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  const handleRegister = async () => {
-    try {
-      const email = regEmail.trim();
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password: regPass,
-        options: { data: { full_name: regName } },
-      });
-      if (error) { alert("Sign up error: " + error.message); return; }
-
-      if (data?.user) {
-        try {
-          await supabase.from("profiles").insert({
-            id: data.user.id,
-            username: regName || email.split("@")[0],
-            plan: "Free",
-            avatar_url: null,
-          }).single();
-        } catch (_) {}
-      }
-      showToast({ title: "Account created", message: "You are logged in.", success: true });
-      setShowAuth(false);
-      navigate("dashboard");
-    } catch (err) {
-      showToast({ title: "Error", message: mapAuthErrorInfo(err), success: false });
-    }
-  };
-
-  const handleLogin = async () => {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: loginEmail,
-        password: loginPass,
-      });
-      if (error) { alert("Login error: " + error.message); return; }
-      await refreshProfile(data?.user || null);
-      showToast({ title: "Welcome!", message: "Login successful.", success: true });
-      setShowAuth(false);
-      navigate("dashboard");
-    } catch (err) {
-      showToast({ title: "Error", message: mapAuthErrorInfo(err), success: false });
-    }
-  };
-
   const handleLogout = async () => {
     await safeSignOut();
     setProfile(null);
     navigate("home");
+  };
+
+  // >>> NOVO: login com Twitch (único método)
+  const handleLoginTwitch = async () => {
+    try {
+      const redirectTo = `${window.location.origin}${window.location.pathname}#/auth`;
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "twitch",
+        options: {
+          redirectTo,
+          scopes: "user:read:email",
+        },
+      });
+      if (error) throw error;
+      // Supabase redireciona; sem mais ações aqui.
+    } catch (err) {
+      showToast({ title: "Login error", message: mapAuthErrorInfo(err), success: false });
+    }
   };
 
   useEffect(() => {
@@ -607,13 +540,10 @@ const Shell = ({ route, navigate, children }) => {
       showToast({ title: "Error", message: readable, success: false });
     }
   }, []);
-  // Abre o modal de auth via evento global
+
+  // Evento global para abrir o modal (continua a funcionar)
   useEffect(() => {
-    const onOpenAuth = (e) => {
-      const mode = e?.detail?.mode === "create" ? "create" : "login";
-      setAuthMode(mode);
-      setShowAuth(true);
-    };
+    const onOpenAuth = () => setShowAuth(true);
     window.addEventListener("open-auth", onOpenAuth);
     return () => window.removeEventListener("open-auth", onOpenAuth);
   }, []);
@@ -696,7 +626,7 @@ const Shell = ({ route, navigate, children }) => {
                         variant="outline"
                         size="sm"
                         className={isDark ? "" : "border-zinc-300 text-zinc-800"}
-                        onClick={() => openAuth("login")}
+                        onClick={() => setShowAuth(true)}
                       >
                         Login
                       </Button>
@@ -747,7 +677,7 @@ const Shell = ({ route, navigate, children }) => {
                         <Button
                           variant="outline"
                           className={cn("w-full", isDark ? "" : "border-zinc-300 text-zinc-800")}
-                          onClick={() => openAuth("login")}
+                          onClick={() => setShowAuth(true)}
                         >
                           Login
                         </Button>
@@ -814,65 +744,22 @@ const Shell = ({ route, navigate, children }) => {
             </div>
           </footer>
 
-          {/* Auth Modal */}
+          {/* Auth Modal — APENAS TWITCH */}
           <BareModal open={showAuth} onClose={() => setShowAuth(false)}>
-            <div className={cn("inline-flex rounded-xl p-1 mb-4 border", isDark ? "border-white/10 bg-white/5" : "border-zinc-200 bg-zinc-100")}>
-              <button className={cn("px-3 py-1 text-sm rounded-lg transition", authMode === "login" ? (isDark ? "bg-sky-500 text-white" : "bg-sky-600 text-white") : (isDark ? "text-white/80 hover:bg-white/10" : "text-zinc-700 hover:bg-white"))} onClick={() => setAuthMode("login")}>Login</button>
-              <button className={cn("px-3 py-1 text-sm rounded-lg transition", authMode === "create" ? (isDark ? "bg-sky-500 text-white" : "bg-sky-600 text-white") : (isDark ? "text-white/80 hover:bg-white/10" : "text-zinc-700 hover:bg-white"))} onClick={() => setAuthMode("create")}>Create account</button>
+            <div className="mb-4">
+              <h3 className="text-xl font-semibold">Login</h3>
+              <p className="text-sm text-white/60 mt-1">Só é possível entrar com a tua conta Twitch.</p>
             </div>
 
-            <div className="relative overflow-visible">
-              <AnimatePresence mode="wait" initial={false}>
-                {authMode === "login" ? (
-                  <motion.div key="login" initial={{ x: 24, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -24, opacity: 0 }} transition={{ duration: 0.22 }}>
-                    <h3 className="text-xl font-semibold mb-3">Login</h3>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="login-email">Email</Label>
-                      <Input id="login-email" type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} placeholder="you@example.com" className="w-full h-11 rounded-xl px-4 bg-zinc-100 text-zinc-900 placeholder:text-zinc-500 dark:bg-zinc-800 dark:text-white dark:placeholder:text-white/50 border border-transparent focus-visible:ring-2 focus-visible:ring-sky-500" />
-                    </div>
-
-                    <div className="space-y-2 mt-3">
-                      <Label htmlFor="login-password">Password</Label>
-                      <Input id="login-password" type="password" value={loginPass} onChange={(e) => setLoginPass(e.target.value)} placeholder="••••••••" className="w-full h-11 rounded-xl px-4 bg-zinc-100 text-zinc-900 placeholder:text-zinc-500 dark:bg-zinc-800 dark:text-white dark:placeholder:text-white/50 border border-transparent focus-visible:ring-2 focus-visible:ring-sky-500" />
-                    </div>
-
-                    <Button className="w-full h-11 mt-4 rounded-xl bg-sky-600 text-white hover:bg-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400" onClick={handleLogin}>Login</Button>
-
-                    <div className="mt-3 text-sm">
-                      No account{" "}
-                      <button className="underline hover:opacity-80" onClick={() => setAuthMode("create")}>Create one</button>
-                    </div>
-                  </motion.div>
-                ) : (
-                  <motion.div key="create" initial={{ x: -24, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 24, opacity: 0 }} transition={{ duration: 0.22 }}>
-                    <h3 className="text-xl font-semibold mb-3">Create account</h3>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="reg-name">Name</Label>
-                      <Input id="reg-name" value={regName} onChange={(e) => setRegName(e.target.value)} placeholder="Your name" className="w-full h-11 rounded-xl px-4 bg-zinc-100 text-zinc-900 placeholder:text-zinc-500 dark:bg-zinc-800 dark:text-white dark:placeholder:text-white/50 border border-transparent focus-visible:ring-2 focus-visible:ring-sky-500" />
-                    </div>
-
-                    <div className="space-y-2 mt-3">
-                      <Label htmlFor="reg-email">Email</Label>
-                      <Input id="reg-email" type="email" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} placeholder="you@example.com" className="w-full h-11 rounded-xl px-4 bg-zinc-100 text-zinc-900 placeholder:text-zinc-500 dark:bg-zinc-800 dark:text-white dark:placeholder:text-white/50 border border-transparent focus-visible:ring-2 focus-visible:ring-sky-500" />
-                    </div>
-
-                    <div className="space-y-2 mt-3">
-                      <Label htmlFor="reg-password">Password</Label>
-                      <Input id="reg-password" type="password" value={regPass} onChange={(e) => setRegPass(e.target.value)} placeholder="••••••••" className="w-full h-11 rounded-xl px-4 bg-zinc-100 text-zinc-900 placeholder:text-zinc-500 dark:bg-zinc-800 dark:text-white dark:placeholder:text-white/50 border border-transparent focus-visible:ring-2 focus-visible:ring-sky-500" />
-                    </div>
-
-                    <Button className="w-full h-11 mt-4 rounded-xl bg-sky-600 text-white hover:bg-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400" onClick={handleRegister}>Create account</Button>
-
-                    <div className="mt-3 text-sm">
-                      Already have an account{" "}
-                      <button className="underline hover:opacity-80" onClick={() => setAuthMode("login")}>Login</button>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+            <Button
+              className={cn(
+                "w-full h-11 rounded-xl flex items-center justify-center gap-2",
+                "bg-[#9146FF] text-white hover:bg-[#7d39ff]"
+              )}
+              onClick={handleLoginTwitch}
+            >
+              <TwitchIcon className="h-4 w-4" /> Entrar com Twitch
+            </Button>
           </BareModal>
 
           {toast && (
@@ -1028,7 +915,7 @@ const Home = ({ goPremium, navigate }) => {
   );
 };
 
-/* -------- Widgets page (UPGRADED) -------- */
+/* -------- Widgets page -------- */
 const widgetsList = [
   { id: "amountWon", free: true, title: "amountWon", desc: "Shows the total amount won in the hunt." },
   { id: "averageBet", free: true, title: "averageBet", desc: "Average bet size across spins/games." },
@@ -1127,7 +1014,7 @@ const WidgetsPage = () => {
   );
 };
 
-/* -------- Games page (UPGRADED) -------- */
+/* -------- Games page -------- */
 const gamesList = [
   {
     id: "deal",
@@ -1189,24 +1076,6 @@ const GamesPage = () => {
 };
 
 /* -------- Premium page -------- */
-const Feature = ({ line }) => {
-  const { isDark } = useTheme();
-  return (
-    <div className={cn("flex items-center gap-2 text-sm", isDark ? "text-white/80" : "text-zinc-700")}>
-      <ShieldCheck className={cn("h-4 w-4", isDark ? "text-sky-400" : "text-sky-600")} /> {line}
-    </div>
-  );
-};
-
-const premiumFeats = [
-  "Basic widgets", "OBS-ready links", "Community themes", "Email support",
-  "Premium widgets", "Theme builder", "Priority support", "Early access features"
-];
-const customFeats = [
-  "Custom integrations", "Team access", "Dedicated channels", "Service-level options"
-];
-
-/* -------- Premium page (CLEAN TAGS) -------- */
 const FeatureBullet = ({ children }) => {
   const { isDark } = useTheme();
   return (
@@ -1376,7 +1245,7 @@ const PremiumPage = () => {
             "Email support",
           ]}
           ctaText="Stay on Free"
-          onClick={() => window.dispatchEvent(new CustomEvent("open-auth", { detail: { mode: "login" } }))}
+          onClick={() => window.dispatchEvent(new CustomEvent("open-auth"))}
           tags={[]}
         />
 
@@ -1487,6 +1356,7 @@ function AuthCallback({ onDone }) {
     </Section>
   );
 }
+
 // ---- container transparente para o overlay ----
 function BareOverlayContainer({ children }) {
   React.useEffect(() => {
@@ -1532,11 +1402,10 @@ export default function App() {
   const huntDetailMatch = route.match(/^\/?hunts\/([^\/?#]+)$/);
   const tournamentDetailMatch = route.match(/^\/?tournaments\/([^\/?#]+)$/);
 
-  // >>> overlay: battle OU token fixo para a conta
+  // overlay: battle OU token fixo para a conta
   const isOverlay =
     route.startsWith("overlay/battle/") || route.startsWith("w/");
 
-  // ⬅️ overlay: sem header/rodapé, fundo transparente e widget centrado
   if (isOverlay) {
     return (
       <BareOverlayContainer>
@@ -1551,7 +1420,7 @@ export default function App() {
     !!huntDetailMatch ||
     !!tournamentDetailMatch ||
     route.startsWith("battles/") ||
-    route.startsWith("overlay/battle/"); // (não chega aqui se for overlay)
+    route.startsWith("overlay/battle/");
 
   let content = null;
 
@@ -1559,13 +1428,11 @@ export default function App() {
     const numberId = huntDetailMatch[1];
     content = <HuntDetail numberId={numberId} />;
   } else if (route.startsWith("w/")) {
-    // (não acontece porque já tratámos como overlay acima)
     content = <WidgetByToken />;
   } else if (tournamentDetailMatch) {
     const tournamentId = tournamentDetailMatch[1];
     content = <TournamentDetail tournamentId={tournamentId} />;
   } else if (route.startsWith("overlay/battle/")) {
-    // (não acontece porque já tratámos como overlay acima)
     content = <WidgetOverlay />;
   } else {
     content = (
