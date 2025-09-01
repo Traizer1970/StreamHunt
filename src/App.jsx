@@ -51,12 +51,23 @@ const DiscordIcon = ({ className = "", title = "Discord" }) => (
 );
 
 /* NOVO: ícone Twitch simples */
+// Minimal Twitch logo (usa currentColor)
 const TwitchIcon = ({ className = "", title = "Twitch" }) => (
-  <svg className={className} viewBox="0 0 240 240" role="img" xmlns="http://www.w3.org/2000/svg" aria-label={title}>
+  <svg
+    className={className}
+    role="img"
+    viewBox="0 0 24 24"
+    xmlns="http://www.w3.org/2000/svg"
+    aria-label={title}
+  >
     <title>{title}</title>
-    <path fill="currentColor" d="M30 20h180v110l-40 40h-40l-20 20H80v-20H50L30 150V20zm30 30v90h30v30h20l30-30h40V50H60zm80 20h20v50h-20V70zm-40 0h20v50h-20V70z"/>
+    <path
+      fill="currentColor"
+      d="M3 2.5 2 6.75v12.75h4.5V22h2.25l2.25-2.25h3.75L22 13.5V2.5H3zm17.25 9.75-3 3H12l-2.25 2.25H7.5v-2.25H4.5V4.75h15.75v7.5zM15 6.5h1.5v5.25H15V6.5zm-4.5 0H12v5.25h-1.5V6.5z"
+    />
   </svg>
 );
+
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 async function api(path, payload) {
@@ -513,22 +524,35 @@ const Shell = ({ route, navigate, children }) => {
   };
 
   // >>> NOVO: login com Twitch (único método)
-  const handleLoginTwitch = async () => {
-    try {
-      const redirectTo = `${window.location.origin}${window.location.pathname}#/auth`;
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: "twitch",
-        options: {
-          redirectTo,
-          scopes: "user:read:email",
-        },
-      });
-      if (error) throw error;
-      // Supabase redireciona; sem mais ações aqui.
-    } catch (err) {
-      showToast({ title: "Login error", message: mapAuthErrorInfo(err), success: false });
-    }
-  };
+const handleTwitchLogin = async () => {
+  try {
+    await supabase.auth.signInWithOAuth({
+  provider: "twitch",
+  options: {
+    redirectTo: REDIRECT_TO,
+    scopes: "user:read:email"
+  }
+});
+
+// Usa o domínio atual em runtime; cai para a env var; e por fim para localhost.
+const ORIGIN =
+  (typeof window !== "undefined" && window.location.origin) ||
+  import.meta.env.VITE_SITE_URL ||
+  "http://localhost:5173";
+
+const REDIRECT_TO = `${ORIGIN}/#/auth`;
+
+    if (error) throw error;
+    // o Supabase redireciona automaticamente; não precisamos fazer mais nada aqui.
+  } catch (err) {
+    showToast({
+      title: "Falha no login com Twitch",
+      message: err?.message || "Tenta outra vez.",
+      success: false,
+    });
+  }
+};
+
 
   useEffect(() => {
     const p = getHashParams();
@@ -745,22 +769,78 @@ const Shell = ({ route, navigate, children }) => {
           </footer>
 
           {/* Auth Modal — APENAS TWITCH */}
-          <BareModal open={showAuth} onClose={() => setShowAuth(false)}>
-            <div className="mb-4">
-              <h3 className="text-xl font-semibold">Login</h3>
-              <p className="text-sm text-white/60 mt-1">Só é possível entrar com a tua conta Twitch.</p>
-            </div>
+         {/* Auth Modal (sem criar conta) */}
+<BareModal open={showAuth} onClose={() => setShowAuth(false)}>
+  <div className={cn(
+    "mb-4 text-lg font-semibold",
+    isDark ? "text-white" : "text-zinc-900"
+  )}>
+    Login
+  </div>
 
-            <Button
-              className={cn(
-                "w-full h-11 rounded-xl flex items-center justify-center gap-2",
-                "bg-[#9146FF] text-white hover:bg-[#7d39ff]"
-              )}
-              onClick={handleLoginTwitch}
-            >
-              <TwitchIcon className="h-4 w-4" /> Entrar com Twitch
-            </Button>
-          </BareModal>
+  <p className={cn(
+    "text-sm mb-4",
+    isDark ? "text-white/70" : "text-zinc-600"
+  )}>
+    Se já tinhas conta, entra com email e palavra-passe. Também podes entrar com a tua conta <strong>Twitch</strong>.
+  </p>
+
+  {/* Email + password (só login; sem criar conta) */}
+  <div className="space-y-3">
+    <div className="space-y-2">
+      <Label htmlFor="login-email">Email</Label>
+      <Input
+        id="login-email"
+        type="email"
+        value={loginEmail}
+        onChange={(e) => setLoginEmail(e.target.value)}
+        placeholder="you@example.com"
+        className="w-full h-11 rounded-xl px-4 bg-zinc-100 text-zinc-900 placeholder:text-zinc-500 dark:bg-zinc-800 dark:text-white dark:placeholder:text-white/50 border border-transparent focus-visible:ring-2 focus-visible:ring-sky-500"
+      />
+    </div>
+
+    <div className="space-y-2">
+      <Label htmlFor="login-password">Password</Label>
+      <Input
+        id="login-password"
+        type="password"
+        value={loginPass}
+        onChange={(e) => setLoginPass(e.target.value)}
+        placeholder="••••••••"
+        className="w-full h-11 rounded-xl px-4 bg-zinc-100 text-zinc-900 placeholder:text-zinc-500 dark:bg-zinc-800 dark:text-white dark:placeholder:text-white/50 border border-transparent focus-visible:ring-2 focus-visible:ring-sky-500"
+      />
+    </div>
+
+    <Button
+      className="w-full h-11 rounded-xl bg-sky-600 text-white hover:bg-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400"
+      onClick={handleLogin}
+    >
+      Login com email
+    </Button>
+  </div>
+
+  {/* divisor */}
+  <div className={cn("mt-6 mb-4 flex items-center gap-3 text-xs",
+    isDark ? "text-white/40" : "text-zinc-400")}>
+    <div className="h-px flex-1 bg-current/30" />
+    <span>ou</span>
+    <div className="h-px flex-1 bg-current/30" />
+  </div>
+
+  {/* Twitch OAuth */}
+  <Button
+    variant="outline"
+    onClick={handleTwitchLogin}
+    className={cn(
+      "w-full h-11 rounded-xl flex items-center justify-center gap-2",
+      isDark ? "border-white/15 text-white hover:bg-white/10"
+             : "border-zinc-300 text-zinc-800 hover:bg-zinc-100"
+    )}
+  >
+    <TwitchIcon className="h-4 w-4" /> Entrar com Twitch
+  </Button>
+</BareModal>
+
 
           {toast && (
             <Toast
