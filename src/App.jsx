@@ -13,7 +13,7 @@ import { supabase, safeSignOut } from "@/lib/supabase";
 import {
   Menu, Star, GaugeCircle, ListChecks, Coins, Users, ShieldCheck,
   Sparkles, Wallet, Trophy, Sun, Moon, Gem, Flame,
-  ChevronDown, LogOut, LayoutDashboard, ArrowRight, Link2, Type, 
+  ChevronDown, LogOut, LayoutDashboard, ArrowRight, Link2, Type,
   Crown, CheckCircle2, FileText
 } from "lucide-react";
 
@@ -38,6 +38,31 @@ import WidgetOverlay from "./widget-overlay.jsx";
 /* =================== CONFIG =================== */
 const TELEGRAM_URL = "https://t.me/gsousa70";
 const DISCORD_URL = import.meta.env.VITE_DISCORD_URL || "https://discord.gg/your-invite";
+
+/* === Scrollbar unificada (injeta no <head>) === */
+function injectUnifiedScrollbars() {
+  if (document.getElementById("unified-scrollbars")) return;
+  const css = `
+:root{
+  --sb-track: rgba(255,255,255,.06);
+  --sb-thumb: rgba(255,255,255,.28);
+  --sb-thumb-hover: rgba(255,255,255,.45);
+}
+html, body, * { scrollbar-width: thin; scrollbar-color: var(--sb-thumb) transparent; }
+*::-webkit-scrollbar{ width:12px; height:12px; }
+*::-webkit-scrollbar-track{ background:var(--sb-track); border-radius:9999px; margin:6px; }
+*::-webkit-scrollbar-thumb{
+  background-color:var(--sb-thumb); border-radius:9999px;
+  border:3px solid transparent; background-clip:content-box;
+}
+*::-webkit-scrollbar-thumb:hover{ background-color:var(--sb-thumb-hover); }
+*::-webkit-scrollbar-corner{ background:transparent; }
+`;
+  const el = document.createElement("style");
+  el.id = "unified-scrollbars";
+  el.textContent = css;
+  document.head.appendChild(el);
+}
 
 // Minimal Discord logo (usa currentColor)
 const DiscordIcon = ({ className = "", title = "Discord" }) => (
@@ -73,6 +98,10 @@ async function api(path, payload) {
 function Root() {
   useEffect(() => {
     redirectIfLoggedToApp();
+    injectUnifiedScrollbars(); // <- scrollbar unificada
+    // fundo base bem escuro
+    document.documentElement.style.background = "#0b0c0f";
+    document.body.style.background = "transparent";
   }, []);
   return <App />;
 }
@@ -85,19 +114,22 @@ const Section = ({ id, className = "", children }) => (
 const H2 = ({ children, className = "" }) => (
   <h2 className={cn("text-3xl md:text-4xl font-extrabold tracking-tight", className)}>{children}</h2>
 );
-// Replace your current Pill with this
+
+// Pill mais neutra (preto/cinza)
 const Pill = ({ children }) => (
-  <span className="text-xs px-2 py-1 rounded-full bg-gradient-to-r from-sky-500/30 to-cyan-400/20 text-foreground/80 border border-sky-400/40 shadow-sm">
+  <span className="text-xs px-2 py-1 rounded-full bg-gradient-to-r from-white/10 to-white/5 text-white/90 border border-white/10 shadow-sm">
     {children}
   </span>
 );
 
+// Cartões “vidro” em pretos
 const glassCls = (isDark) =>
   isDark
-    ? "border border-white/10 bg-white/[0.04] backdrop-blur-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.35)]"
+    ? "border border-white/10 bg-[#0b0c0f]/85 backdrop-blur-xl shadow-[0_10px_40px_-12px_rgba(0,0,0,0.6)]"
     : "border border-zinc-200 bg-white/70 backdrop-blur-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.15)]";
+
 const GradientText = ({ children }) => (
-  <span className="bg-gradient-to-r from-sky-500 via-sky-400 to-sky-300 bg-clip-text text-transparent">{children}</span>
+  <span className="bg-gradient-to-r from-white to-zinc-300 bg-clip-text text-transparent">{children}</span>
 );
 
 /* ---------- tiny UI helpers for Home ---------- */
@@ -107,7 +139,7 @@ function HeroMetric({ label, value, subtitle }) {
     <div
       className={cn(
         "p-4 rounded-2xl border shadow-sm",
-        isDark ? "border-white/10 bg-white/5" : "border-zinc-200 bg-white"
+        isDark ? "border-white/10 bg-[#0f1014]" : "border-zinc-200 bg-white"
       )}
     >
       <div className={cn("text-xs", isDark ? "text-white/60" : "text-zinc-600")}>
@@ -123,32 +155,24 @@ function HeroMetric({ label, value, subtitle }) {
   );
 }
 
-function HomeTile({ icon, title, desc, onClick, tone = "neutral" }) {
+function HomeTile({ icon, title, desc, onClick }) {
   const { isDark } = useTheme();
-  const toneGrad =
-    tone === "gold" // usamos azul mesmo no "gold"
-      ? "from-sky-400/60 via-sky-300/20"
-      : tone === "sky"
-      ? "from-sky-400/50 via-sky-300/20"
-      : "from-white/30 via-white/10";
   return (
     <button onClick={onClick} className="text-left group relative">
       <div
         aria-hidden
         className="pointer-events-none absolute -inset-0.5 rounded-2xl opacity-0 blur-md transition-opacity duration-200 group-hover:opacity-100"
-        style={{
-          background: `linear-gradient(90deg, rgba(56,189,248,0.25), rgba(56,189,248,0.08))`,
-        }}
+        style={{ background: `linear-gradient(90deg, rgba(255,255,255,0.15), rgba(255,255,255,0.06))` }}
       />
-      <div className={cn("rounded-2xl p-[1px] relative bg-gradient-to-r", toneGrad, "to-transparent")}>
+      <div className={cn("rounded-2xl p-[1px] relative bg-gradient-to-r from-white/15 via-white/5 to-transparent")}>
         <Card
           className={cn(
             "rounded-[calc(theme(borderRadius.2xl)-1px)] transition-colors",
-            isDark ? "bg-zinc-900/70 border-white/10" : "bg-white/95 border-zinc-200"
+            isDark ? "bg-[#0e1014] border-white/10" : "bg-white/95 border-zinc-200"
           )}
         >
           <CardHeader className="flex flex-row items-start gap-3">
-            <div className={cn("p-2 rounded-xl", isDark ? "bg-sky-400/10" : "bg-sky-500/10")}>
+            <div className={cn("p-2 rounded-xl", isDark ? "bg-white/10" : "bg-zinc-100")}>
               {icon}
             </div>
             <div className="flex-1">
@@ -187,7 +211,7 @@ const GameCard = ({ title, desc, icon, free, features = [], highlight = false })
   const { isDark } = useTheme();
   const pillCls = free
     ? "bg-white text-zinc-900 dark:bg-white/90 dark:text-black"
-    : "bg-sky-500 text-white dark:bg-sky-400 dark:text-black";
+    : "bg-zinc-800 text-white dark:bg-zinc-800 dark:text-white";
 
   return (
     <motion.div whileHover={{ y: -3, scale: 1.01 }} transition={{ duration: 0.18 }} className="group relative">
@@ -197,8 +221,8 @@ const GameCard = ({ title, desc, icon, free, features = [], highlight = false })
         className="pointer-events-none absolute -inset-0.5 rounded-2xl opacity-0 blur-md transition-opacity duration-200 group-hover:opacity-100"
         style={{
           background: highlight
-            ? "linear-gradient(90deg, rgba(56,189,248,0.35), rgba(56,189,248,0.08))"
-            : "linear-gradient(90deg, rgba(255,255,255,0.18), rgba(255,255,255,0.06))",
+            ? "linear-gradient(90deg, rgba(255,255,255,0.20), rgba(255,255,255,0.06))"
+            : "linear-gradient(90deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04))",
         }}
       />
       <Card className={cn(glassCls(isDark), "relative rounded-2xl")}>
@@ -210,7 +234,7 @@ const GameCard = ({ title, desc, icon, free, features = [], highlight = false })
                   "h-10 w-10 grid place-items-center rounded-xl",
                   free
                     ? isDark ? "bg-white/10 text-white" : "bg-zinc-100 text-zinc-800"
-                    : isDark ? "bg-sky-400/20 text-sky-300" : "bg-sky-500/10 text-sky-700"
+                    : isDark ? "bg-white/8 text-white/80" : "bg-zinc-100 text-zinc-700"
                 )}
               >
                 {icon}
@@ -245,14 +269,15 @@ const BackgroundFX = () => {
     <div aria-hidden className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
       {isDark ? (
         <>
-          <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-sky-500/15 blur-3xl" />
-          <div className="absolute -bottom-40 -left-40 h-[28rem] w-[28rem] rounded-full bg-indigo-500/10 blur-3xl" />
+          {/* glows neutros bem suaves */}
+          <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-white/[0.06] blur-3xl" />
+          <div className="absolute -bottom-40 -left-40 h-[28rem] w-[28rem] rounded-full bg-white/[0.04] blur-3xl" />
           <div className="absolute inset-0 bg-[radial-gradient(transparent_1px,rgba(255,255,255,0.04)_1px)] [background-size:16px_16px]" />
         </>
       ) : (
         <>
-          <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-sky-300/40 blur-3xl" />
-          <div className="absolute -bottom-40 -left-40 h-[28rem] w-[28rem] rounded-full bg-cyan-300/40 blur-3xl" />
+          <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-zinc-300/40 blur-3xl" />
+          <div className="absolute -bottom-40 -left-40 h-[28rem] w-[28rem] rounded-full bg-zinc-300/40 blur-3xl" />
           <div className="absolute inset-0 bg-[radial-gradient(transparent_1px,rgba(0,0,0,0.04)_1px)] [background-size:16px_16px]" />
         </>
       )}
@@ -295,8 +320,8 @@ const NavLink = ({ to, current, onClick, children }) => {
         "px-4 py-2 text-sm rounded-xl transition font-medium",
         current === to
           ? (isDark
-              ? "bg-sky-500 text-black shadow"
-              : "bg-sky-600 text-white shadow")
+              ? "bg-white/15 text-white shadow"
+              : "bg-zinc-600 text-white shadow")
           : (isDark
               ? "text-white/80 hover:bg-white/5 hover:text-white"
               : "text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900"),
@@ -307,7 +332,7 @@ const NavLink = ({ to, current, onClick, children }) => {
   );
 };
 
-/* ---------- Theme toggle (FIXED) ---------- */
+/* ---------- Theme toggle (mantido) ---------- */
 function ThemeIconToggle() {
   const { isDark, toggle } = useTheme();
   return (
@@ -356,8 +381,7 @@ function QuickStats({ stats }) {
 function BareModal({ open, onClose, children }) {
   const { isDark } = useTheme();
 
-  useEffect(() => {
-    if (!open) return; // só aplica quando estiver aberto
+  React.useEffect(() => {
     const html = document.documentElement;
     const body = document.body;
     const sbw = window.innerWidth - html.clientWidth;
@@ -383,17 +407,17 @@ function BareModal({ open, onClose, children }) {
       body.style.overflow = prev.overflow;
       body.style.marginRight = prev.marginRight;
     };
-  }, [open]);
+  }, []);
 
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-[60] overflow-hidden">   {/* evita scroll no overlay */}
+    <div className="fixed inset-0 z-[60] overflow-hidden">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden />
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-[520px]">
         <div
           className={cn(
-            "rounded-2xl p-6 border shadow-2xl max-h-[90vh] overflow-auto",  // ⬅️ rolagem só aqui
-            isDark ? "bg-gradient-to-b from-zinc-900 to-zinc-950 border-white/10" : "bg-white border-zinc-200"
+            "rounded-2xl p-6 border shadow-2xl max-h-[90vh] overflow-auto",
+            isDark ? "bg-gradient-to-b from-[#0d0f12] to-[#0a0b0e] border-white/10" : "bg-white border-zinc-200"
           )}
         >
           {children}
@@ -428,7 +452,7 @@ function getPlanLabel(user, profile) {
   if (!user) return null;
   const plan = String(profile?.plan || "Free").toLowerCase();
   if (plan === "free") return "Free";
-  if (plan === "premium" || plan === "pro" || plan === "plus"|| plan === "Valek" || plan === "Cig_Pais" || plan === "MossDiBoss") return "Premium";
+  if (["premium","pro","plus","valek","cig_pais","mossdiboss"].includes(plan)) return "Premium";
   return plan.charAt(0).toUpperCase() + plan.slice(1);
 }
 
@@ -456,7 +480,7 @@ const UserMenu = ({ onGoDashboard, onGoSettings, onLogout }) => {
         {avatar ? (
           <img src={avatar} alt="avatar" className="h-8 w-8 rounded-full object-cover" />
         ) : (
-          <div className={cn("h-8 w-8 rounded-full grid place-items-center font-semibold", isDark ? "bg-sky-500/20 text-sky-300" : "bg-sky-500/15 text-sky-700")}>
+          <div className={cn("h-8 w-8 rounded-full grid place-items-center font-semibold", isDark ? "bg-white/10 text-white" : "bg-zinc-200 text-zinc-800")}>
             {displayName.slice(0,1).toUpperCase()}
           </div>
         )}
@@ -469,7 +493,7 @@ const UserMenu = ({ onGoDashboard, onGoSettings, onLogout }) => {
       </button>
 
       {open && (
-        <div className={cn("absolute right-0 mt-2 w-48 rounded-xl overflow-hidden border z-50", isDark ? "bg-zinc-900 border-white/10 shadow-2xl" : "bg-white border-zinc-200 shadow-xl")}>
+        <div className={cn("absolute right-0 mt-2 w-48 rounded-xl overflow-hidden border z-50", isDark ? "bg-[#0e1014] border-white/10 shadow-2xl" : "bg-white border-zinc-200 shadow-xl")}>
           <button
             onClick={() => { setOpen(false); onGoDashboard(); }}
             className={cn("w-full px-3 py-2 text-left text-sm flex items-center gap-2", isDark ? "hover:bg-white/5" : "hover:bg-zinc-100")}
@@ -496,13 +520,8 @@ const UserMenu = ({ onGoDashboard, onGoSettings, onLogout }) => {
 
 /* ------------------ Shell ------------------ */
 const Shell = ({ route, navigate, children }) => {
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(true); // default: escuro
   const toggle = () => setIsDark((v) => !v);
-
-  // >>> mantém o atributo no <html> para CSS global (scrollbar, etc.)
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
-  }, [isDark]);
 
   // Auth modal
   const [showAuth, setShowAuth] = useState(false);
@@ -621,13 +640,18 @@ const Shell = ({ route, navigate, children }) => {
   return (
     <AuthCtx.Provider value={{ user, profile, refreshProfile }}>
       <ThemeCtx.Provider value={{ isDark, toggle }}>
-        <div className={cn("relative min-h-screen", isDark ? "bg-gradient-to-b from-zinc-950 via-zinc-900 to-zinc-950 text-white" : "bg-gradient-to-b from-zinc-50 via-white to-white text-zinc-900")}>
+        <div className={cn(
+          "relative min-h-screen",
+          isDark
+            ? "bg-gradient-to-b from-[#0b0c0f] via-[#0a0b0e] to-[#0b0c0f] text-white"
+            : "bg-gradient-to-b from-zinc-50 via-white to-white text-zinc-900"
+        )}>
           <BackgroundFX />
           {/* Header */}
           <header
             className={cn(
               "sticky top-0 z-40 border-b backdrop-blur-xl supports-[backdrop-filter]:bg-opacity-40",
-              isDark ? "border-white/10 bg-zinc-950/40" : "border-zinc-200 bg-white/60"
+              isDark ? "border-white/10 bg-black/30" : "border-zinc-200 bg-white/60"
             )}
           >
             <div className="max-w-7xl mx-auto px-4">
@@ -636,9 +660,9 @@ const Shell = ({ route, navigate, children }) => {
                 <div className="flex items-center gap-3">
                   <motion.div
                     whileHover={{ rotate: 10 }}
-                    className={cn("p-2 rounded-xl", isDark ? "bg-sky-400/15" : "bg-sky-500/10")}
+                    className={cn("p-2 rounded-xl", isDark ? "bg-white/10" : "bg-zinc-100")}
                   >
-                    <GaugeCircle className={cn("h-6 w-6", isDark ? "text-sky-400" : "text-sky-600")} />
+                    <GaugeCircle className={cn("h-6 w-6", isDark ? "text-white/80" : "text-zinc-700")} />
                   </motion.div>
 
                   <div className={cn("font-bold tracking-tight text-xl", isDark ? "text-white" : "text-zinc-900")}>
@@ -695,7 +719,7 @@ const Shell = ({ route, navigate, children }) => {
                       <Button
                         variant="outline"
                         size="sm"
-                        className={isDark ? "" : "border-zinc-300 text-zinc-800"}
+                        className={isDark ? "border-white/15 text-white hover:bg-white/10" : "border-zinc-300 text-zinc-800"}
                         onClick={() => openAuth("login")}
                       >
                         Login
@@ -704,8 +728,8 @@ const Shell = ({ route, navigate, children }) => {
                         size="sm"
                         className={cn(
                           isDark
-                            ? "bg-sky-500 text-black hover:bg-sky-400 shadow"
-                            : "bg-sky-600 text-white hover:bg-sky-500 shadow"
+                            ? "bg-zinc-900 border border-white/10 text-white hover:bg-zinc-800 shadow"
+                            : "bg-zinc-800 text-white hover:bg-zinc-700 shadow"
                         )}
                         onClick={() => navigate("premium")}
                       >
@@ -727,7 +751,7 @@ const Shell = ({ route, navigate, children }) => {
 
             {/* Mobile menu */}
             {route === "menu" && (
-              <div className={cn("md:hidden border-t", isDark ? "border-white/10 bg-zinc-900/90" : "border-zinc-200 bg-white/90")}>
+              <div className={cn("md:hidden border-t", isDark ? "border-white/10 bg-[#0e1014]/95" : "border-zinc-200 bg-white/90")}>
                 <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap gap-2">
                   {!user ? (
                     <>
@@ -738,7 +762,7 @@ const Shell = ({ route, navigate, children }) => {
                           key={to}
                           variant="ghost"
                           onClick={() => navigate(to)}
-                          className={cn(isDark ? "text-white/80 hover:text-white" : "text-zinc-700 hover:bg-zinc-100")}
+                          className={cn(isDark ? "text-white/80 hover:text-white hover:bg-white/5" : "text-zinc-700 hover:bg-zinc-100")}
                         >
                           {label}
                         </Button>
@@ -746,7 +770,7 @@ const Shell = ({ route, navigate, children }) => {
                       <div className="w-full mt-1">
                         <Button
                           variant="outline"
-                          className={cn("w-full", isDark ? "" : "border-zinc-300 text-zinc-800")}
+                          className={cn("w-full", isDark ? "border-white/15 text-white hover:bg-white/10" : "border-zinc-300 text-zinc-800")}
                           onClick={() => openAuth("login")}
                         >
                           Login
@@ -773,7 +797,7 @@ const Shell = ({ route, navigate, children }) => {
               )}
             >
               <div className="flex items-center gap-2">
-                <ShieldCheck className={cn("h-4 w-4", isDark ? "text-sky-400" : "text-sky-600")} />
+                <ShieldCheck className={cn("h-4 w-4", isDark ? "text-white/70" : "text-zinc-700")} />
                 <span>Play responsibly. 18+.</span>
               </div>
 
@@ -817,8 +841,8 @@ const Shell = ({ route, navigate, children }) => {
           {/* Auth Modal */}
           <BareModal open={showAuth} onClose={() => setShowAuth(false)}>
             <div className={cn("inline-flex rounded-xl p-1 mb-4 border", isDark ? "border-white/10 bg-white/5" : "border-zinc-200 bg-zinc-100")}>
-              <button className={cn("px-3 py-1 text-sm rounded-lg transition", authMode === "login" ? (isDark ? "bg-sky-500 text-white" : "bg-sky-600 text-white") : (isDark ? "text-white/80 hover:bg-white/10" : "text-zinc-700 hover:bg-white"))} onClick={() => setAuthMode("login")}>Login</button>
-              <button className={cn("px-3 py-1 text-sm rounded-lg transition", authMode === "create" ? (isDark ? "bg-sky-500 text-white" : "bg-sky-600 text-white") : (isDark ? "text-white/80 hover:bg-white/10" : "text-zinc-700 hover:bg-white"))} onClick={() => setAuthMode("create")}>Create account</button>
+              <button className={cn("px-3 py-1 text-sm rounded-lg transition", authMode === "login" ? (isDark ? "bg-white/15 text-white" : "bg-zinc-600 text-white") : (isDark ? "text-white/80 hover:bg-white/10" : "text-zinc-700 hover:bg-white"))} onClick={() => setAuthMode("login")}>Login</button>
+              <button className={cn("px-3 py-1 text-sm rounded-lg transition", authMode === "create" ? (isDark ? "bg-white/15 text-white" : "bg-zinc-600 text-white") : (isDark ? "text-white/80 hover:bg-white/10" : "text-zinc-700 hover:bg-white"))} onClick={() => setAuthMode("create")}>Create account</button>
             </div>
 
             <div className="relative overflow-visible">
@@ -829,15 +853,15 @@ const Shell = ({ route, navigate, children }) => {
 
                     <div className="space-y-2">
                       <Label htmlFor="login-email">Email</Label>
-                      <Input id="login-email" type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} placeholder="you@example.com" className="w-full h-11 rounded-xl px-4 bg-zinc-100 text-zinc-900 placeholder:text-zinc-500 dark:bg-zinc-800 dark:text-white dark:placeholder:text-white/50 border border-transparent focus-visible:ring-2 focus-visible:ring-sky-500" />
+                      <Input id="login-email" type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} placeholder="you@example.com" className="w-full h-11 rounded-xl px-4 bg-zinc-100 text-zinc-900 placeholder:text-zinc-500 dark:bg-[#0f1115] dark:text-white dark:placeholder:text-white/50 border border-transparent focus-visible:ring-2 focus-visible:ring-white/30" />
                     </div>
 
                     <div className="space-y-2 mt-3">
                       <Label htmlFor="login-password">Password</Label>
-                      <Input id="login-password" type="password" value={loginPass} onChange={(e) => setLoginPass(e.target.value)} placeholder="••••••••" className="w-full h-11 rounded-xl px-4 bg-zinc-100 text-zinc-900 placeholder:text-zinc-500 dark:bg-zinc-800 dark:text-white dark:placeholder:text-white/50 border border-transparent focus-visible:ring-2 focus-visible:ring-sky-500" />
+                      <Input id="login-password" type="password" value={loginPass} onChange={(e) => setLoginPass(e.target.value)} placeholder="••••••••" className="w-full h-11 rounded-xl px-4 bg-zinc-100 text-zinc-900 placeholder:text-zinc-500 dark:bg-[#0f1115] dark:text-white dark:placeholder:text-white/50 border border-transparent focus-visible:ring-2 focus-visible:ring-white/30" />
                     </div>
 
-                    <Button className="w-full h-11 mt-4 rounded-xl bg-sky-600 text-white hover:bg-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400" onClick={handleLogin}>Login</Button>
+                    <Button className="w-full h-11 mt-4 rounded-xl bg-zinc-900 border border-white/10 text-white hover:bg-zinc-800" onClick={handleLogin}>Login</Button>
 
                     <div className="mt-3 text-sm">
                       No account{" "}
@@ -850,20 +874,20 @@ const Shell = ({ route, navigate, children }) => {
 
                     <div className="space-y-2">
                       <Label htmlFor="reg-name">Name</Label>
-                      <Input id="reg-name" value={regName} onChange={(e) => setRegName(e.target.value)} placeholder="Your name" className="w-full h-11 rounded-xl px-4 bg-zinc-100 text-zinc-900 placeholder:text-zinc-500 dark:bg-zinc-800 dark:text-white dark:placeholder:text-white/50 border border-transparent focus-visible:ring-2 focus-visible:ring-sky-500" />
+                      <Input id="reg-name" value={regName} onChange={(e) => setRegName(e.target.value)} placeholder="Your name" className="w-full h-11 rounded-xl px-4 bg-zinc-100 text-zinc-900 placeholder:text-zinc-500 dark:bg-[#0f1115] dark:text-white dark:placeholder:text-white/50 border border-transparent focus-visible:ring-2 focus-visible:ring-white/30" />
                     </div>
 
                     <div className="space-y-2 mt-3">
                       <Label htmlFor="reg-email">Email</Label>
-                      <Input id="reg-email" type="email" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} placeholder="you@example.com" className="w-full h-11 rounded-xl px-4 bg-zinc-100 text-zinc-900 placeholder:text-zinc-500 dark:bg-zinc-800 dark:text-white dark:placeholder:text-white/50 border border-transparent focus-visible:ring-2 focus-visible:ring-sky-500" />
+                      <Input id="reg-email" type="email" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} placeholder="you@example.com" className="w-full h-11 rounded-xl px-4 bg-zinc-100 text-zinc-900 placeholder:text-zinc-500 dark:bg-[#0f1115] dark:text-white dark:placeholder:text-white/50 border border-transparent focus-visible:ring-2 focus-visible:ring-white/30" />
                     </div>
 
                     <div className="space-y-2 mt-3">
                       <Label htmlFor="reg-password">Password</Label>
-                      <Input id="reg-password" type="password" value={regPass} onChange={(e) => setRegPass(e.target.value)} placeholder="••••••••" className="w-full h-11 rounded-xl px-4 bg-zinc-100 text-zinc-900 placeholder:text-zinc-500 dark:bg-zinc-800 dark:text-white dark:placeholder:text-white/50 border border-transparent focus-visible:ring-2 focus-visible:ring-sky-500" />
+                      <Input id="reg-password" type="password" value={regPass} onChange={(e) => setRegPass(e.target.value)} placeholder="••••••••" className="w-full h-11 rounded-xl px-4 bg-zinc-100 text-zinc-900 placeholder:text-zinc-500 dark:bg-[#0f1115] dark:text-white dark:placeholder:text-white/50 border border-transparent focus-visible:ring-2 focus-visible:ring-white/30" />
                     </div>
 
-                    <Button className="w-full h-11 mt-4 rounded-xl bg-sky-600 text-white hover:bg-sky-500 dark:bg-sky-500 dark:hover:bg-sky-400" onClick={handleRegister}>Create account</Button>
+                    <Button className="w-full h-11 mt-4 rounded-xl bg-zinc-900 border border-white/10 text-white hover:bg-zinc-800" onClick={handleRegister}>Create account</Button>
 
                     <div className="mt-3 text-sm">
                       Already have an account{" "}
@@ -942,7 +966,7 @@ const Home = ({ goPremium, navigate }) => {
                 size="lg"
                 className={cn(
                   "shadow-lg",
-                  isDark ? "bg-sky-500 text-white hover:bg-sky-400" : "bg-sky-600 text-white hover:bg-sky-500"
+                  isDark ? "bg-zinc-900 border border-white/10 text-white hover:bg-zinc-800" : "bg-zinc-800 text-white hover:bg-zinc-700"
                 )}
                 onClick={goPremium}
               >
@@ -954,7 +978,7 @@ const Home = ({ goPremium, navigate }) => {
                 variant="outline"
                 className={cn(
                   "shadow-sm",
-                  isDark ? "border-white/20 hover:bg-white/5" : "border-zinc-300 text-zinc-800 hover:bg-zinc-100"
+                  isDark ? "border-white/20 text-white hover:bg-white/5" : "border-zinc-300 text-zinc-800 hover:bg-zinc-100"
                 )}
                 onClick={() => navigate("widgets")}
               >
@@ -971,7 +995,7 @@ const Home = ({ goPremium, navigate }) => {
 
           {/* Right: compact hero metrics card */}
           <Card className={cn(glassCls(isDark), "relative overflow-hidden")}>
-            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-sky-400/40 to-transparent" />
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
             <CardHeader>
               <CardTitle>Widgets in seconds</CardTitle>
               <CardDescription>Paste into OBS and you’re done.</CardDescription>
@@ -981,10 +1005,10 @@ const Home = ({ goPremium, navigate }) => {
                 <HeroMetric label="Amount won" value={<span>€ 12 750,38</span>} />
                 <HeroMetric label="Average bet" value={<span>€ 2.50</span>} />
                 <HeroMetric label="To open" value={12} />
-                <div className={cn("p-4 rounded-2xl border shadow-sm", isDark ? "border-white/10 bg-white/5" : "border-zinc-200 bg-white")}>
+                <div className={cn("p-4 rounded-2xl border shadow-sm", isDark ? "border-white/10 bg-[#0f1115]" : "border-zinc-200 bg-white")}>
                   <div className={cn("text-sm mb-2", isDark ? "text-white/60" : "text-zinc-600")}>Progress</div>
                   <div className={cn("w-full h-2 rounded-full overflow-hidden", isDark ? "bg-white/10" : "bg-zinc-200")}>
-                    <div className={cn("h-full", isDark ? "bg-sky-400" : "bg-sky-600")} style={{ width: "62%" }} />
+                    <div className={cn("h-full", isDark ? "bg-white/70" : "bg-zinc-700")} style={{ width: "62%" }} />
                   </div>
                 </div>
               </div>
@@ -995,7 +1019,7 @@ const Home = ({ goPremium, navigate }) => {
 
       {/* Included tiles */}
       <Section>
-        <H2 className="text-sky-600">Included</H2>
+        <H2 className="text-white">Included</H2>
         <p className={cn("mt-2 max-w-2xl", isDark ? "text-white/70" : "text-zinc-600")}>
           Everything you need to run hunts and show results.
         </p>
@@ -1006,21 +1030,18 @@ const Home = ({ goPremium, navigate }) => {
             title="Widgets"
             desc="Copy to OBS and you're done."
             onClick={() => navigate("widgets")}
-            tone="neutral"
           />
           <HomeTile
             icon={<Users className="h-5 w-5" />}
             title="Games"
             desc="Mini-games for your stream."
             onClick={() => navigate("games")}
-            tone="gold"
           />
           <HomeTile
             icon={<Star className="h-5 w-5" />}
             title="Premium"
             desc="Unlock all features."
             onClick={() => navigate("premium")}
-            tone="sky"
           />
         </div>
       </Section>
@@ -1057,7 +1078,7 @@ function WidgetCard({ w }) {
 
   const pillCls = w.free
     ? "bg-white text-zinc-900 dark:bg-white/90 dark:text-black"
-    : "bg-sky-500 text-white dark:bg-sky-400 dark:text-black";
+    : "bg-zinc-800 text-white dark:bg-zinc-800 dark:text-white";
 
   return (
     <motion.div whileHover={{ y: -3, scale: 1.01 }} transition={{ duration: 0.18 }} className="group relative">
@@ -1066,17 +1087,17 @@ function WidgetCard({ w }) {
         style={{
           background: w.free
             ? "linear-gradient(90deg, rgba(255,255,255,0.18), rgba(255,255,255,0.06))"
-            : "linear-gradient(90deg, rgba(56,189,248,0.35), rgba(56,189,248,0.08))",
+            : "linear-gradient(90deg, rgba(255,255,255,0.22), rgba(255,255,255,0.08))",
         }}
       />
 
       <div className={cn(
         "rounded-2xl p-[1px] relative",
-        w.free ? "bg-gradient-to-r from-white/30 via-white/10 to-transparent" : "bg-gradient-to-r from-sky-400/60 via-sky-300/20 to-transparent"
+        "bg-gradient-to-r from-white/20 via-white/8 to-transparent"
       )}>
         <Card className={cn(
           "rounded-[calc(theme(borderRadius.2xl)-1px)] transition-colors",
-          isDark ? "bg-zinc-900/65 border-white/10" : "bg-white/95 border-zinc-200"
+          isDark ? "bg-[#0f1115] border-white/10" : "bg-white/95 border-zinc-200"
         )}>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -1085,7 +1106,7 @@ function WidgetCard({ w }) {
                   "h-10 w-10 grid place-items-center rounded-xl",
                   w.free
                     ? isDark ? "bg-white/10 text-white" : "bg-zinc-100 text-zinc-800"
-                    : isDark ? "bg-sky-400/20 text-sky-300" : "bg-sky-500/10 text-sky-700"
+                    : isDark ? "bg-white/8 text-white/80" : "bg-zinc-100 text-zinc-700"
                 )}>
                   <Icon className="h-5 w-5" />
                 </div>
@@ -1116,7 +1137,7 @@ const WidgetsPage = () => {
   const { isDark } = useTheme();
   return (
     <Section>
-      <H2 className="text-sky-600">Widgets</H2>
+      <H2 className="text-white">Widgets</H2>
       <p className={cn("mt-2", isDark ? "text-white/70" : "text-zinc-600")}>Paste into OBS</p>
       <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-5 mt-6">
         {widgetsList.map((w) => (
@@ -1169,7 +1190,7 @@ const GamesPage = () => {
   const { isDark } = useTheme();
   return (
     <Section>
-      <H2 className="text-sky-600">Games</H2>
+      <H2 className="text-white">Games</H2>
       <p className={cn("mt-2", isDark ? "text-white/70" : "text-zinc-600")}>Mini-games for stream</p>
       <div className="grid md:grid-cols-3 gap-5 mt-6">
         {gamesList.map((g) => (
@@ -1193,7 +1214,7 @@ const Feature = ({ line }) => {
   const { isDark } = useTheme();
   return (
     <div className={cn("flex items-center gap-2 text-sm", isDark ? "text-white/80" : "text-zinc-700")}>
-      <ShieldCheck className={cn("h-4 w-4", isDark ? "text-sky-400" : "text-sky-600")} /> {line}
+      <ShieldCheck className={cn("h-4 w-4", isDark ? "text-white/70" : "text-zinc-700")} /> {line}
     </div>
   );
 };
@@ -1211,7 +1232,7 @@ const FeatureBullet = ({ children }) => {
   const { isDark } = useTheme();
   return (
     <div className="flex items-center gap-2 text-sm">
-      <CheckCircle2 className={cn("h-4 w-4", isDark ? "text-sky-400" : "text-sky-600")} />
+      <CheckCircle2 className={cn("h-4 w-4", isDark ? "text-white/70" : "text-zinc-600")} />
       <span className={cn(isDark ? "text-white/85" : "text-zinc-800")}>{children}</span>
     </div>
   );
@@ -1219,9 +1240,9 @@ const FeatureBullet = ({ children }) => {
 
 const BadgeTag = ({ color = "primary", icon: Icon, children }) => {
   const palette = {
-    primary: "border-sky-400/35 text-sky-200 bg-sky-500/10",
-    neutral: "border-white/12 text-white/80 bg-white/6 dark:border-white/12 dark:text-white/80 dark:bg-white/5",
-    sky:     "border-sky-400/40 text-sky-200 bg-sky-500/10",
+    primary: "border-white/15 text-white/80 bg-white/6",
+    neutral: "border-white/12 text-white/80 bg-white/6",
+    sky:     "border-white/15 text-white/80 bg-white/6",
   };
   const cls = palette[color] || palette.primary;
   return (
@@ -1253,8 +1274,8 @@ const PriceTag = ({ value, note, old }) => {
       <div
         className={cn(
           "text-4xl font-extrabold tracking-tight bg-clip-text text-transparent",
-          isDark ? "bg-gradient-to-r from-sky-300 to-sky-100"
-                 : "bg-gradient-to-r from-sky-700 to-sky-500"
+          isDark ? "bg-gradient-to-r from-white to-zinc-200"
+                 : "bg-gradient-to-r from-zinc-900 to-zinc-700"
         )}
       >
         {value}
@@ -1281,14 +1302,14 @@ const PricingCard = ({
 
   const ringByTone = {
     free:   isDark ? "ring-1 ring-white/8" : "ring-1 ring-zinc-200/80",
-    pro:    isDark ? "ring-1 ring-sky-400/35" : "ring-1 ring-sky-600/25",
-    custom: isDark ? "ring-1 ring-sky-400/35"   : "ring-1 ring-sky-600/25",
+    pro:    isDark ? "ring-1 ring-white/12" : "ring-1 ring-zinc-600/25",
+    custom: isDark ? "ring-1 ring-white/12" : "ring-1 ring-zinc-600/25",
   }[tone];
 
   const glowByTone = {
     free:   "from-white/10",
-    pro:    "from-sky-400/20",
-    custom: "from-sky-400/20",
+    pro:    "from-white/12",
+    custom: "from-white/12",
   }[tone];
 
   const unifiedBtnClass = isDark
@@ -1358,7 +1379,7 @@ const PremiumPage = () => {
   const { isDark } = useTheme();
   return (
     <Section>
-      <H2 className="text-sky-600">Plans</H2>
+      <H2 className="text-white">Plans</H2>
       <p className={cn("mt-2", isDark ? "text-white/70" : "text-zinc-600")}>Choose your plan</p>
 
       <div className="grid md:grid-cols-3 gap-5 mt-6">
@@ -1457,7 +1478,7 @@ const WidgetProgress = ({ value = 0 }) => {
     <div className={cn("p-4 rounded-2xl border shadow-sm", isDark ? "border-white/10 bg-white/5" : "border-zinc-200 bg-white")}>
       <div className={cn("text-sm mb-2", isDark ? "text-white/60" : "text-zinc-600")}>Progress</div>
       <div className={cn("w-full h-2 rounded-full overflow-hidden", isDark ? "bg-white/10" : "bg-zinc-200")}>
-        <div className={cn("h-full", isDark ? "bg-sky-400" : "bg-sky-600")} style={{ width: `${Math.min(100, Math.max(0, value))}%` }} />
+        <div className={cn("h-full", isDark ? "bg-white/70" : "bg-zinc-700")} style={{ width: `${Math.min(100, Math.max(0, value))}%` }} />
       </div>
     </div>
   );
