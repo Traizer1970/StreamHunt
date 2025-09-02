@@ -2013,6 +2013,10 @@ export default function HuntDetail({ numberId }) {
     defaultValue: DEFAULT_OPENING_OVERLAY,
   });
 
+  // STOP (persistido no localStorage)
+const [stopBox, setStopBox] = useLocalState(`hunt:${nId}:stop`, { value: 0 });
+
+
   const sortedSlots = React.useMemo(() => {
     const arr = [...slots];
     if (sortBy.key === "order") return arr;
@@ -2114,26 +2118,23 @@ export default function HuntDetail({ numberId }) {
 
   React.useEffect(() => { refreshSlots(); }, [refreshSlots]);
 
-  const kpis = React.useMemo(() => {
-    // [ADICIONAR] — STOP (editável) + B/E calculado pelo STOP
-const [stopBox, setStopBox] = useLocalState(`hunt:${nId}:stop`, { value: 0 });
+const kpis = React.useMemo(() => {
+  const startFromHunt  = Number(hunt?.start_cost);
+  const startFromSlots = slots.reduce((a, s) => a + (toNum(s.bet_size) || 0), 0);
+  const start = Number.isFinite(startFromHunt) ? startFromHunt : startFromSlots;
+
+  const amountWon  = slots.reduce((a, s) => a + (toNum(s.payout) || 0), 0);
+  const bonusCount = slots.length;
+
+  return { amountWon, bonusCount, startCost: start };
+}, [hunt, slots]);
 
 const beLeft = React.useMemo(() => {
   const stop = toNum(stopBox.value);
-  // Se STOP for > 0, usamos STOP como alvo de BE; caso contrário usamos o Start
-  const target = stop > 0 ? stop : kpis.startCost;
+  const target = stop > 0 ? stop : kpis.startCost; // usa STOP se > 0, senão Start
   return Math.max(0, target - kpis.amountWon);
 }, [stopBox.value, kpis.startCost, kpis.amountWon]);
 
-    const startFromHunt = Number(hunt?.start_cost);
-    const startFromSlots = slots.reduce((a, s) => a + (toNum(s.bet_size) || 0), 0);
-    const start = Number.isFinite(startFromHunt) ? startFromHunt : startFromSlots;
-
-    const amountWon = slots.reduce((a, s) => a + (toNum(s.payout) || 0), 0);
-    const bonusCount = slots.length;
-
-    return { amountWon, bonusCount, startCost: start };
-  }, [hunt, slots]);
 
   function goBack() { window.location.hash = "#/hunts"; }
 
