@@ -266,24 +266,37 @@ async function persistOrder(slots) {
   }
 }
 
-/* ───────────────────────── small hooks ───────────────────────── */
-/* Salvar/ler opções do overlay no Supabase (com IS NULL + onConflict consistente) */
-/* ── substituir a versão atual por esta ── */
+/* ───────────────────────── Salvar/ler opções do overlay (DB + fallback) ───────────────────────── */
 function useOverlaySettings({ type, huntNumberId, defaultValue }) {
   const { user } = useAuth();
   const [opts, setOpts] = React.useState(defaultValue);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState(null);
   const [rowId, setRowId] = React.useState(null);
+
+  const key = React.useMemo(
+    () => `overlay:${type}:${huntNumberId == null ? "null" : String(huntNumberId)}`,
+    [type, huntNumberId]
+  );
+
+  // carrega primeiro de localStorage (para não “saltar” ao dar F5)
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) setOpts((o) => ({ ...o, ...JSON.parse(raw) }));
+    } catch {}
+  }, [key]);
+
   const debounced = useDebounced(opts, 400);
 
-  // 1) Ler opções (e descobrir o id da linha, se existir)
+  // ── LER DA BD ────────────────────────────────────────────────────────────
   React.useEffect(() => {
     let alive = true;
     (async () => {
       try {
         setLoading(true);
         setError(null);
+
         if (!user) { setLoading(false); return; }
 
         let q = supabase
@@ -304,6 +317,9 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
         if (data?.id) setRowId(data.id);
         const merged = { ...defaultValue, ...(data?.opts || {}) };
         setOpts(merged);
+
+        // mantém localStorage sincronizado
+        try { localStorage.setItem(key, JSON.stringify(merged)); } catch {}
       } catch (e) {
         if (alive) setError(e);
         console.warn("[overlay_settings] load failed:", e?.message || e);
@@ -312,32 +328,34 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
       }
     })();
     return () => { alive = false; };
-  }, [user?.id, type, huntNumberId]);
+  }, [user?.id, type, huntNumberId, key]);
 
-  // 2) Gravar — compatível com PG14/PG15 e sem depender de onConflict
+  // ── GUARDAR (DB + localStorage) ─────────────────────────────────────────
   React.useEffect(() => {
+    // grava sempre em localStorage (resiste a F5 mesmo sem login)
+    try { localStorage.setItem(key, JSON.stringify(debounced)); } catch {}
+
     (async () => {
       try {
-        if (!user) return;
+        if (!user) return; // sem user → só localStorage
 
-        const payload = {
+        const base = {
           user_id: user.id,
           type,
           hunt_number_id: huntNumberId ?? null,
-          opts: debounced,
           updated_at: new Date().toISOString(),
         };
 
         if (rowId) {
           const { error } = await supabase
             .from("overlay_settings")
-            .update({ opts: payload.opts, updated_at: payload.updated_at })
+            .update({ opts: debounced, updated_at: base.updated_at })
             .eq("id", rowId);
           if (error) throw error;
           return;
         }
 
-        // Se ainda não temos rowId, tentamos descobrir (evita duplicados)
+        // tenta localizar a linha (evita duplicados)
         let q = supabase
           .from("overlay_settings")
           .select("id")
@@ -352,13 +370,13 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
           setRowId(probe.data.id);
           const { error } = await supabase
             .from("overlay_settings")
-            .update({ opts: payload.opts, updated_at: payload.updated_at })
+            .update({ opts: debounced, updated_at: base.updated_at })
             .eq("id", probe.data.id);
           if (error) throw error;
         } else {
           const { data, error } = await supabase
             .from("overlay_settings")
-            .insert(payload)
+            .insert({ ...base, opts: debounced })
             .select("id")
             .single();
           if (error) throw error;
@@ -368,7 +386,7 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
         console.warn("[overlay_settings] save failed:", e?.message || e);
       }
     })();
-  }, [user?.id, type, huntNumberId, debounced, rowId]);
+  }, [debounced, key, user?.id, type, huntNumberId, rowId]);
 
   return [opts, setOpts, { loading, error }];
 }
