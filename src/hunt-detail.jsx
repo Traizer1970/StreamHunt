@@ -14,6 +14,7 @@ import {
   Search,
   ChevronDown,
   ChevronLeft,
+  ChevronRight,
   Loader2,
   Copy as CopyIcon,
   Star,
@@ -2190,6 +2191,257 @@ function RedeemModal({ open, onClose, slots, onSaved }) {
   );
 }
 
+function RedeemFlowModal({ open, onClose, hunt, slots, onSaved }) {
+  const { t } = useLang();
+  const pageSize = 16;
+
+  // índice inicial = 1ª slot sem payout (ou 0)
+  const firstIdx = React.useMemo(() => {
+    const i = Math.max(0, slots.findIndex(s => s.payout == null));
+    return i === -1 ? 0 : i;
+  }, [slots]);
+
+  const [idx, setIdx] = React.useState(0);
+  React.useEffect(() => { if (open) setIdx(firstIdx); }, [open, firstIdx]);
+
+  const row = slots[idx] || null;
+
+  // Campos (texto) para aceitar vírgula ou ponto
+  const [payoutTxt, setPayoutTxt] = React.useState("");
+  const [multTxt, setMultTxt]     = React.useState("");
+  const [betTxt, setBetTxt]       = React.useState("");
+  const [busy, setBusy]           = React.useState(false);
+
+  // Quando muda a slot ativa, inicializa campos
+  React.useEffect(() => {
+    if (!row) return;
+    const bet = row.bet_size ?? "";
+    const payout = row.payout ?? "";
+    const mult = (toNum(bet) > 0 && payout !== "" ) ? (toNum(payout) / toNum(bet)) : "";
+    setBetTxt(String(bet ?? ""));
+    setPayoutTxt(payout === "" ? "" : String(payout).replace(".", ","));
+    setMultTxt(mult === "" ? "" : String(mult).replace(".", ","));
+  }, [row?.id]);
+
+  // Sync inputs
+  const onChangeBet = (v) => {
+    setBetTxt(v);
+    const b = toNum(v), m = toNum(multTxt);
+    if (b > 0 && multTxt !== "") setPayoutTxt(String(b * m).replace(".", ","));
+  };
+  const onChangePayout = (v) => {
+    setPayoutTxt(v);
+    const b = toNum(betTxt), p = toNum(v);
+    if (b > 0 && v !== "") setMultTxt(String(p / b).replace(".", ","));
+  };
+  const onChangeMult = (v) => {
+    setMultTxt(v);
+    const b = toNum(betTxt), m = toNum(v);
+    if (b > 0 && v !== "") setPayoutTxt(String(b * m).replace(".", ","));
+  };
+
+  // KPIs (iguais ao layout antigo)
+  const totals = React.useMemo(() => {
+    const startFromHunt  = Number(hunt?.start_cost);
+    const totalBetAll    = slots.reduce((a, s) => a + toNum(s.bet_size), 0);
+    const startCost      = Number.isFinite(startFromHunt) ? startFromHunt : totalBetAll;
+
+    const amountWon      = slots.reduce((a, s) => a + toNum(s.payout), 0);
+    const openedBet      = slots.filter(s => s.payout != null).reduce((a, s) => a + toNum(s.bet_size), 0);
+    const remainingBet   = Math.max(0, totalBetAll - openedBet);
+
+    const pl             = amountWon - startCost;
+    const avgRequiredX   = remainingBet > 0 ? Math.max(0, startCost - amountWon) / remainingBet : 0;
+    const currentAvgX    = openedBet > 0 ? amountWon / openedBet : 0;
+    const cumulativeX    = totalBetAll > 0 ? amountWon / totalBetAll : 0;
+
+    return { startCost, amountWon, pl, avgRequiredX, currentAvgX, cumulativeX, totalBetAll };
+  }, [hunt?.start_cost, slots]);
+
+  // Guardar esta slot
+  async function saveCurrent(goNext = false) {
+    if (!row) return;
+    try {
+      setBusy(true);
+      const bet = betTxt === "" ? null : toNum(betTxt);
+      const payout = payoutTxt === "" ? null : toNum(payoutTxt);
+      const mult = (bet != null && bet > 0 && payout != null) ? payout / bet : null;
+
+      await updateHuntSlot(row.id, { bet_size: bet, payout, multiplier: mult });
+      onSaved && onSaved();
+
+      if (goNext) {
+        // próximo sem payout; se não houver, seguinte
+        const nextIdx = slots.findIndex((s, i) => i > idx && s.payout == null);
+        setIdx(nextIdx >= 0 ? nextIdx : Math.min(idx + 1, slots.length - 1));
+      }
+    } catch (e) {
+      alert(e.message || "Falha ao guardar.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Copiar nome
+  const copySlotName = async () => {
+    if (!row) return;
+    try { await navigator.clipboard.writeText(row.name || ""); } catch {}
+  };
+
+  // Paginação (16 por página)
+  const page = Math.floor(idx / pageSize);
+  const pages = Math.max(1, Math.ceil(slots.length / pageSize));
+  const view = slots.slice(page * pageSize, page * pageSize + pageSize);
+  const gotoCard = (iAbs) => setIdx(Math.max(0, Math.min(slots.length - 1, iAbs)));
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[120]">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[96vw] max-w-[1200px]">
+        <div className="rounded-2xl border border-white/10 bg-zinc-950 text-white shadow-2xl p-4 md:p-5">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-lg font-semibold">
+              {t("startRedeeming")} — {row?.name || "—"} ({idx + 1}/{slots.length})
+            </div>
+            <button className="p-2 rounded-lg hover:bg-white/10" onClick={onClose} aria-label={t("close")}>
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* KPIs */}
+          <div className="grid md:grid-cols-6 gap-2 mb-3">
+            {[
+              ["P/L", fmtMoney(totals.pl), totals.pl < 0 ? "text-red-300" : "text-emerald-300"],
+              [t("amountWon"), fmtMoney(totals.amountWon)],
+              [t("startCost"), fmtMoney(totals.startCost)],
+              ["Avg. Required X", fmtPlain(totals.avgRequiredX, 2)],
+              ["Current Avg. X", fmtPlain(totals.currentAvgX, 2)],
+              ["Cumulative X", fmtPlain(totals.cumulativeX, 2) + "x"],
+            ].map(([label, value, color], i) => (
+              <div key={i} className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+                <div className="text-[11px] leading-none mb-1 text-white/70">{label}</div>
+                <div className={cn("font-semibold", numCls, color)}>{value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Slot ativo */}
+          {row && (
+            <div className="rounded-xl border border-white/10 bg-zinc-900 p-3 mb-3">
+              <div className="flex items-center gap-3">
+                {row.thumbnail ? (
+                  <img src={row.thumbnail} alt="" className="h-12 w-12 rounded object-cover" />
+                ) : <div className="h-12 w-12 rounded bg-white/10" />}
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold truncate">{row.name}</div>
+                  <div className="text-xs opacity-70 truncate">{row.provider}</div>
+                </div>
+                <Button variant="outline" className="h-9" onClick={copySlotName}>
+                  <CopyIcon className="h-4 w-4 mr-2" />
+                  {t("copySlot")}
+                </Button>
+              </div>
+
+              {/* Inputs */}
+              <div className="grid md:grid-cols-3 gap-3 mt-3">
+                <div>
+                  <div className="text-xs opacity-70 mb-1">Payout</div>
+                  <Input
+                    value={payoutTxt}
+                    onChange={(e) => onChangePayout(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="0"
+                    className="h-11 rounded-xl bg-zinc-800 border-white/10 text-white"
+                  />
+                </div>
+                <div>
+                  <div className="text-xs opacity-70 mb-1">Multiplier</div>
+                  <Input
+                    value={multTxt}
+                    onChange={(e) => onChangeMult(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="0"
+                    className="h-11 rounded-xl bg-zinc-800 border-white/10 text-white"
+                  />
+                </div>
+                <div>
+                  <div className="text-xs opacity-70 mb-1">{t("betsizeReq")}</div>
+                  <Input
+                    value={betTxt}
+                    onChange={(e) => onChangeBet(e.target.value)}
+                    inputMode="decimal"
+                    placeholder="0"
+                    className="h-11 rounded-xl bg-zinc-800 border-white/10 text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="mt-3 flex items-center justify-end gap-2">
+                <Button variant="outline" className="h-9" onClick={onClose}>
+                  {t("close")}
+                </Button>
+                <Button className="h-9" onClick={() => saveCurrent(true)} disabled={busy}>
+                  {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ChevronRight className="h-4 w-4 mr-2" />}
+                  {t("saveContinue")}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Grelha de slots + paginação */}
+          <div className="rounded-xl border border-white/10 bg-zinc-900 p-3">
+            <div className="grid grid-cols-8 gap-2">
+              {view.map((s, i) => {
+                const iAbs = page * pageSize + i;
+                const selected = iAbs === idx;
+                const isSuper = getIsSuper(s);
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => gotoCard(iAbs)}
+                    className={cn(
+                      "relative rounded-lg overflow-hidden border text-left",
+                      selected ? "border-white/60" : "border-white/10 hover:border-white/25"
+                    )}
+                    title={s.name}
+                  >
+                    <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">
+                      #{iAbs + 1}
+                    </div>
+                    {isSuper && (
+                      <div className="absolute right-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-fuchsia-500/90 text-black">
+                        SUPER
+                      </div>
+                    )}
+                    {s.thumbnail ? (
+                      <img src={s.thumbnail} alt="" className="h-16 w-full object-cover object-bottom" />
+                    ) : (
+                      <div className="h-16 w-full bg-white/10" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-3 flex items-center justify-center gap-2">
+              <Button variant="outline" className="h-9" onClick={() => setIdx(Math.max(0, idx - pageSize))} disabled={page === 0}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <div className="text-sm opacity-80">{page + 1} / {pages}</div>
+              <Button variant="outline" className="h-9" onClick={() => setIdx(Math.min(slots.length - 1, idx + pageSize))} disabled={page + 1 >= pages}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 export default function HuntDetail({ numberId }) {
   const { isDark } = useTheme();
@@ -2210,6 +2462,8 @@ export default function HuntDetail({ numberId }) {
     return () => window.removeEventListener("hashchange", onHash);
   }, [numberId]);
 
+
+  const [redeemFlowOpen, setRedeemFlowOpen] = React.useState(false);
   const [redeemOpen, setRedeemOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(true);
   const [hunt, setHunt] = React.useState(null);
@@ -2392,11 +2646,8 @@ const beLeft = React.useMemo(() => {
  // vai para o ecrã de Opening/Redeem depois de confirmares
 const confirmStartYes = React.useCallback(() => {
   setConfirmStart(false);
-  setRedeemOpen(true);   // abre o modal de redeem
+  setRedeemFlowOpen(true);
 }, []);
-
-
-
 
   if (busy) return <div className="max-w-7xl mx-auto px-4 py-10 text-sm opacity-70">A carregar…</div>;
   if (!hunt) {
@@ -2635,12 +2886,14 @@ const confirmStartYes = React.useCallback(() => {
         }}
       />
 
-<RedeemModal
-  open={redeemOpen}
-  onClose={() => setRedeemOpen(false)}
+<RedeemFlowModal
+  open={redeemFlowOpen}
+  onClose={() => setRedeemFlowOpen(false)}
+  hunt={hunt}
   slots={sortedSlots}
   onSaved={refreshSlots}
 />
+
 
 
 
