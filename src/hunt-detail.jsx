@@ -1968,6 +1968,68 @@ function ConfirmDeleteModal({ open, slot, onCancel, onConfirm }) {
 }
 
 /* ───────────────────────── Página ───────────────────────── */
+function OpeningModal({ open, onClose, huntNumberId, opts }) {
+  if (!open || !huntNumberId) return null;
+
+  const base = React.useMemo(
+    () => `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, ""),
+    []
+  );
+  const url = React.useMemo(
+    () => buildOpeningOverlayUrl(base, huntNumberId, opts || {}),
+    [base, huntNumberId, opts]
+  );
+
+  return (
+    <div className="fixed inset-0 z-[120]">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[96vw] max-w-[1120px]">
+        <div className="rounded-2xl border border-white/10 bg-zinc-950 text-white shadow-2xl p-4 md:p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-lg font-semibold">Opening</div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                className="h-9"
+                onClick={() => navigator.clipboard.writeText(url)}
+              >
+                <CopyIcon className="h-4 w-4 mr-2" />
+                Copy URL
+              </Button>
+              <Button
+                variant="outline"
+                className="h-9"
+                onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Pop-out
+              </Button>
+              <Button className="h-9" onClick={onClose}>
+                <X className="h-4 w-4 mr-2" />
+                Fechar
+              </Button>
+            </div>
+          </div>
+
+          {/* O iframe mostra o mesmo overlay que abrías noutra aba */}
+          <div className="rounded-xl overflow-hidden border border-white/10 bg-black">
+            <iframe
+              src={url}
+              title="Opening overlay"
+              className="w-full"
+              style={{
+                border: 0,
+                height: "70vh",           // altura confortável no modal
+                display: "block",
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function HuntDetail({ numberId }) {
   const { isDark } = useTheme();
   const { t } = useLang();
@@ -1987,6 +2049,7 @@ export default function HuntDetail({ numberId }) {
     return () => window.removeEventListener("hashchange", onHash);
   }, [numberId]);
 
+  const [openOpening, setOpenOpening] = React.useState(false);
   const [busy, setBusy] = React.useState(true);
   const [hunt, setHunt] = React.useState(null);
   const [slots, setSlots] = React.useState([]);
@@ -2168,10 +2231,9 @@ const beLeft = React.useMemo(() => {
  // vai para o ecrã de Opening/Redeem depois de confirmares
 const confirmStartYes = React.useCallback(() => {
   setConfirmStart(false);
+  setOpenOpening(true);     // abre o modal
+}, []);
 
-  // Se o teu route for /redeem/:id usa "#/redeem"
-  window.location.hash = `#/opening/${nId}`;
-}, [nId]);
 
 
   if (busy) return <div className="max-w-7xl mx-auto px-4 py-10 text-sm opacity-70">A carregar…</div>;
@@ -2410,6 +2472,14 @@ const confirmStartYes = React.useCallback(() => {
           }
         }}
       />
+
+        <OpeningModal
+  open={openOpening}
+  onClose={() => setOpenOpening(false)}
+  huntNumberId={hunt.number_id}
+  opts={openingOpts}
+/>
+
 
       {/* Início do Redeem (apenas confirmação) */}
       {confirmStart && (
