@@ -272,7 +272,7 @@ function LayoutPresetChip({ label, variant, active, onClick }) {
       title={label}
       className={cn(
         "w-full flex items-center gap-2 h-9 px-3 rounded-lg border transition truncate",
-        active ? "border-white/30 bg-white/10 ring-1 ring-white/40" : "border-white/10 hover:bg-white/5"
+        active ? "border-sky-400/40 bg-sky-500/10 ring-1 ring-sky-400/40" : "border-white/10 hover:bg-white/5"
       )}
     >
       {/* mini-preview */}
@@ -362,8 +362,10 @@ function Segmented({ value, onChange, options, className = "" }) {
             type="button"
             onClick={() => onChange(val)}
             className={cn(
-              "px-3 h-9 rounded-md text-sm transition",
-              active ? "bg-white/10" : "text-white/70 hover:text-white"
+             "px-3 h-9 rounded-md text-sm transition",
+             active
+               ? "bg-sky-500/15 text-sky-100 ring-1 ring-sky-400/30"
+               : "text-white/70 hover:text-white"
             )}
           >
             {label}
@@ -385,8 +387,8 @@ function Toggle({ label, checked, onChange, hint }) {
           "h-9 px-3 rounded-xl border inline-flex items-center gap-2 select-none transition",
           "shadow-sm hover:shadow",
           checked
-            ? "bg-amber-400/10 text-amber-50 border-amber-300/40 ring-1 ring-amber-300/30"
-            : "bg-zinc-900/60 text-white/80 border-white/10 hover:text-white"
+           ? "bg-sky-500/10 text-sky-100 border-sky-400/40 ring-1 ring-sky-400/30"
+           : "bg-zinc-900/60 text-white/80 border-white/10 hover:text-white"
         )}
       >
         <span className="text-sm">{label}</span>
@@ -395,7 +397,7 @@ function Toggle({ label, checked, onChange, hint }) {
         <span
           className={cn(
             "ml-1 relative h-5 w-9 rounded-full transition",
-            checked ? "bg-amber-400/70" : "bg-white/15"
+            checked ? "bg-sky-400/70" : "bg-white/15"
           )}
         >
           <span
@@ -927,7 +929,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
           style={infoRight ? { alignItems: badgesVertical ? "flex-end" : "center", textAlign: "right" } : {}}
         >
           {opts.showIdx && <div className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-black/70">#{i + 1}</div>}
-          {opts.showBet && (opts.betStyle === "chip" || !!opts.vInfo) && (
+          {(opts.betStyle === "chip" || !!opts.vInfo) && (
             <div className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-white/85 text-black/90 shadow">
               {fmtPlain(toNum(s.bet_size))}
             </div>
@@ -948,7 +950,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
                  style={{ background: "rgba(0,0,0,.45)", borderColor: "rgba(255,255,255,.18)", fontFamily: RUBIK_STACK }}
                  title={s?.name || ""}>
               <div className="font-semibold leading-tight truncate">{s?.name || "—"}</div>
-              {opts.betStyle === "inline" && !!opts.showBet && (
+             {opts.betStyle === "inline" && (
                 <div className="mt-0.5 text-[11px] opacity-85 flex items-center gap-1">
                   <span className="h-[6px] w-[6px] rounded-full bg-white/70" />
                   {s?.bet_size != null ? fmtPlain(toNum(s.bet_size)) : "—"}
@@ -961,7 +963,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
         {showName && captionIsFloat && (
           <div className="absolute left-2 bottom-2 right-2 pointer-events-none" style={{ fontFamily: RUBIK_STACK }}>
             <div className="font-semibold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,.8)] truncate">{s?.name || "—"}</div>
-            {opts.betStyle === "inline" && !!opts.showBet && (
+            {opts.betStyle === "inline" && (
               <div className="text-[11px] text-white/85 drop-shadow-[0_2px_6px_rgba(0,0,0,.8)]">
                 {s?.bet_size != null ? fmtPlain(toNum(s.bet_size)) : "—"}
               </div>
@@ -1420,7 +1422,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
           <Field label="Bet">
             <Segmented
               value={opts.betStyle}
-              onChange={(v) => setOpts(o => ({ ...o, betStyle: v }))}
+              onChange={(v) => setOpts(o => ({ ...o, betStyle: v, showBet: v !== "none" }))}
               options={[{ value: "inline", label: "Inline" }, { value: "chip", label: "Chip" }, { value: "none", label: "Oculto" }]}
             />
           </Field>
