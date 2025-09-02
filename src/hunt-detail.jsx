@@ -1008,6 +1008,31 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
 }
 
 /* ───────────────────────── Designer ───────────────────────── */
+function KpiPresetSwatches({ value, onChange }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {Object.entries(KPI_COLOR_PRESETS).map(([key, preset]) => {
+        const active = value === key;
+        return (
+          <button
+            key={key}
+            type="button"
+            onClick={() => onChange(key)}
+            title={key}                          // nome só em tooltip
+            className={cn(
+              "w-8 h-8 rounded-md border inline-flex items-center justify-center",
+              active ? "ring-2 ring-white/70" : "opacity-80 hover:opacity-100"
+            )}
+            style={{ background: preset.bg, borderColor: preset.border }}
+          >
+            <span className="sr-only">{key}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
   if (!open) return null;
 
@@ -1071,7 +1096,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         </Button>
       }
     >
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
         <Field label="Base width">
           <Input
             type="number"
@@ -1090,7 +1115,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         </Field>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
         <Field label="Padding">
           <Input
             type="number"
@@ -1112,7 +1137,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         </Field>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={!!opts.shine} onChange={(e) => setOpts(o => ({ ...o, shine: !!e.target.checked }))} />
           Shine
@@ -1128,7 +1153,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
     {/* Presets rápidos (só hunt) */}
     {type === "hunt" && (
       <Section title="Presets de Layout">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
           {["Default", "Compact", "Bar", "Minimal", "Head-to-Head"].map((n) => (
             <PresetChip
               key={n}
@@ -1156,7 +1181,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
           />
         </Field>
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
           <Field label="Card height (px)">
             <Input
               type="number"
@@ -1178,7 +1203,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         </div>
 
         {opts.layout === "carousel" && (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={!!opts.autoScroll} onChange={(e) => setOpts(o => ({ ...o, autoScroll: !!e.target.checked }))} />
               Auto-scroll
@@ -1199,7 +1224,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
     {/* LABELS & INFOS (hunt) */}
     {type === "hunt" && (
       <Section title="Labels & Infos">
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
           <Field label="Nome">
             <Segmented
               value={opts.nameStyle}
@@ -1246,7 +1271,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         </Button>
       }
     >
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
         <Field label="Posição">
           <Segmented
             value={opts.kpiPos}
@@ -1285,7 +1310,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         </Field>
       )}
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
         <Field label="KPI gap">
           <Input type="number" value={opts.kpiGap} onChange={(e)=>setOpts(o=>({...o,kpiGap:Number(e.target.value)||0}))} className="h-9 bg-zinc-900 border-white/10 text-white"/>
         </Field>
@@ -1294,7 +1319,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         </Field>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
         <Field label="Tamanho (0.7–1.6)">
           <input type="range" min={0.7} max={1.6} step={0.05} value={opts.kpiSize} onChange={(e)=>setOpts(o=>({...o,kpiSize:Number(e.target.value)}))} className="w-full"/>
         </Field>
@@ -1307,7 +1332,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         </Field>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
         <Field label="Arredondar valores">
           <Segmented
             value={String(opts.kpiRound)}
@@ -1320,7 +1345,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         </Field>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
         <Field label="Ícone (ms, círculo)">
           <Input type="number" value={opts.kpiAltIconMs} onChange={(e)=>setOpts(o=>({...o,kpiAltIconMs:Math.max(0,Number(e.target.value)||0)}))} className="h-9 bg-zinc-900 border-white/10 text-white"/>
         </Field>
@@ -1330,24 +1355,61 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
       </div>
 
       {/* Cores KPI */}
-      <Field label="KPI color preset">
-        <Segmented
-          value={opts.kpiColorPreset}
-          onChange={(v) => setOpts(o => ({ ...o, kpiColorPreset: v }))}
-          options={Object.keys(KPI_COLOR_PRESETS).map(k => ({ value: k, label: k }))}
-        />
-      </Field>
-      <div className="grid grid-cols-3 gap-2">
-        <Field label="BG (override)" hint="Deixa vazio p/ usar preset">
-          <Input value={opts.kpiBg ?? ""} onChange={(e)=>setOpts(o=>({...o,kpiBg:e.target.value}))} placeholder="#RRGGBB ou rgba()" className="h-9 bg-zinc-900 border-white/10 text-white"/>
-        </Field>
-        <Field label="Border (override)">
-          <Input value={opts.kpiBorder ?? ""} onChange={(e)=>setOpts(o=>({...o,kpiBorder:e.target.value}))} placeholder="#RRGGBB ou rgba()" className="h-9 bg-zinc-900 border-white/10 text-white"/>
-        </Field>
-        <Field label="Text (override)">
-          <Input value={opts.kpiText ?? ""} onChange={(e)=>setOpts(o=>({...o,kpiText:e.target.value}))} placeholder="#RRGGBB" className="h-9 bg-zinc-900 border-white/10 text-white"/>
-        </Field>
-      </div>
+      <div className="mt-2">
+  <div className="text-xs opacity-70 mb-1">KPI color preset</div>
+
+  <KpiPresetSwatches
+    value={opts.kpiColorPreset}
+    onChange={(k) =>
+      setOpts((o) => ({
+        ...o,
+        kpiColorPreset: k,
+        // limpa overrides para o preset aparecer imediatamente:
+        kpiBg: "",
+        kpiBorder: "",
+        kpiText: "",
+      }))
+    }
+  />
+
+  <div className="grid grid-cols-3 gap-2 mt-2">
+    <div>
+      <div className="text-xs opacity-70 mb-1">BG (override)</div>
+      <Input
+        type="text"
+        placeholder="#RRGGBB or rgba()"
+        value={opts.kpiBg ?? ""}
+        onChange={(e) => setOpts((o) => ({ ...o, kpiBg: e.target.value }))}
+        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+      />
+    </div>
+    <div>
+      <div className="text-xs opacity-70 mb-1">Border (override)</div>
+      <Input
+        type="text"
+        placeholder="#RRGGBB or rgba()"
+        value={opts.kpiBorder ?? ""}
+        onChange={(e) => setOpts((o) => ({ ...o, kpiBorder: e.target.value }))}
+        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+      />
+    </div>
+    <div>
+      <div className="text-xs opacity-70 mb-1">Text (override)</div>
+      <Input
+        type="text"
+        placeholder="#RRGGBB"
+        value={opts.kpiText ?? ""}
+        onChange={(e) => setOpts((o) => ({ ...o, kpiText: e.target.value }))}
+        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+      />
+    </div>
+  </div>
+
+  <div className="text-[11px] opacity-60 mt-1">
+    Tip: leave overrides empty to use the preset.
+  </div>
+</div>
+
     </Section>
 
     {/* CORES & EFEITOS */}
@@ -1371,7 +1433,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
       }
     >
       {/* Presets de painel (gradiente) */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
         {Object.entries(PANEL_PRESETS).map(([name, [start, end]]) => (
           <PresetChip
             key={name}
@@ -1383,7 +1445,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
         <Field label="Background start">
           <ColorField label="" value={opts.panelBgStart ?? ""} onChange={(v)=>setOpts(o=>({...o,panelBgStart:v}))}/>
         </Field>
@@ -1396,7 +1458,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         <ColorField label="" value={opts.panelBorder ?? ""} onChange={(v)=>setOpts(o=>({...o,panelBorder:v}))} placeholder="rgba(255,255,255,.12) ou #hex"/>
       </Field>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
         <Field label="Text">
           <ColorField label="" value={opts.textColor ?? ""} onChange={(v)=>setOpts(o=>({...o,textColor:v}))}/>
         </Field>
@@ -1405,7 +1467,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         </Field>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
         <Field label="Accent">
           <ColorField label="" value={opts.accentColor ?? ""} onChange={(v)=>setOpts(o=>({...o,accentColor:v}))}/>
         </Field>
@@ -1418,7 +1480,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
       {type === "hunt" && (
         <>
           <div className="text-xs opacity-70 mt-2">Super bonus</div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
             <Field label="Glow color">
               <ColorField label="" value={opts.superGlowColor ?? ""} onChange={(v)=>setOpts(o=>({...o,superGlowColor:v}))}/>
             </Field>
@@ -1426,7 +1488,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
               <input type="range" min={0} max={1} step={0.05} value={opts.superGlowStrength ?? 0.6} onChange={(e)=>setOpts(o=>({...o,superGlowStrength:Number(e.target.value)}))} className="w-full mt-2"/>
             </Field>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
             <Field label="Super tag bg">
               <ColorField label="" value={opts.superTagColor ?? ""} onChange={(v)=>setOpts(o=>({...o,superTagColor:v}))}/>
             </Field>
