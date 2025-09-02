@@ -1560,109 +1560,133 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 }
 
 /* ───────────────────────── OverlayCard ───────────────────────── */
-/* ───────────────────────── OverlayCard (limpo, sem cabeçalhos inúteis) ───────────────────────── */
-function OverlayCard({ type, hunt, slots, opts, setOpts }) {
-  const { t } = useLang();
-  const [open, setOpen] = React.useState(false);
-  const [openDesigner, setOpenDesigner] = React.useState(false);
+/* ───────────────────────── Salvar/ler opções do overlay (DB + local fallback, sem overwrite) ───────────────────────── */
+function useOverlaySettings({ type, huntNumberId, defaultValue }) {
+  const { user } = useAuth();
+  const [opts, setOpts] = React.useState(defaultValue);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState(null);
+  const [rowId, setRowId] = React.useState(null);
 
-  const base = React.useMemo(
-    () =>
-      `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, ""),
-    []
+  const key = React.useMemo(
+    () => `overlay:${type}:${huntNumberId == null ? "null" : String(huntNumberId)}`,
+    [type, huntNumberId]
   );
 
-  const url = React.useMemo(() => {
-    if (!hunt?.number_id) return "";
-    return type === "hunt"
-      ? buildHuntOverlayUrl(base, hunt.number_id, opts)
-      : buildOpeningOverlayUrl(base, hunt.number_id, opts);
-  }, [type, hunt?.number_id, base, opts]);
-
-  const copyUrl = async () => {
-    if (!url) return;
+  // 0) Carregar do localStorage imediato (para persistir no F5)
+  React.useEffect(() => {
     try {
-      await navigator.clipboard.writeText(url);
-    } catch {
-      alert("Não consegui copiar o URL.");
-    }
-  };
-  const openOverlay = () => {
-    if (!url) return;
-    window.open(url, "_blank", "noopener,noreferrer");
-  };
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const fromLS = JSON.parse(raw);
+        setOpts((o) => ({ ...o, ...fromLS }));
+      }
+    } catch {}
+  }, [key]);
 
-  return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03]">
-      {/* Header colapsável */}
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="w-full px-3 py-2 text-left flex items-center gap-2"
-      >
-        <div className="h-8 w-8 rounded-lg bg-white/10 flex items-center justify-center">
-          <SlidersHorizontal className="h-4 w-4" />
-        </div>
-        <div className="font-medium flex-1">
-          {type === "hunt" ? "Overlay (Hunt)" : "Overlay (Opening)"}
-        </div>
-        <ChevronDown
-          className={cn("h-4 w-4 transition", open ? "rotate-180" : "")}
-        />
-      </button>
+  const debounced = useDebounced(opts, 400);
 
-      {open && (
-        <div className="px-3 pb-3 space-y-3">
-          {/* Só os botões — sem “Preset / Padding / Align” */}
-          <div className="flex items-center gap-2">
-            <Button type="button" className="h-9" onClick={copyUrl}>
-              <CopyIcon className="h-4 w-4 mr-2" />
-              Copy URL
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-9"
-              onClick={openOverlay}
-            >
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Open overlay
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              className="h-9"
-              onClick={() => setOpenDesigner(true)}
-            >
-              <SlidersHorizontal className="h-4 w-4 mr-2" />
-              Open Designer
-            </Button>
-          </div>
+  // 1) Ler da BD — SÓ aplica se houver linha (não volta ao default se não existir)
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        if (!user) { setLoading(false); return; }
 
-          {/* Preview */}
-          <div className="overflow-auto">
-            {type === "hunt" ? (
-              <HuntOverlayPreview hunt={hunt} slots={slots} opts={opts} />
-            ) : (
-              <OpeningOverlayPreview hunt={hunt} slots={slots} opts={opts} />
-            )}
-          </div>
+        let q = supabase
+          .from("overlay_settings")
+          .select("id, opts, updated_at")
+          .eq("user_id", user.id)
+          .eq("type", type)
+          .limit(1);
 
-          {/* Designer (continua a controlar tudo lá dentro) */}
-          <Designer
-            open={openDesigner}
-            onClose={() => setOpenDesigner(false)}
-            opts={opts}
-            setOpts={setOpts}
-            title={`${type === "hunt" ? "Hunt" : "Opening"} — Designer`}
-            type={type}
-            hunt={hunt}
-            slots={slots}
-          />
-        </div>
-      )}
-    </div>
-  );
+        if (huntNumberId == null) q = q.is("hunt_number_id", null);
+        else                      q = q.eq("hunt_number_id", huntNumberId);
+
+        const { data, error } = await q.maybeSingle();
+
+        // PGRST116 = no rows; não mexe nas opções (mantém as do localStorage)
+        if (error && error.code !== "PGRST116") throw error;
+        if (!alive) return;
+
+        if (data?.id) {
+          setRowId(data.id);
+          const merged = { ...defaultValue, ...(data.opts || {}) };
+          setOpts(merged);
+          try { localStorage.setItem(key, JSON.stringify(merged)); } catch {}
+        }
+      } catch (e) {
+        if (alive) setError(e);
+        console.warn("[overlay_settings] load failed:", e?.message || e);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [user?.id, type, huntNumberId, key, defaultValue]);
+
+  // 2) Guardar (localStorage + BD)
+  React.useEffect(() => {
+    // grava sempre local
+    try { localStorage.setItem(key, JSON.stringify(debounced)); } catch {}
+
+    (async () => {
+      try {
+        if (!user) return;
+
+        const base = {
+          user_id: user.id,
+          type,
+          hunt_number_id: huntNumberId ?? null,
+          updated_at: new Date().toISOString(),
+        };
+
+        if (rowId) {
+          const { error } = await supabase
+            .from("overlay_settings")
+            .update({ opts: debounced, updated_at: base.updated_at })
+            .eq("id", rowId);
+          if (error) throw error;
+          return;
+        }
+
+        // não havia rowId → tenta achar; se não existir, cria
+        let q = supabase
+          .from("overlay_settings")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("type", type)
+          .limit(1);
+        if (huntNumberId == null) q = q.is("hunt_number_id", null);
+        else                      q = q.eq("hunt_number_id", huntNumberId);
+
+        const probe = await q.maybeSingle();
+
+        if (probe.data?.id) {
+          setRowId(probe.data.id);
+          const { error } = await supabase
+            .from("overlay_settings")
+            .update({ opts: debounced, updated_at: base.updated_at })
+            .eq("id", probe.data.id);
+          if (error) throw error;
+        } else {
+          const { data, error } = await supabase
+            .from("overlay_settings")
+            .insert({ ...base, opts: debounced })
+            .select("id")
+            .single();
+          if (error) throw error;
+          if (data?.id) setRowId(data.id);
+        }
+      } catch (e) {
+        console.warn("[overlay_settings] save failed:", e?.message || e);
+      }
+    })();
+  }, [debounced, key, user?.id, type, huntNumberId, rowId]);
+
+  return [opts, setOpts, { loading, error }];
 }
 
 /* ───────────────────────── Redeem & CRUD (inalterado) ───────────────────────── */
