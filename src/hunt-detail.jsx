@@ -2231,6 +2231,12 @@ React.useEffect(() => {
       "0 0 0 2px rgba(56,189,248,.9), 0 0 24px rgba(56,189,248,.55)",
     borderColor: "rgba(56,189,248,.85)",
   };
+React.useEffect(() => {
+  if (open) {
+    setIdx(firstIdx);
+    setPage(Math.floor(firstIdx / pageSize));
+  }
+}, [open, firstIdx]);
 
   // Quando muda a slot ativa, inicializa campos
   React.useEffect(() => {
@@ -2310,9 +2316,11 @@ React.useEffect(() => {
       onSaved && onSaved();
 
       if (goNext) {
-        const nextIdx = slots.findIndex((s, i) => i > idx && s.payout == null);
-        setIdx(nextIdx >= 0 ? nextIdx : Math.min(idx + 1, slots.length - 1));
-      }
+  const next = Math.min(idx + 1, slots.length - 1); // sempre a seguinte
+  setIdx(next);
+  setPage(Math.floor(next / pageSize)); // garante que a página acompanha
+}
+
     } catch (e) {
       alert(e.message || "Falha ao guardar.");
     } finally {
@@ -2338,11 +2346,21 @@ const copySlotName = async (name = row?.name) => {
   };
 
   // Paginação (16 por página)
-  const page = Math.floor(idx / pageSize);
-  const pages = Math.max(1, Math.ceil(slots.length / pageSize));
-  const view = slots.slice(page * pageSize, page * pageSize + pageSize);
-  const gotoCard = (iAbs) =>
-    setIdx(Math.max(0, Math.min(slots.length - 1, iAbs)));
+const pages = Math.max(1, Math.ceil(slots.length / pageSize));
+const view = slots.slice(page * pageSize, page * pageSize + pageSize);
+const gotoCard = (iAbs) => {
+  const next = Math.max(0, Math.min(slots.length - 1, iAbs));
+  setIdx(next);
+  setPage(Math.floor(next / pageSize));
+};
+
+React.useEffect(() => {
+  setPage(p => {
+    const must = Math.floor(idx / pageSize);
+    return p === must ? p : must;
+  });
+}, [idx]);
+
 
   // Ctrl+clique numa miniatura = copiar; clique normal = navegar
 const onTileClick = (e, s, iAbs) => {
@@ -2437,12 +2455,12 @@ const onTileClick = (e, s, iAbs) => {
                 <div>
                   <div className="text-xs opacity-70 mb-1">Payout</div>
                   <Input
-                    value={payoutTxt}
-                    onChange={(e) => onChangePayout(e.target.value)}
-                    inputMode="decimal"
-                    placeholder="0"
-                    className="h-11 rounded-xl bg-zinc-800 border-white/10 text-white"
-                  />
+  value={payoutTxt}
+  onChange={(e) => onChangePayout(e.target.value)}
+  inputMode="decimal"
+  placeholder="0"
+  className="h-11 rounded-xl bg-zinc-800 border-white/10 text-white pl-4 pr-3"
+/>
                 </div>
                 <div>
                   <div className="text-xs opacity-70 mb-1">Multiplier</div>
@@ -2530,25 +2548,25 @@ const onTileClick = (e, s, iAbs) => {
             </div>
 
             <div className="mt-3 flex items-center justify-center gap-2">
-              <Button
-                variant="outline"
-                className="h-9"
-                onClick={() => setIdx(Math.max(0, idx - pageSize))}
-                disabled={page === 0}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
+<Button
+  variant="outline"
+  className="h-9"
+  onClick={() => setPage(p => Math.max(0, p - 1))}
+  disabled={page === 0}
+>
+  <ChevronLeft className="h-4 w-4" />
+</Button>
               <div className="text-sm opacity-80">
                 {page + 1} / {pages}
               </div>
-              <Button
-                variant="outline"
-                className="h-9"
-                onClick={() => setIdx(Math.min(slots.length - 1, idx + pageSize))}
-                disabled={page + 1 >= pages}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+           <Button
+  variant="outline"
+  className="h-9"
+  onClick={() => setPage(p => Math.min(pages - 1, p + 1))}
+  disabled={page + 1 >= pages}
+>
+  <ChevronRight className="h-4 w-4" />
+</Button>
             </div>
           </div>
         </div>
@@ -2595,6 +2613,8 @@ export default function HuntDetail({ numberId }) {
   const [delRow, setDelRow] = React.useState(null);
 
   const [sortBy, setSortBy] = React.useState({ key: "order", dir: 1 });
+  const [page, setPage] = React.useState(0);
+
 
   const [huntOpts, setHuntOpts] = useOverlaySettings({
     type: "hunt",
