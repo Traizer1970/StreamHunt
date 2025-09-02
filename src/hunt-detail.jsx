@@ -377,15 +377,41 @@ function Segmented({ value, onChange, options, className = "" }) {
 // switches estilizados para aquelas opções booleanas
 function Toggle({ label, checked, onChange, hint }) {
   return (
-    <div className="flex items-center justify-between rounded-lg border border-white/10 bg-zinc-900/60 px-3 py-2">
-      <div>
-        <div className="text-sm">{label}</div>
-        {hint ? <HelpText>{hint}</HelpText> : null}
-      </div>
-      <Switch checked={!!checked} onCheckedChange={onChange} />
+    <div className="inline-flex flex-col gap-1">
+      <button
+        type="button"
+        onClick={() => onChange(!checked)}
+        className={cn(
+          "h-9 px-3 rounded-xl border inline-flex items-center gap-2 select-none transition",
+          "shadow-sm hover:shadow",
+          checked
+            ? "bg-amber-400/10 text-amber-50 border-amber-300/40 ring-1 ring-amber-300/30"
+            : "bg-zinc-900/60 text-white/80 border-white/10 hover:text-white"
+        )}
+      >
+        <span className="text-sm">{label}</span>
+
+        {/* mini-switch embutido */}
+        <span
+          className={cn(
+            "ml-1 relative h-5 w-9 rounded-full transition",
+            checked ? "bg-amber-400/70" : "bg-white/15"
+          )}
+        >
+          <span
+            className={cn(
+              "absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform",
+              checked ? "translate-x-4" : "translate-x-0"
+            )}
+          />
+        </span>
+      </button>
+
+      {hint ? <HelpText>{hint}</HelpText> : null}
     </div>
   );
 }
+
 
 
 function Field({ label, hint, children }) {
@@ -1192,7 +1218,7 @@ function PanelPresetSwatches({ value, onChange }) {
 function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
   if (!open) return null;
   const { t } = useLang();
-  
+
   function applyPanelPreset(name) {
     const [start, end] = PANEL_PRESETS[name] || PANEL_PRESETS.Neon;
     setOpts((o) => ({ ...o, panelBgStart: start, panelBgEnd: end }));
@@ -1294,12 +1320,19 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         </Field>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-   <Toggle label="Shine" checked={!!opts.shine} onChange={(v)=>setOpts(o=>({...o,shine:!!v}))}/>
-   <Toggle label="Pulse" checked={!!opts.pulse} onChange={(v)=>setOpts(o=>({...o,pulse:!!v}))}/>
- </div>
-      </div>
+<div className="flex flex-wrap gap-2">
+  <Toggle
+    label="Shine"
+    checked={!!opts.shine}
+    onChange={(v) => setOpts(o => ({ ...o, shine: !!v }))}
+  />
+  <Toggle
+    label="Pulse"
+    checked={!!opts.pulse}
+    onChange={(v) => setOpts(o => ({ ...o, pulse: !!v }))}
+  />
+</div>
+
       <div className="text-[11px] opacity-60">Dica: em OBS usa o mesmo Width/Height do browser source para evitar cortes.</div>
     </Section>
 
