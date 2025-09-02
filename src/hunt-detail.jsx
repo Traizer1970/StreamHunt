@@ -1623,21 +1623,16 @@ function OverlayCard({ type, hunt, slots, opts, setOpts }) {
       {open && (
         <div className="px-3 pb-3 space-y-3">
           {/* Apenas os botões */}
-          <div className="flex items-center gap-2">
-            <Button type="button" className="h-9" onClick={copyUrl}>
+<div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+   <Button type="button" className="h-9 w-full justify-center" onClick={copyUrl}>
               <CopyIcon className="h-4 w-4 mr-2" />
               Copy URL
             </Button>
-            <Button type="button" variant="outline" className="h-9" onClick={openOverlay}>
+            <Button type="button" variant="outline" className="h-9 w-full justify-center" onClick={openOverlay}>
               <ExternalLink className="h-4 w-4 mr-2" />
               Open overlay
             </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              className="h-9"
-              onClick={() => setOpenDesigner(true)}
-            >
+            <Button type="button" variant="secondary" className="h-9 w-full justify-center" onClick={() => setOpenDesigner(true)}>
               <SlidersHorizontal className="h-4 w-4 mr-2" />
               Open Designer
             </Button>
