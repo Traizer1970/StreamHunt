@@ -348,9 +348,12 @@ function Segmented({ value, onChange, options, className = "" }) {
   return (
     <div
       className={cn(
-        "inline-flex flex-wrap gap-1 rounded-lg border border-white/10 bg-zinc-900 p-0.5",
+        "inline-flex flex-wrap gap-1 rounded-xl border border-white/10",
+        "bg-zinc-900/70 backdrop-blur supports-[backdrop-filter]:bg-zinc-900/50",
+        "p-1 shadow-[inset_0_1px_0_rgba(255,255,255,.06)]",
         className
       )}
+      role="tablist"
     >
       {options.map((o) => {
         const val = o.value ?? o;
@@ -360,12 +363,15 @@ function Segmented({ value, onChange, options, className = "" }) {
           <button
             key={val}
             type="button"
+            role="tab"
+            aria-selected={active}
             onClick={() => onChange(val)}
             className={cn(
-             "px-3 h-9 rounded-md text-sm transition",
-             active
-               ? "bg-sky-500/15 text-sky-100 ring-1 ring-sky-400/30"
-               : "text-white/70 hover:text-white"
+              "px-3 h-9 rounded-lg text-sm transition select-none",
+              "border border-transparent",
+              active
+                ? "bg-sky-500/15 text-sky-100 ring-1 ring-sky-400/40 border-sky-400/30 shadow"
+                : "text-white/80 hover:text-white hover:bg-white/5"
             )}
           >
             {label}
@@ -375,6 +381,26 @@ function Segmented({ value, onChange, options, className = "" }) {
     </div>
   );
 }
+// exemplo: <Input className="h-9 pretty-input ..." ... />
+<style>{`
+.pretty-input {
+  background: rgba(24,24,27,.65);
+  border: 1px solid rgba(255,255,255,.10);
+  color: white;
+  border-radius: 12px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.06),
+    0 8px 24px rgba(0,0,0,.35);
+}
+.pretty-input:focus {
+  outline: none;
+  box-shadow:
+    0 0 0 2px rgba(56,189,248,.30),
+    inset 0 1px 0 rgba(255,255,255,.08),
+    0 8px 24px rgba(0,0,0,.35);
+  border-color: rgba(56,189,248,.35);
+}
+`}</style>
 
 // switches estilizados para aquelas opções booleanas
 // substitui o Toggle atual por este
@@ -985,6 +1011,27 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     );
   }
 
+function NiceSlider({ min=0, max=100, step=1, value, onChange, ariaLabel }) {
+  const pct = Math.max(0, Math.min(100, ((Number(value ?? 0) - min) / (max - min)) * 100));
+
+  return (
+    <div className="py-1">
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        aria-label={ariaLabel}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="nice-slider w-full h-8 appearance-none bg-transparent"
+        style={{ ['--pct']: `${pct}%` }}
+      />
+    </div>
+  );
+}
+
+
   function KpiBadge({ shape, label, value, Icon }) {
     if (shape === "circle") {
       const circleD = Math.round(36 * (opts.kpiSize ?? 1));
@@ -1543,7 +1590,36 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
         <Field label="Tamanho (0.7–1.6)">
-          <input type="range" min={0.7} max={1.6} step={0.05} value={opts.kpiSize} onChange={(e)=>setOpts(o=>({...o,kpiSize:Number(e.target.value)}))} className="w-full"/>
+         {/* Tamanho (0.7–1.6) */}
+<Field label="Tamanho (0.7–1.6)">
+  <NiceSlider
+    min={0.7} max={1.6} step={0.05}
+    value={opts.kpiSize}
+    onChange={(v) => setOpts(o => ({ ...o, kpiSize: v }))}
+    ariaLabel="Tamanho KPI"
+  />
+</Field>
+
+{/* Font KPI (0.8–1.6) */}
+<Field label="Font KPI (0.8–1.6)" hint="Só ajusta a letra">
+  <NiceSlider
+    min={0.8} max={1.6} step={0.05}
+    value={opts.kpiFont}
+    onChange={(v) => setOpts(o => ({ ...o, kpiFont: v }))}
+    ariaLabel="Fonte KPI"
+  />
+</Field>
+
+{/* (opcional) Força do glow do SUPER */}
+<Field label="Glow strength">
+  <NiceSlider
+    min={0} max={1} step={0.05}
+    value={opts.superGlowStrength ?? 0.6}
+    onChange={(v) => setOpts(o => ({ ...o, superGlowStrength: v }))}
+    ariaLabel="Força do brilho Super"
+  />
+</Field>
+
         </Field>
         <Field label="Forma">
           <Segmented
@@ -1563,7 +1639,36 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
           />
         </Field>
         <Field label="Font KPI (0.8–1.6)" hint="Só ajusta a letra">
-          <input type="range" min={0.8} max={1.6} step={0.05} value={opts.kpiFont} onChange={(e)=>setOpts(o=>({...o,kpiFont:Number(e.target.value)}))} className="w-full"/>
+          {/* Tamanho (0.7–1.6) */}
+<Field label="Tamanho (0.7–1.6)">
+  <NiceSlider
+    min={0.7} max={1.6} step={0.05}
+    value={opts.kpiSize}
+    onChange={(v) => setOpts(o => ({ ...o, kpiSize: v }))}
+    ariaLabel="Tamanho KPI"
+  />
+</Field>
+
+{/* Font KPI (0.8–1.6) */}
+<Field label="Font KPI (0.8–1.6)" hint="Só ajusta a letra">
+  <NiceSlider
+    min={0.8} max={1.6} step={0.05}
+    value={opts.kpiFont}
+    onChange={(v) => setOpts(o => ({ ...o, kpiFont: v }))}
+    ariaLabel="Fonte KPI"
+  />
+</Field>
+
+{/* (opcional) Força do glow do SUPER */}
+<Field label="Glow strength">
+  <NiceSlider
+    min={0} max={1} step={0.05}
+    value={opts.superGlowStrength ?? 0.6}
+    onChange={(v) => setOpts(o => ({ ...o, superGlowStrength: v }))}
+    ariaLabel="Força do brilho Super"
+  />
+</Field>
+
         </Field>
       </div>
 
@@ -1770,6 +1875,51 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
     )}
   </div>
 </div>
+<style>{`
+/* Slider bonito — funciona no Chromium/WebKit e Firefox */
+.nice-slider {
+  --track: rgba(255,255,255,.14);
+  --track-bg: rgba(255,255,255,.09);
+  --fill: #38bdf8;          /* sky-400 */
+  --thumb: #e5e7eb;         /* zinc-200 */
+  --ring: rgba(56,189,248,.35);
+}
+.nice-slider:focus { outline: none; }
+
+/* WebKit */
+.nice-slider::-webkit-slider-runnable-track {
+  height: 8px; border-radius: 9999px;
+  background:
+    linear-gradient(to right, var(--fill) 0 var(--pct), var(--track-bg) var(--pct) 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+}
+.nice-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  margin-top: -6px;          /* centra no track */
+  width: 20px; height: 20px; border-radius: 9999px;
+  background: var(--thumb);
+  border: 2px solid #0ea5e9; /* sky-500 */
+  box-shadow: 0 6px 20px rgba(14,165,233,.35), 0 0 0 3px var(--ring);
+  transition: transform .12s ease;
+}
+.nice-slider:active::-webkit-slider-thumb { transform: scale(1.05); }
+
+/* Firefox */
+.nice-slider::-moz-range-track {
+  height: 8px; border-radius: 9999px; background: var(--track-bg);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+}
+.nice-slider::-moz-range-progress {
+  height: 8px; border-radius: 9999px; background: var(--fill);
+}
+.nice-slider::-moz-range-thumb {
+  width: 20px; height: 20px; border-radius: 9999px;
+  background: var(--thumb); border: 2px solid #0ea5e9;
+  box-shadow: 0 6px 20px rgba(14,165,233,.35), 0 0 0 3px var(--ring);
+  transition: transform .12s ease;
+}
+.nice-slider:active::-moz-range-thumb { transform: scale(1.05); }
+`}</style>
 
         {/* Preview */}
         <div className="flex-1 p-6 overflow-auto min-w-0">
