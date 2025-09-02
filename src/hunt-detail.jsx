@@ -235,7 +235,7 @@ function ColorField({ label, value, onChange, placeholder = "#RRGGBB ou rgba()" 
 function Section({ title, defaultOpen = true, right, children }) {
   const [open, setOpen] = React.useState(defaultOpen);
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5">
+    <div className="rounded-xl border border-white/10 bg-white/5 max-w-full overflow-x-hidden">
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
@@ -251,6 +251,61 @@ function Section({ title, defaultOpen = true, right, children }) {
     </div>
   );
 }
+
+function LayoutPresetChip({ label, variant, active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      className={cn(
+        "w-full flex items-center gap-2 h-9 px-3 rounded-lg border transition truncate",
+        active ? "border-white/30 bg-white/10 ring-1 ring-white/40" : "border-white/10 hover:bg-white/5"
+      )}
+    >
+      {/* mini-preview */}
+      <div className="h-4 w-8 rounded overflow-hidden bg-white/10 relative shrink-0">
+        {variant === "Default" && (
+          <div className="absolute inset-0 flex items-center justify-center gap-0.5">
+            <span className="h-3 w-2 rounded bg-white/20" />
+            <span className="h-3 w-2 rounded bg-white/40" />
+            <span className="h-3 w-2 rounded bg-white/20" />
+          </div>
+        )}
+        {variant === "Compact" && (
+          <div className="absolute inset-0 grid grid-cols-2 gap-0.5 p-0.5">
+            <span className="rounded bg-white/30" />
+            <span className="rounded bg-white/20" />
+            <span className="rounded bg-white/20" />
+            <span className="rounded bg-white/30" />
+          </div>
+        )}
+        {variant === "Bar" && (
+          <div className="absolute inset-0">
+            <div className="absolute left-0 right-0 top-0.5 mx-0.5 h-2.5 rounded bg-white/25" />
+            <div className="absolute left-0 right-0 bottom-0.5 mx-1 h-0.5 rounded bg-white/70" />
+          </div>
+        )}
+        {variant === "Minimal" && (
+          <div className="absolute inset-0 flex items-center justify-center gap-0.5">
+            <span className="h-2 w-2 rounded bg-white/20" />
+            <span className="h-2 w-2 rounded bg-white/40" />
+            <span className="h-2 w-2 rounded bg-white/20" />
+          </div>
+        )}
+        {variant === "Head-to-Head" && (
+          <div className="absolute inset-0 flex items-center justify-between px-0.5">
+            <span className="h-3 w-3 rounded bg-white/25" />
+            <span className="h-3 w-[1px] bg-white/50" />
+            <span className="h-3 w-3 rounded bg-white/25" />
+          </div>
+        )}
+      </div>
+      <span className="text-sm truncate">{label}</span>
+    </button>
+  );
+}
+
 
 function Segmented({ value, onChange, options, className = "" }) {
   return (
@@ -293,16 +348,16 @@ function PresetChip({ name, colors = [], onClick, active }) {
       type="button"
       onClick={onClick}
       className={cn(
-        "flex items-center gap-2 h-9 px-3 rounded-lg border transition",
+        "w-full flex items-center gap-2 h-9 px-3 rounded-lg border transition truncate",
         active ? "border-white/30 bg-white/10" : "border-white/10 hover:bg-white/5"
       )}
       title={name}
     >
       <span
-        className="h-4 w-8 rounded"
+        className="h-4 w-8 rounded shrink-0"
         style={{ background: `linear-gradient(90deg, ${colors[0]} 0%, ${colors[1]} 100%)` }}
       />
-      <span className="text-sm">{name}</span>
+      <span className="text-sm truncate">{name}</span>
     </button>
   );
 }
@@ -1151,21 +1206,22 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
     </Section>
 
     {/* Presets rápidos (só hunt) */}
-    {type === "hunt" && (
-      <Section title="Presets de Layout">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-          {["Default", "Compact", "Bar", "Minimal", "Head-to-Head"].map((n) => (
-            <PresetChip
-              key={n}
-              name={n === "Head-to-Head" ? "Head-to-Head (VS)" : n}
-              onClick={() => applyLayoutPreset(n)}
-              active={opts.layoutPreset === n}
-              colors={["#0b1020", "#111827"]}
-            />
-          ))}
-        </div>
-      </Section>
-    )}
+   {type === "hunt" && (
+  <Section title="Layout presets">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+      {["Default", "Compact", "Bar", "Minimal", "Head-to-Head"].map((n) => (
+        <LayoutPresetChip
+          key={n}
+          label={n === "Head-to-Head" ? "Head-to-Head (VS)" : n}
+          variant={n}
+          active={opts.layoutPreset === n}
+          onClick={() => applyLayoutPreset(n)}
+        />
+      ))}
+    </div>
+  </Section>
+)}
+
 
     {/* LAYOUT (hunt) */}
     {type === "hunt" && (
