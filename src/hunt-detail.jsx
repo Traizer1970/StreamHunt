@@ -2165,7 +2165,14 @@ const beLeft = React.useMemo(() => {
 
   const [confirmStart, setConfirmStart] = React.useState(false);
   const openStart = () => setConfirmStart(true);
-  const confirmStartYes = () => { setConfirmStart(false); /* aqui abririas o fluxo de redeem */ };
+ // vai para o ecrã de Opening/Redeem depois de confirmares
+const confirmStartYes = React.useCallback(() => {
+  setConfirmStart(false);
+
+  // Se o teu route for /redeem/:id usa "#/redeem"
+  window.location.hash = `#/opening/${nId}`;
+}, [nId]);
+
 
   if (busy) return <div className="max-w-7xl mx-auto px-4 py-10 text-sm opacity-70">A carregar…</div>;
   if (!hunt) {
