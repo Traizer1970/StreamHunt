@@ -835,8 +835,6 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
         fontFamily: RUBIK_STACK,
       }}
     >
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap'); @keyframes marquee{0%{transform:translateX(0%)}100%{transform:translateX(-50%)}}`}</style>
-
       {opts.kpiPos === "top" && <KPIsInline />}
       {opts.kpiPos === "side" && <KPIsSide />}
 
@@ -2117,6 +2115,16 @@ export default function HuntDetail({ numberId }) {
   React.useEffect(() => { refreshSlots(); }, [refreshSlots]);
 
   const kpis = React.useMemo(() => {
+    // [ADICIONAR] — STOP (editável) + B/E calculado pelo STOP
+const [stopBox, setStopBox] = useLocalState(`hunt:${nId}:stop`, { value: 0 });
+
+const beLeft = React.useMemo(() => {
+  const stop = toNum(stopBox.value);
+  // Se STOP for > 0, usamos STOP como alvo de BE; caso contrário usamos o Start
+  const target = stop > 0 ? stop : kpis.startCost;
+  return Math.max(0, target - kpis.amountWon);
+}, [stopBox.value, kpis.startCost, kpis.amountWon]);
+
     const startFromHunt = Number(hunt?.start_cost);
     const startFromSlots = slots.reduce((a, s) => a + (toNum(s.bet_size) || 0), 0);
     const start = Number.isFinite(startFromHunt) ? startFromHunt : startFromSlots;
@@ -2162,7 +2170,7 @@ export default function HuntDetail({ numberId }) {
       </div>
 
       {/* KPIs topo da página */}
-      <div className="grid md:grid-cols-4 gap-2 mb-3">
+      <div className="grid md:grid-cols-5 gap-2 mb-3">
         {[
           ["Bonus Count", String(kpis.bonusCount), ""],
           [t("startCost"), fmtMoney(kpis.startCost), ""],
@@ -2173,6 +2181,30 @@ export default function HuntDetail({ numberId }) {
             <div className={cn("font-semibold", numCls, color)}>{value}</div>
           </div>
         ))}
+        {/* [ADICIONAR] B/E (usa STOP se definido) */}
+<div className={cn("rounded-xl border p-3", isDark ? "border-white/10 bg-white/5" : "border-zinc-200 bg-white")}>
+  <div className={cn("text-[11px] leading-none mb-1", isDark ? "text-white/60" : "text-zinc-600")}>
+    {t("kpiBE")}
+  </div>
+  <div className={cn("font-semibold", numCls)}>{fmtMoney(beLeft)}</div>
+</div>
+
+{/* [ADICIONAR] STOP (editável, por defeito 0) */}
+<div className={cn("rounded-xl border p-3", isDark ? "border-white/10 bg-white/5" : "border-zinc-200 bg-white")}>
+  <div className={cn("text-[11px] leading-none mb-1", isDark ? "text-white/60" : "text-zinc-600")}>Stop</div>
+  <Input
+    type="text"
+    inputMode="decimal"
+    placeholder="0"
+    value={String(stopBox.value ?? "")}
+    onChange={(e) => setStopBox((s) => ({ ...s, value: e.target.value }))}
+    className={cn(
+      "h-8 rounded-lg",
+      isDark ? "bg-zinc-900 border-white/10 text-white" : "bg-white border-zinc-300 text-zinc-900"
+    )}
+  />
+</div>
+
       </div>
 
       {/* Ações rápidas */}
