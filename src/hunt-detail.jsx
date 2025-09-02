@@ -267,6 +267,7 @@ async function persistOrder(slots) {
 }
 
 /* ───────────────────────── Salvar/ler opções do overlay (DB + fallback) ───────────────────────── */
+/* ───────────────────────── Salvar/ler opções do overlay (DB + local fallback, sem overwrite) ───────────────────────── */
 function useOverlaySettings({ type, huntNumberId, defaultValue }) {
   const { user } = useAuth();
   const [opts, setOpts] = React.useState(defaultValue);
@@ -279,24 +280,26 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
     [type, huntNumberId]
   );
 
-  // carrega primeiro de localStorage (para não “saltar” ao dar F5)
+  // 0) Carregar do localStorage imediato (para persistir no F5)
   React.useEffect(() => {
     try {
       const raw = localStorage.getItem(key);
-      if (raw) setOpts((o) => ({ ...o, ...JSON.parse(raw) }));
+      if (raw) {
+        const fromLS = JSON.parse(raw);
+        setOpts((o) => ({ ...o, ...fromLS }));
+      }
     } catch {}
   }, [key]);
 
   const debounced = useDebounced(opts, 400);
 
-  // ── LER DA BD ────────────────────────────────────────────────────────────
+  // 1) Ler da BD — SÓ aplica se houver linha (não volta ao default se não existir)
   React.useEffect(() => {
     let alive = true;
     (async () => {
       try {
         setLoading(true);
         setError(null);
-
         if (!user) { setLoading(false); return; }
 
         let q = supabase
@@ -310,16 +313,17 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
         else                      q = q.eq("hunt_number_id", huntNumberId);
 
         const { data, error } = await q.maybeSingle();
-        if (error && error.code !== "PGRST116") throw error;
 
+        // PGRST116 = no rows; não mexe nas opções (mantém as do localStorage)
+        if (error && error.code !== "PGRST116") throw error;
         if (!alive) return;
 
-        if (data?.id) setRowId(data.id);
-        const merged = { ...defaultValue, ...(data?.opts || {}) };
-        setOpts(merged);
-
-        // mantém localStorage sincronizado
-        try { localStorage.setItem(key, JSON.stringify(merged)); } catch {}
+        if (data?.id) {
+          setRowId(data.id);
+          const merged = { ...defaultValue, ...(data.opts || {}) };
+          setOpts(merged);
+          try { localStorage.setItem(key, JSON.stringify(merged)); } catch {}
+        }
       } catch (e) {
         if (alive) setError(e);
         console.warn("[overlay_settings] load failed:", e?.message || e);
@@ -328,16 +332,16 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
       }
     })();
     return () => { alive = false; };
-  }, [user?.id, type, huntNumberId, key]);
+  }, [user?.id, type, huntNumberId, key, defaultValue]);
 
-  // ── GUARDAR (DB + localStorage) ─────────────────────────────────────────
+  // 2) Guardar (localStorage + BD)
   React.useEffect(() => {
-    // grava sempre em localStorage (resiste a F5 mesmo sem login)
+    // grava sempre local
     try { localStorage.setItem(key, JSON.stringify(debounced)); } catch {}
 
     (async () => {
       try {
-        if (!user) return; // sem user → só localStorage
+        if (!user) return;
 
         const base = {
           user_id: user.id,
@@ -355,7 +359,7 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
           return;
         }
 
-        // tenta localizar a linha (evita duplicados)
+        // não havia rowId → tenta achar; se não existir, cria
         let q = supabase
           .from("overlay_settings")
           .select("id")
@@ -364,6 +368,7 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
           .limit(1);
         if (huntNumberId == null) q = q.is("hunt_number_id", null);
         else                      q = q.eq("hunt_number_id", huntNumberId);
+
         const probe = await q.maybeSingle();
 
         if (probe.data?.id) {
@@ -390,6 +395,7 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
 
   return [opts, setOpts, { loading, error }];
 }
+
 
 function useDebounced(value, delay = 250) {
   const [v, setV] = React.useState(value);
@@ -1560,133 +1566,132 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 }
 
 /* ───────────────────────── OverlayCard ───────────────────────── */
-/* ───────────────────────── Salvar/ler opções do overlay (DB + local fallback, sem overwrite) ───────────────────────── */
-function useOverlaySettings({ type, huntNumberId, defaultValue }) {
-  const { user } = useAuth();
-  const [opts, setOpts] = React.useState(defaultValue);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState(null);
-  const [rowId, setRowId] = React.useState(null);
+function OverlayCard({ type, hunt, slots, opts, setOpts }) {
+  const { t } = useLang();
+  const [open, setOpen] = React.useState(false);
+  const [openDesigner, setOpenDesigner] = React.useState(false);
 
-  const key = React.useMemo(
-    () => `overlay:${type}:${huntNumberId == null ? "null" : String(huntNumberId)}`,
-    [type, huntNumberId]
+  const base = React.useMemo(
+    () =>
+      `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, ""),
+    []
   );
+  const url = React.useMemo(() => {
+    if (!hunt?.number_id) return "";
+    return type === "hunt"
+      ? buildHuntOverlayUrl(base, hunt.number_id, opts)
+      : buildOpeningOverlayUrl(base, hunt.number_id, opts);
+  }, [type, hunt?.number_id, base, opts]);
 
-  // 0) Carregar do localStorage imediato (para persistir no F5)
-  React.useEffect(() => {
+  const copyUrl = async () => {
+    if (!url) return;
     try {
-      const raw = localStorage.getItem(key);
-      if (raw) {
-        const fromLS = JSON.parse(raw);
-        setOpts((o) => ({ ...o, ...fromLS }));
-      }
-    } catch {}
-  }, [key]);
+      await navigator.clipboard.writeText(url);
+    } catch {
+      alert("Não consegui copiar o URL.");
+    }
+  };
+  const openOverlay = () => {
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
 
-  const debounced = useDebounced(opts, 400);
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03]">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full px-3 py-2 text-left flex items-center gap-2"
+      >
+        <div className="h-8 w-8 rounded-lg bg-white/10 flex items-center justify-center">
+          <SlidersHorizontal className="h-4 w-4" />
+        </div>
+        <div className="font-medium flex-1">
+          {type === "hunt" ? "Overlay (Hunt)" : "Overlay (Opening)"}
+        </div>
+        <ChevronDown className={cn("h-4 w-4 transition", open ? "rotate-180" : "")} />
+      </button>
 
-  // 1) Ler da BD — SÓ aplica se houver linha (não volta ao default se não existir)
-  React.useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        if (!user) { setLoading(false); return; }
+      {open && (
+        <div className="px-3 pb-3 space-y-3">
+          <div className="grid md:grid-cols-3 gap-2">
+            <div>
+              <div className="text-xs opacity-70 mb-1">Preset</div>
+              <select
+                value={opts.design}
+                onChange={(e) => setOpts((o) => ({ ...o, design: e.target.value }))}
+                className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+              >
+                {type === "hunt" ? (
+                  <option value="cards">Cards (Start • B/E • #Bonus)</option>
+                ) : (
+                  <>
+                    <option value="default">Default</option>
+                    <option value="minimal">Minimal</option>
+                  </>
+                )}
+              </select>
+            </div>
+            <div>
+              <div className="text-xs opacity-70 mb-1">Padding</div>
+              <Input
+                type="number"
+                value={opts.pad}
+                onChange={(e) => setOpts((o) => ({ ...o, pad: Number(e.target.value) || 0 }))}
+                className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+              />
+            </div>
+            <div>
+              <div className="text-xs opacity-70 mb-1">Align</div>
+              <select
+                value={opts.align}
+                onChange={(e) => setOpts((o) => ({ ...o, align: e.target.value }))}
+                className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
+              >
+                <option value="left">left</option>
+                <option value="center">center</option>
+                <option value="right">right</option>
+              </select>
+            </div>
+          </div>
 
-        let q = supabase
-          .from("overlay_settings")
-          .select("id, opts, updated_at")
-          .eq("user_id", user.id)
-          .eq("type", type)
-          .limit(1);
+          <div className="flex items-center gap-2">
+            <Button type="button" className="h-9" onClick={copyUrl}>
+              <CopyIcon className="h-4 w-4 mr-2" />
+              Copy URL
+            </Button>
+            <Button type="button" variant="outline" className="h-9" onClick={openOverlay}>
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Open overlay
+            </Button>
+            <Button type="button" variant="secondary" className="h-9" onClick={() => setOpenDesigner(true)}>
+              <SlidersHorizontal className="h-4 w-4 mr-2" />
+              Open Designer
+            </Button>
+          </div>
 
-        if (huntNumberId == null) q = q.is("hunt_number_id", null);
-        else                      q = q.eq("hunt_number_id", huntNumberId);
+          <div className="overflow-auto">
+            {type === "hunt" ? (
+              <HuntOverlayPreview hunt={hunt} slots={slots} opts={opts} />
+            ) : (
+              <OpeningOverlayPreview hunt={hunt} slots={slots} opts={opts} />
+            )}
+          </div>
 
-        const { data, error } = await q.maybeSingle();
-
-        // PGRST116 = no rows; não mexe nas opções (mantém as do localStorage)
-        if (error && error.code !== "PGRST116") throw error;
-        if (!alive) return;
-
-        if (data?.id) {
-          setRowId(data.id);
-          const merged = { ...defaultValue, ...(data.opts || {}) };
-          setOpts(merged);
-          try { localStorage.setItem(key, JSON.stringify(merged)); } catch {}
-        }
-      } catch (e) {
-        if (alive) setError(e);
-        console.warn("[overlay_settings] load failed:", e?.message || e);
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => { alive = false; };
-  }, [user?.id, type, huntNumberId, key, defaultValue]);
-
-  // 2) Guardar (localStorage + BD)
-  React.useEffect(() => {
-    // grava sempre local
-    try { localStorage.setItem(key, JSON.stringify(debounced)); } catch {}
-
-    (async () => {
-      try {
-        if (!user) return;
-
-        const base = {
-          user_id: user.id,
-          type,
-          hunt_number_id: huntNumberId ?? null,
-          updated_at: new Date().toISOString(),
-        };
-
-        if (rowId) {
-          const { error } = await supabase
-            .from("overlay_settings")
-            .update({ opts: debounced, updated_at: base.updated_at })
-            .eq("id", rowId);
-          if (error) throw error;
-          return;
-        }
-
-        // não havia rowId → tenta achar; se não existir, cria
-        let q = supabase
-          .from("overlay_settings")
-          .select("id")
-          .eq("user_id", user.id)
-          .eq("type", type)
-          .limit(1);
-        if (huntNumberId == null) q = q.is("hunt_number_id", null);
-        else                      q = q.eq("hunt_number_id", huntNumberId);
-
-        const probe = await q.maybeSingle();
-
-        if (probe.data?.id) {
-          setRowId(probe.data.id);
-          const { error } = await supabase
-            .from("overlay_settings")
-            .update({ opts: debounced, updated_at: base.updated_at })
-            .eq("id", probe.data.id);
-          if (error) throw error;
-        } else {
-          const { data, error } = await supabase
-            .from("overlay_settings")
-            .insert({ ...base, opts: debounced })
-            .select("id")
-            .single();
-          if (error) throw error;
-          if (data?.id) setRowId(data.id);
-        }
-      } catch (e) {
-        console.warn("[overlay_settings] save failed:", e?.message || e);
-      }
-    })();
-  }, [debounced, key, user?.id, type, huntNumberId, rowId]);
-
-  return [opts, setOpts, { loading, error }];
+          <Designer
+            open={openDesigner}
+            onClose={() => setOpenDesigner(false)}
+            opts={opts}
+            setOpts={setOpts}
+            title={`${type === "hunt" ? "Hunt" : "Opening"} — Designer`}
+            type={type}
+            hunt={hunt}
+            slots={slots}
+          />
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ───────────────────────── Redeem & CRUD (inalterado) ───────────────────────── */
