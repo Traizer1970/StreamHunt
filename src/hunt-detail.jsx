@@ -275,10 +275,6 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
   const [error, setError] = React.useState(null);
   const [rowId, setRowId] = React.useState(null);
 
-    React.useEffect(() => {
-    setRowId(null);
-  }, [type, huntNumberId, user?.id]);
-
   const key = React.useMemo(
     () => `overlay:${type}:${huntNumberId == null ? "null" : String(huntNumberId)}`,
     [type, huntNumberId]
@@ -357,46 +353,46 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
 
   const debounced = useDebounced(opts, 400);
 
-  // 1) ler da BD (se existir linha)
-  React.useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        if (!user) { setLoading(false); return; }
+React.useEffect(() => {
+  let alive = true;
+  (async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      if (!user) { setLoading(false); return; }
 
-        let q = supabase
-          .from("overlay_settings")
-          .select("id, opts, settings, config, data, json, updated_at")
-          .eq("user_id", user.id)
-          .eq("type", type)
-          .limit(1);
+      let q = supabase
+        .from("overlay_settings")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("type", type)
+        .limit(1);
 
-        if (huntNumberId == null) q = q.is("hunt_number_id", null);
-        else                      q = q.eq("hunt_number_id", huntNumberId);
+      if (huntNumberId == null) q = q.is("hunt_number_id", null);
+      else                      q = q.eq("hunt_number_id", huntNumberId);
 
-        const { data, error } = await q.maybeSingle();
+      const { data, error } = await q.maybeSingle();
+      if (!alive) return;
+      if (error && error.code !== "PGRST116") throw error;
 
-        if (!alive) return;
-
-        if (error && error.code !== "PGRST116") throw error;
-
-        if (data?.id) {
-          setRowId(data.id);
-          const merged = { ...defaultValue, ...pickOpts(data) };
-          setOpts(merged);
-          try { localStorage.setItem(key, JSON.stringify(merged)); } catch {}
-        }
-      } catch (e) {
-        if (alive) setError(e);
-        console.warn("[overlay_settings] load failed:", e?.message || e);
-      } finally {
-        if (alive) setLoading(false);
+      if (data?.id) {
+        setRowId(data.id);
+        const merged = { ...defaultValue, ...pickOpts(data) }; // pickOpts vê opts/settings/config/...
+        setOpts(merged);
+        try { localStorage.setItem(key, JSON.stringify(merged)); } catch {}
+      } else {
+        setRowId(null);
       }
-    })();
-    return () => { alive = false; };
-  }, [user?.id, type, huntNumberId, key, defaultValue]);
+    } catch (e) {
+      if (alive) setError(e);
+      console.warn("[overlay_settings] load failed:", e?.message || e);
+    } finally {
+      if (alive) setLoading(false);
+    }
+  })();
+  return () => { alive = false; };
+}, [user?.id, type, huntNumberId, key, defaultValue]);
+
 
   // 2) gravar (local + BD)
   React.useEffect(() => {
