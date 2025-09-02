@@ -14,13 +14,11 @@ import {
   Search,
   ChevronDown,
   ChevronLeft,
-  ChevronRight,
   Loader2,
   Copy as CopyIcon,
   Star,
   Pencil,
   Trash2,
-  Check,
   ExternalLink,
   Palette,
   Save,
@@ -178,7 +176,6 @@ function fmtMoney(n) {
     maximumFractionDigits: 2,
   }).format(num);
 }
-// número sem símbolo de moeda (2 casas por omissão)
 function fmtPlain(n, decimals = 2) {
   const num = Number(n);
   if (!Number.isFinite(num)) return "—";
@@ -187,7 +184,6 @@ function fmtPlain(n, decimals = 2) {
     maximumFractionDigits: decimals,
   }).format(num);
 }
-
 const toNum = (v) => {
   if (v == null || v === "") return 0;
   if (typeof v === "string") v = v.replace(",", ".");
@@ -207,15 +203,13 @@ function hexToRgba(hex, a = 1) {
     return `rgba(232,121,249,${a})`;
   }
 }
-
-// aceita hex (#RRGGBB/#RGB) ou rgba()/rgb()/hsl()/hsla()
 function anyToRgba(color, a = 1) {
   const v = String(color || "").trim();
-  if (/^(rgba?|hsla?)\(/i.test(v)) return v;        // já é css válido
-  return hexToRgba(v, a);                            // cai no conversor hex
+  if (/^(rgba?|hsla?)\(/i.test(v)) return v;
+  return hexToRgba(v, a);
 }
 
-/* Campo de cor com swatch à esquerda (hex/rgba em texto) */
+/* Campo cor com swatch */
 function ColorField({ label, value, onChange, placeholder = "#RRGGBB ou rgba()" }) {
   const css = String(value ?? "");
   return (
@@ -238,18 +232,13 @@ function ColorField({ label, value, onChange, placeholder = "#RRGGBB ou rgba()" 
   );
 }
 
-
 /* ───────────────────────── db helpers ───────────────────────── */
 async function updateSuperFlag(rowId, value) {
   const tryFns = [
-    () =>
-      supabase.from("hunt_slots").update({ is_super: !!value }).eq("id", rowId),
-    () =>
-      supabase.from("hunt_slots").update({ super: !!value }).eq("id", rowId),
-    () =>
-      supabase.from("hunt_slots").update({ is_super: !!value }).eq("ID", rowId),
-    () =>
-      supabase.from("hunt_slots").update({ super: !!value }).eq("ID", rowId),
+    () => supabase.from("hunt_slots").update({ is_super: !!value }).eq("id", rowId),
+    () => supabase.from("hunt_slots").update({ super: !!value }).eq("id", rowId),
+    () => supabase.from("hunt_slots").update({ is_super: !!value }).eq("ID", rowId),
+    () => supabase.from("hunt_slots").update({ super: !!value }).eq("ID", rowId),
   ];
   let last;
   for (const fn of tryFns) {
@@ -268,57 +257,46 @@ async function persistOrder(slots) {
     const rowId = slots[i].id;
     let ok = false;
     for (const col of colCandidates) {
-      const r1 = await supabase
-        .from("hunt_slots")
-        .update({ [col]: i + 1 })
-        .eq("id", rowId);
-      if (!r1.error) {
-        ok = true;
-        break;
-      }
-      const r2 = await supabase
-        .from("hunt_slots")
-        .update({ [col]: i + 1 })
-        .eq("ID", rowId);
-      if (!r2.error) {
-        ok = true;
-        break;
-      }
+      const r1 = await supabase.from("hunt_slots").update({ [col]: i + 1 }).eq("id", rowId);
+      if (!r1.error) { ok = true; break; }
+      const r2 = await supabase.from("hunt_slots").update({ [col]: i + 1 }).eq("ID", rowId);
+      if (!r2.error) { ok = true; break; }
     }
-    if (!ok) {
-      // ignora
-    }
+    if (!ok) { /* ignora */ }
   }
 }
 
 /* ───────────────────────── small hooks ───────────────────────── */
-
-/* Salvar/ler opções do overlay no Supabase */
+/* Salvar/ler opções do overlay no Supabase (com IS NULL + onConflict consistente) */
 function useOverlaySettings({ type, huntNumberId, defaultValue }) {
   const { user } = useAuth();
   const [opts, setOpts] = React.useState(defaultValue);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState(null);
 
-  // Carrega do Supabase
   React.useEffect(() => {
     let alive = true;
     (async () => {
       try {
         if (!user) { setLoading(false); return; }
-        const { data, error } = await supabase
+
+        let q = supabase
           .from("overlay_settings")
-          .select("opts")
+          .select("id, opts, updated_at")
           .eq("user_id", user.id)
-          .eq("type", type)
-          .eq("hunt_number_id", huntNumberId ?? null)
-          .maybeSingle();
+          .eq("type", type);
+
+        if (huntNumberId == null) q = q.is("hunt_number_id", null);
+        else                      q = q.eq("hunt_number_id", huntNumberId);
+
+        const { data, error } = await q.maybeSingle();
         if (error && error.code !== "PGRST116") throw error;
-        // merge com defaults para não perder chaves novas
+
         const merged = { ...defaultValue, ...(data?.opts || {}) };
         if (alive) setOpts(merged);
       } catch (e) {
         if (alive) setError(e);
+        console.warn("overlay_settings load:", e?.message || e);
       } finally {
         if (alive) setLoading(false);
       }
@@ -326,14 +304,15 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
     return () => { alive = false; };
   }, [user?.id, type, huntNumberId]);
 
-  // Debounce do state para não spammar updates
+  // debounce
   const debounced = useDebounced(opts, 400);
 
-  // Grava no Supabase (upsert)
+  // GUARDAR (upsert)
   React.useEffect(() => {
     (async () => {
       try {
         if (!user) return;
+
         const payload = {
           user_id: user.id,
           type,
@@ -341,9 +320,14 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
           opts: debounced,
           updated_at: new Date().toISOString(),
         };
+
         const { error } = await supabase
           .from("overlay_settings")
-          .upsert(payload, { onConflict: "user_id,hunt_number_id,type" });
+          .upsert(payload, {
+            onConflict: "user_id,type,hunt_number_id",
+            returning: "minimal",
+          });
+
         if (error) throw error;
       } catch (e) {
         console.warn("Falha a gravar overlay_settings:", e?.message || e);
@@ -353,7 +337,6 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
 
   return [opts, setOpts, { loading, error }];
 }
-
 
 function useDebounced(value, delay = 250) {
   const [v, setV] = React.useState(value);
@@ -390,8 +373,6 @@ const PANEL_PRESETS = {
   Carbon: ["#0a0a0a", "#1a1a1a"],
   Twilight: ["#0e2038", "#0f2f55"],
 };
-
-/* ───────── KPI color presets ───────── */
 const KPI_COLOR_PRESETS = {
   glass:   { bg: "rgba(255,255,255,.10)", border: "rgba(255,255,255,.15)", text: "#ffffff" },
   slate:   { bg: "rgba(17,24,39,.70)",    border: "rgba(255,255,255,.12)", text: "#e5e7eb" },
@@ -402,40 +383,29 @@ const KPI_COLOR_PRESETS = {
   azure:   { bg: "rgba(59,130,246,.17)",  border: "rgba(59,130,246,.40)",  text: "#dbeafe" },
   neon:    { bg: hexToRgba("#22d3ee",.16),border: hexToRgba("#22d3ee",.45),text: "#cffafe" },
 };
-
 function getKpiColors(opts){
   const p = KPI_COLOR_PRESETS[String(opts.kpiColorPreset||"glass")] || KPI_COLOR_PRESETS.glass;
-  return {
-    bg:     opts.kpiBg     || p.bg,
-    border: opts.kpiBorder || p.border,
-    text:   opts.kpiText   || p.text,
-  };
+  return { bg: opts.kpiBg || p.bg, border: opts.kpiBorder || p.border, text: opts.kpiText || p.text };
 }
 
 const DEFAULT_HUNT_OVERLAY = {
   design: "cards",
-
-  // Carrossel / grid
   layout: "carousel",
   visible: 3,
   autoScroll: true,
   scrollDur: 30,
   showBox: true,
-
-  // KPIs (Start • B/E • #Bonus)
-  kpiPos: "top",         // "top" | "bottom" | "side" | "hidden"
-  kpiDir: "row",         // "row" | "column"
-  kpiAlign: "center",    // "left" | "center" | "right"
-  kpiSide: "right",      // "left" | "right"
+  kpiPos: "top",
+  kpiDir: "row",
+  kpiAlign: "center",
+  kpiSide: "right",
   kpiGap: 8,
   kpiSideSpace: 18,
-  kpiSize: 1.0,          // 0.7 a 1.6 (tamanho do badge)
-  kpiShape: "box",       // "box" | "pill" | "circle"
-  kpiRound: 2,           // 0,1,2
+  kpiSize: 1.0,
+  kpiShape: "box",
+  kpiRound: 2,
   kpiShowLabels: true,
-  kpiFont: 1.0,          // << NOVO — escala do tamanho da letra (0.8–1.6)
-
-  // alternância + cores
+  kpiFont: 1.0,
   kpiAltIconMs: 1200,
   kpiAltValueMs: 1800,
   kpiAnim: "fade",
@@ -443,38 +413,26 @@ const DEFAULT_HUNT_OVERLAY = {
   kpiBg: "",
   kpiBorder: "",
   kpiText: "",
-
-  // Cards
   cardH: 160,
   nameStyle: "bar",
   betStyle: "inline",
   showIdx: true,
   showBet: true,
   showSuper: true,
-
-  // Infos verticais
   vInfo: false,
   infoPos: "left",
-
-  // SUPER glow
   superGlow: true,
   superGlowColor: "#e879f9",
   superGlowStrength: 0.6,
   superTagColor: "#e879f9",
-  superTextColor: "#120614",   // <<< cor do TEXTO do selo SUPER
-  // Tema avançado (para UI de cores)
+  superTextColor: "#120614",
   panelBorder: "rgba(255,255,255,.12)",
   textColor:   "#e5e7eb",
   subtextColor:"#9ca3af",
   accentColor: "#fb7185",
   chipBg:      "rgba(255,255,255,.08)",
-
-
-  // Cores painel
   panelBgStart: "#0b1020",
   panelBgEnd:   "#111827",
-
-  // canvas
   pad: 16,
   align: "center",
   shine: true,
@@ -483,7 +441,6 @@ const DEFAULT_HUNT_OVERLAY = {
   baseW: 560,
   baseH: 280,
 };
-
 const DEFAULT_OPENING_OVERLAY = {
   design: "default",
   pad: 16,
@@ -494,14 +451,12 @@ const DEFAULT_OPENING_OVERLAY = {
   baseH: 320,
   showTitle: true,
   showCurrent: true,
-  kpiFont: 1.0, // para consistência (se usar heading com números no futuro)
+  kpiFont: 1.0,
 };
 
 /* ───────────────────────── URLs ───────────────────────── */
 function buildHuntOverlayUrl(base, huntNumberId, o) {
   const qs = new URLSearchParams();
-
-  // layout básico
   qs.set("design", "cards");
   qs.set("layout", String(o.layout || "carousel"));
   qs.set("visible", String(o.visible || 3));
@@ -509,8 +464,6 @@ function buildHuntOverlayUrl(base, huntNumberId, o) {
   qs.set("speed", String(o.scrollDur || 30));
   qs.set("cardH", String(o.cardH || 140));
   qs.set("box", o.showBox ? "1" : "0");
-
-  // cards
   qs.set("name", String(o.nameStyle || "bar"));
   qs.set("bet", String(o.betStyle || "inline"));
   qs.set("showIdx", o.showIdx ? "1" : "0");
@@ -518,8 +471,6 @@ function buildHuntOverlayUrl(base, huntNumberId, o) {
   qs.set("showSuper", o.showSuper ? "1" : "0");
   if (o.vInfo) qs.set("vinfo", "1");
   qs.set("infoside", String(o.infoPos || "left"));
-
-  // KPIs
   qs.set("kpos", String(o.kpiPos || "top"));
   qs.set("kdir", String(o.kpiDir || "row"));
   qs.set("kalign", String(o.kpiAlign || "center"));
@@ -530,9 +481,7 @@ function buildHuntOverlayUrl(base, huntNumberId, o) {
   qs.set("kshape", String(o.kpiShape || "box"));
   qs.set("kround", String(o.kpiRound ?? 2));
   qs.set("klabels", o.kpiShowLabels ? "1" : "0");
-  qs.set("kfont", String(o.kpiFont ?? 1)); // << NOVO
-
-  // tempos/animação + cores
+  qs.set("kfont", String(o.kpiFont ?? 1));
   qs.set("kicon", String(o.kpiAltIconMs ?? 0));
   qs.set("kval",  String(o.kpiAltValueMs ?? 0));
   qs.set("kanim", String(o.kpiAnim || "fade"));
@@ -540,8 +489,6 @@ function buildHuntOverlayUrl(base, huntNumberId, o) {
   if (o.kpiBg)     qs.set("kbg", String(o.kpiBg).replace("#",""));
   if (o.kpiBorder) qs.set("kbr", String(o.kpiBorder).replace("#",""));
   if (o.kpiText)   qs.set("ktx", String(o.kpiText).replace("#",""));
-
-  // SUPER glow + painel
   if (o.superGlow === false) qs.set("sg", "0");
   if (o.superGlowColor) qs.set("sgc", String(o.superGlowColor).replace("#",""));
   if (o.superGlowStrength != null) qs.set("sgs", String(o.superGlowStrength));
@@ -549,17 +496,12 @@ function buildHuntOverlayUrl(base, huntNumberId, o) {
   if (o.panelBgStart) qs.set("bg1", String(o.panelBgStart).replace("#",""));
   if (o.panelBgEnd)   qs.set("bg2", String(o.panelBgEnd).replace("#",""));
   if (o.superTextColor) qs.set("stx", String(o.superTextColor).replace("#",""));
-
-
-  // canvas
   qs.set("align", String(o.align || "center"));
   qs.set("pad", String(o.pad || 0));
   qs.set("bw", String(o.baseW || 560));
   qs.set("bh", String(o.baseH || 280));
-
   return `${base}#/overlay/hunt/${huntNumberId}?${qs.toString()}`;
 }
-
 function buildOpeningOverlayUrl(base, huntNumberId, opts) {
   const qs = new URLSearchParams();
   qs.set("design", "opening");
@@ -590,35 +532,31 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
   const speedSec = Math.max(5, Math.min(180, Number(opts.scrollDur || 30)));
   const gapCards = layout === "grid" ? 8 : 12;
 
-  // KPIs
-  const kpiPos   = String(opts.kpiPos || "top");       // "top" | "bottom" | "side" | "hidden"
+  const kpiPos   = String(opts.kpiPos || "top");
   const kpiDir   = String(opts.kpiDir || "row");
   const kpiAlign = String(opts.kpiAlign || "center");
   const kpiSide  = String(opts.kpiSide || "right");
   const kpiGap   = Number(opts.kpiGap ?? 8);
   const kpiSideSpace = Number(opts.kpiSideSpace ?? 18);
   const kpiSize  = Math.max(0.7, Math.min(1.6, Number(opts.kpiSize ?? 1)));
-  const kpiShape = String(opts.kpiShape || "box");     // "box" | "pill" | "circle"
+  const kpiShape = String(opts.kpiShape || "box");
   const kpiRound = Math.max(0, Math.min(2, Number(opts.kpiRound ?? 2)));
   const kpiShowLabels = !!opts.kpiShowLabels;
-  const kpiFont = Math.max(0.6, Math.min(2, Number(opts.kpiFont ?? 1))); // segurança
+  const kpiFont = Math.max(0.6, Math.min(2, Number(opts.kpiFont ?? 1)));
 
-  // alternância + cores
   const kpiAltIconMs  = Math.max(0, Number(opts.kpiAltIconMs ?? 0));
   const kpiAltValueMs = Math.max(0, Number(opts.kpiAltValueMs ?? 0));
   const kpiAnim       = String(opts.kpiAnim || "fade");
   const kColors       = getKpiColors(opts);
 
-    const formatPlainRound = (n) => fmtPlain(n, kpiRound);
-
- const items = [
+  const formatPlainRound = (n) => fmtPlain(n, kpiRound);
+  const items = [
     { key: "start",  label: "Start",  value: formatPlainRound(start),  Icon: Wallet },
     { key: "be",     label: "B/E",    value: formatPlainRound(beLeft), Icon: Scale  },
     { key: "bonus",  label: "# Bonus",value: String(slots.length),     Icon: Gift   },
   ];
-  // Alternância círculo com tempos distintos
   const wantAlt = kpiShape === "circle" && (kpiAltIconMs > 0 || kpiAltValueMs > 0);
-  const [phase, setPhase] = React.useState(0); // 0 = ícone, 1 = valor
+  const [phase, setPhase] = React.useState(0);
   React.useEffect(() => {
     if (!wantAlt) return;
     let alive = true;
@@ -637,9 +575,8 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     const cancel = tick();
     return () => { alive = false; cancel && cancel(); };
   }, [wantAlt, kpiAltIconMs, kpiAltValueMs, kpiShape]);
-  const showIcons = wantAlt ? phase === 0 : false; // por omissão mostra valores
+  const showIcons = wantAlt ? phase === 0 : false;
 
-  // tamanhos KPI + reserva lateral (sem alterar o tamanho dos cards!)
   const pillH   = Math.round(28 * kpiSize);
   const boxH    = Math.round(32 * kpiSize);
   const circleD = Math.round(36 * kpiSize);
@@ -647,7 +584,6 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
   const estKpiW = kpiShape === "circle" ? circleD : Math.round(112 * kpiSize);
   const reserveSide = kpiPos === "side" ? estKpiW + kpiSideSpace + 6 : 0;
 
-  // estilos consistentes para todos os badges
   const kStyle = {
     background: kColors.bg,
     borderColor: kColors.border,
@@ -657,7 +593,6 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
   const iconPxCircle = Math.max(12, Math.round(circleD * 0.56));
   const valueFontCircle = Math.max(10, Math.round(circleD * 0.36 * kpiFont));
 
-  // >>> NÃO mexemos no tamanho dos cards – só usamos opts.cardH <<<
   const cardHeight = Math.max(120, Number(opts.cardH || 140));
 
   function Card({ s, i, width }) {
@@ -710,8 +645,8 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
         {opts.showSuper && superB && (
           <div className={cn("absolute top-1.5 z-10 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide",
                              infoRight ? "left-1.5" : "right-1.5")}
-style={{ background: anyToRgba(opts.superTagColor || "#e879f9", 0.95), color: opts.superTextColor || "#120614" }}>
-  SUPER
+               style={{ background: anyToRgba(opts.superTagColor || "#e879f9", 0.95), color: opts.superTextColor || "#120614" }}>
+            SUPER
           </div>
         )}
 
@@ -745,96 +680,70 @@ style={{ background: anyToRgba(opts.superTagColor || "#e879f9", 0.95), color: op
     );
   }
 
-  /* ───────── KPI BADGE NORMALIZADO ───────── */
   function KpiBadge({ shape, label, value, Icon }) {
     if (shape === "circle") {
+      const circleD = Math.round(36 * (opts.kpiSize ?? 1));
+      const iconPxCircle = Math.max(12, Math.round(circleD * 0.56));
+      const valueFontCircle = Math.max(10, Math.round(circleD * 0.36 * (opts.kpiFont ?? 1)));
       return (
         <div
           className="rounded-full border shadow-lg grid place-items-center"
-          style={{ width: circleD, height: circleD, lineHeight: 0, ...kStyle }}
+          style={{ width: circleD, height: circleD, lineHeight: 0, background: kColors.bg, borderColor: kColors.border, color: kColors.text, fontFamily: RUBIK_STACK }}
           title={label}
         >
           {showIcons ? (
             <Icon size={iconPxCircle} strokeWidth={2} className="block" />
           ) : (
-            <span
-              className={numCls}
-              style={{
-                fontSize: valueFontCircle,
-                lineHeight: 1,
-                fontWeight: 700,             // sempre bold
-              }}
-            >
+            <span className={numCls} style={{ fontSize: valueFontCircle, lineHeight: 1, fontWeight: 700 }}>
               {value}
             </span>
           )}
         </div>
       );
     }
-    // pill/box
+    const kpiH = (opts.kpiShape === "box" ? Math.round(32 * (opts.kpiSize ?? 1)) : Math.round(28 * (opts.kpiSize ?? 1)));
     return (
       <div
-        className={cn(
-          "border px-3 inline-flex items-center",
-          shape === "pill" ? "rounded-full" : "rounded-lg"
-        )}
-        style={{ height: kpiH, gap: 6, ...kStyle }}
+        className={cn("border px-3 inline-flex items-center", opts.kpiShape === "pill" ? "rounded-full" : "rounded-lg")}
+        style={{ height: kpiH, gap: 6, background: kColors.bg, borderColor: kColors.border, color: kColors.text, fontFamily: RUBIK_STACK }}
       >
-        {kpiShowLabels && (
-          <span className="opacity-80 text-[12px]" style={{ lineHeight: 1 }}>
-            {label}:
-          </span>
+        {opts.kpiShowLabels !== false && (
+          <span className="opacity-80 text-[12px]" style={{ lineHeight: 1 }}>{label}:</span>
         )}
-        <b
-          className={cn(numCls)}
-          style={{
-            lineHeight: 1,
-            fontWeight: 700,                              // sempre bold
-            fontSize: Math.round(12 * kpiFont),          // << NOVO
-          }}
-        >
+        <b className={cn(numCls)} style={{ lineHeight: 1, fontWeight: 700, fontSize: Math.round(12 * (opts.kpiFont ?? 1)) }}>
           {value}
         </b>
       </div>
     );
   }
 
-  // KPIs horizontais (top/bottom)
   function KPIsInline() {
     const j =
-      kpiAlign === "left"
-        ? "justify-start"
-        : kpiAlign === "right"
-        ? "justify-end"
-        : "justify-center";
-    const dir = kpiDir === "column" ? "flex-col" : "flex-row items-center";
+      opts.kpiAlign === "left" ? "justify-start" :
+      opts.kpiAlign === "right" ? "justify-end" : "justify-center";
+    const dir = opts.kpiDir === "column" ? "flex-col" : "flex-row items-center";
     return (
       <div className="px-3 py-2" style={{ fontFamily: RUBIK_STACK }}>
-        <div className={cn("flex", dir, j)} style={{ gap: kpiGap }}>
+        <div className={cn("flex", dir, j)} style={{ gap: opts.kpiGap ?? 8 }}>
           {items.map(({ key, label, value, Icon }) => (
-            <KpiBadge
-              key={key}
-              shape={kpiShape}
-              label={label}
-              value={value}
-              Icon={Icon}
-            />
+            <KpiBadge key={key} shape={opts.kpiShape} label={label} value={value} Icon={Icon} />
           ))}
         </div>
       </div>
     );
   }
-
-  // KPIs verticais (lado)
   function KPIsSide() {
+    const kpiGap = Number(opts.kpiGap ?? 8);
+    const estKpiW = opts.kpiShape === "circle" ? Math.round(36 * (opts.kpiSize ?? 1)) : Math.round(112 * (opts.kpiSize ?? 1));
+    const kpiSideSpace = Number(opts.kpiSideSpace ?? 18);
     return (
       <div
         className="absolute z-20"
         style={{
           top: "50%",
           transform: "translateY(-50%)",
-          left:  kpiSide === "left"  ? kpiSideSpace : undefined,
-          right: kpiSide === "right" ? kpiSideSpace : undefined,
+          left:  opts.kpiSide === "left"  ? kpiSideSpace : undefined,
+          right: opts.kpiSide === "right" ? kpiSideSpace : undefined,
           display: "flex",
           flexDirection: "column",
           gap: kpiGap,
@@ -842,24 +751,16 @@ style={{ background: anyToRgba(opts.superTagColor || "#e879f9", 0.95), color: op
         }}
       >
         {items.map(({ key, label, value, Icon }) => (
-          <KpiBadge
-            key={key}
-            shape={kpiShape}
-            label={label}
-            value={value}
-            Icon={Icon}
-          />
+          <KpiBadge key={key} shape={opts.kpiShape} label={label} value={value} Icon={Icon} />
         ))}
       </div>
     );
   }
 
-  // ➜ largura dos cards
   const innerW = baseW;
-  const visibleW =
-    layout === "carousel"
-      ? Math.max(140, Math.floor((innerW - 6 - (visible - 1) * gapCards) / visible))
-      : undefined;
+  const visibleW = layout === "carousel"
+    ? Math.max(140, Math.floor((innerW - 6 - (visible - 1) * (layout === "grid" ? 8 : 12)) / visible))
+    : undefined;
 
   const bg1 = opts.panelBgStart || "#0b1020";
   const bg2 = opts.panelBgEnd || "#111827";
@@ -875,35 +776,30 @@ style={{ background: anyToRgba(opts.superTagColor || "#e879f9", 0.95), color: op
         fontFamily: RUBIK_STACK,
       }}
     >
-      {/* Importa Rubik para o preview/overlay */}
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap'); @keyframes marquee{0%{transform:translateX(0%)}100%{transform:translateX(-50%)}}`}</style>
 
-      {kpiPos === "top" && <KPIsInline />}
-      {kpiPos === "side" && <KPIsSide />}
+      {opts.kpiPos === "top" && <KPIsInline />}
+      {opts.kpiPos === "side" && <KPIsSide />}
 
-      {/* CARDS */}
       {layout === "grid" ? (
         <div className="h-full px-3 relative flex items-center">
-          {kpiPos === "side" && kpiSide === "left" && <div style={{ width: reserveSide }} />}
-          <div
-            style={{ display: "grid", gridTemplateColumns: "repeat(8,minmax(0,1fr))", gap: gapCards }}
-            className="flex-1"
-          >
+          {opts.kpiPos === "side" && opts.kpiSide === "left" && <div style={{ width: visibleW }} />}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(8,minmax(0,1fr))", gap: 8 }} className="flex-1">
             {slots.slice(0, 16).map((s, i) => (
               <Card key={s.id} s={s} i={i} width="100%" />
             ))}
           </div>
-          {kpiPos === "side" && kpiSide === "right" && <div style={{ width: reserveSide }} />}
-          {kpiPos === "side" && <KPIsSide />}
+          {opts.kpiPos === "side" && opts.kpiSide === "right" && <div style={{ width: visibleW }} />}
+          {opts.kpiPos === "side" && <KPIsSide />}
         </div>
       ) : (
         <div className="h-full px-3 relative flex items-center">
-          {kpiPos === "side" && kpiSide === "left" && <div style={{ width: reserveSide }} />}
+          {opts.kpiPos === "side" && opts.kpiSide === "left" && <div style={{ width: visibleW }} />}
           <div className="overflow-hidden flex-1">
             <div
               className="flex"
               style={{
-                gap: gapCards,
+                gap: 12,
                 width: "max-content",
                 animation:
                   autoScroll && slots.length > visible
@@ -916,12 +812,12 @@ style={{ background: anyToRgba(opts.superTagColor || "#e879f9", 0.95), color: op
               ))}
             </div>
           </div>
-          {kpiPos === "side" && kpiSide === "right" && <div style={{ width: reserveSide }} />}
-          {kpiPos === "side" && <KPIsSide />}
+          {opts.kpiPos === "side" && opts.kpiSide === "right" && <div style={{ width: visibleW }} />}
+          {opts.kpiPos === "side" && <KPIsSide />}
         </div>
       )}
 
-      {kpiPos === "bottom" && <KPIsInline />}
+      {opts.kpiPos === "bottom" && <KPIsInline />}
     </div>
   );
 }
@@ -938,8 +834,7 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
       style={{
         width: baseW,
         height: baseH,
-        background:
-          "linear-gradient(135deg, rgba(15,16,33,1) 0%, rgba(24,16,40,1) 100%)",
+        background: "linear-gradient(135deg, rgba(15,16,33,1) 0%, rgba(24,16,40,1) 100%)",
         fontFamily: RUBIK_STACK,
       }}
     >
@@ -949,44 +844,21 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
           <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
             {hunt?.title || "Hunt"} — Opening
           </div>
-        ) : (
-          <div />
-        )}
+        ) : <div />}
         {opts.showCurrent !== false ? (
           <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
             {current ? current.name : "—"}
           </div>
-        ) : (
-          <div />
-        )}
+        ) : <div />}
       </div>
 
-      <div
-        className="px-3"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(8,minmax(0,1fr))",
-          gap: 8,
-        }}
-      >
+      <div className="px-3" style={{ display: "grid", gridTemplateColumns: "repeat(8,minmax(0,1fr))", gap: 8 }}>
         {slots.slice(0, 24).map((s, i) => (
-          <div
-            key={s.id}
-            className="relative rounded-lg overflow-hidden border border-white/10"
-            title={s.name}
-          >
-            <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">
-              #{i + 1}
-            </div>
+          <div key={s.id} className="relative rounded-lg overflow-hidden border border-white/10" title={s.name}>
+            <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">#{i + 1}</div>
             {s.thumbnail ? (
-              <img
-                src={s.thumbnail}
-                alt=""
-                className="h-14 w-full object-cover object-bottom"
-              />
-            ) : (
-              <div className="h-14 w-full bg-white/10" />
-            )}
+              <img src={s.thumbnail} alt="" className="h-14 w-full object-cover object-bottom" />
+            ) : (<div className="h-14 w-full bg-white/10" />)}
           </div>
         ))}
       </div>
@@ -1007,60 +879,15 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
       const base = { ...o, layoutPreset: name };
       switch (name) {
         case "Compact":
-          return {
-            ...base,
-            layout: "grid",
-            visible: 4,
-            cardH: 140,
-            nameStyle: "float",
-            betStyle: "chip",
-            kpiPos: "top",
-            showBox: true,
-          };
+          return { ...base, layout: "grid", visible: 4, cardH: 140, nameStyle: "float", betStyle: "chip", kpiPos: "top", showBox: true };
         case "Bar":
-          return {
-            ...base,
-            layout: "carousel",
-            visible: 3,
-            cardH: 170,
-            nameStyle: "bar",
-            betStyle: "inline",
-            kpiPos: "top",
-            showBox: true,
-          };
+          return { ...base, layout: "carousel", visible: 3, cardH: 170, nameStyle: "bar", betStyle: "inline", kpiPos: "top", showBox: true };
         case "Minimal":
-          return {
-            ...base,
-            layout: "carousel",
-            visible: 4,
-            cardH: 150,
-            nameStyle: "hidden",
-            betStyle: "chip",
-            kpiPos: "hidden",
-            showBox: false,
-          };
+          return { ...base, layout: "carousel", visible: 4, cardH: 150, nameStyle: "hidden", betStyle: "chip", kpiPos: "hidden", showBox: false };
         case "Head-to-Head":
-          return {
-            ...base,
-            layout: "carousel",
-            visible: 2,
-            cardH: 210,
-            nameStyle: "bar",
-            betStyle: "inline",
-            kpiPos: "bottom",
-            showBox: true,
-          };
+          return { ...base, layout: "carousel", visible: 2, cardH: 210, nameStyle: "bar", betStyle: "inline", kpiPos: "bottom", showBox: true };
         default:
-          return {
-            ...base,
-            layout: "carousel",
-            visible: 3,
-            cardH: 160,
-            nameStyle: "bar",
-            betStyle: "inline",
-            kpiPos: "top",
-            showBox: true,
-          };
+          return { ...base, layout: "carousel", visible: 3, cardH: 160, nameStyle: "bar", betStyle: "inline", kpiPos: "top", showBox: true };
       }
     });
   }
@@ -1099,12 +926,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                   <Input
                     type="number"
                     value={opts.baseW}
-                    onChange={(e) =>
-                      setOpts((o) => ({
-                        ...o,
-                        baseW: Number(e.target.value) || 0,
-                      }))
-                    }
+                    onChange={(e) => setOpts((o) => ({ ...o, baseW: Number(e.target.value) || 0 }))}
                     className="h-9 bg-zinc-900 border-white/10 text-white"
                   />
                 </div>
@@ -1113,12 +935,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                   <Input
                     type="number"
                     value={opts.baseH}
-                    onChange={(e) =>
-                      setOpts((o) => ({
-                        ...o,
-                        baseH: Number(e.target.value) || 0,
-                      }))
-                    }
+                    onChange={(e) => setOpts((o) => ({ ...o, baseH: Number(e.target.value) || 0 }))}
                     className="h-9 bg-zinc-900 border-white/10 text-white"
                   />
                 </div>
@@ -1130,12 +947,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                   <Input
                     type="number"
                     value={opts.pad}
-                    onChange={(e) =>
-                      setOpts((o) => ({
-                        ...o,
-                        pad: Number(e.target.value) || 0,
-                      }))
-                    }
+                    onChange={(e) => setOpts((o) => ({ ...o, pad: Number(e.target.value) || 0 }))}
                     className="h-9 bg-zinc-900 border-white/10 text-white"
                   />
                 </div>
@@ -1143,9 +955,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                   <div className="text-xs opacity-70 mb-1">Align</div>
                   <select
                     value={opts.align}
-                    onChange={(e) =>
-                      setOpts((o) => ({ ...o, align: e.target.value }))
-                    }
+                    onChange={(e) => setOpts((o) => ({ ...o, align: e.target.value }))}
                     className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white px-3"
                   >
                     <option value="left">Left</option>
@@ -1158,65 +968,43 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
               <div className="mt-3 text-xs opacity-70">Effects</div>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={!!opts.shine}
-                    onChange={(e) =>
-                      setOpts((o) => ({ ...o, shine: !!e.target.checked }))
-                    }
-                  />
+                  <input type="checkbox" checked={!!opts.shine} onChange={(e) => setOpts((o) => ({ ...o, shine: !!e.target.checked }))} />
                   Shine
                 </label>
                 <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={!!opts.pulse}
-                    onChange={(e) =>
-                      setOpts((o) => ({ ...o, pulse: !!e.target.checked }))
-                    }
-                  />
+                  <input type="checkbox" checked={!!opts.pulse} onChange={(e) => setOpts((o) => ({ ...o, pulse: !!e.target.checked }))} />
                   Pulse
                 </label>
               </div>
             </div>
 
-            {/* Layout presets */}
+            {/* Layout presets (hunt) */}
             {type === "hunt" && (
               <>
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
                   <div className="text-sm font-medium mb-1">Layout presets</div>
                   <div className="grid grid-cols-2 gap-2 min-w-0">
-                    {["Default", "Compact", "Bar", "Minimal", "Head-to-Head"].map(
-                      (n) => (
-                        <button
-                          key={n}
-                          className={cn(
-                            "h-9 rounded-xl border px-3 text-sm",
-                            opts.layoutPreset === n
-                              ? "border-white/30 bg-white/10"
-                              : "border-white/10 hover:bg-white/5"
-                          )}
-                          onClick={() => applyLayoutPreset(n)}
-                        >
-                          {n === "Head-to-Head"
-                            ? "Head-to-Head (overlay VS)"
-                            : n}
-                        </button>
-                      )
-                    )}
+                    {["Default", "Compact", "Bar", "Minimal", "Head-to-Head"].map((n) => (
+                      <button
+                        key={n}
+                        className={cn("h-9 rounded-xl border px-3 text-sm",
+                          opts.layoutPreset === n ? "border-white/30 bg-white/10" : "border-white/10 hover:bg-white/5")}
+                        onClick={() => applyLayoutPreset(n)}
+                      >
+                        {n === "Head-to-Head" ? "Head-to-Head (overlay VS)" : n}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                {/* Cards & Carrossel */}
+                {/* Cards & Carousel */}
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
                   <div className="text-xs opacity-70 mb-1">Cards</div>
                   <div className="grid grid-cols-2 gap-2 min-w-0">
                     <div>
                       <select
                         value={opts.layout}
-                        onChange={(e) =>
-                          setOpts((o) => ({ ...o, layout: e.target.value }))
-                        }
+                        onChange={(e) => setOpts((o) => ({ ...o, layout: e.target.value }))}
                         className="h-9 w-full appearance-none pr-8 rounded-xl bg-zinc-900 border-white/10 text-white px-3"
                       >
                         <option value="carousel">Rolante (N visíveis)</option>
@@ -1224,18 +1012,11 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                       </select>
                     </div>
                     <div>
-                      <div className="text-xs opacity-70 mb-1">
-                        Card height (px)
-                      </div>
+                      <div className="text-xs opacity-70 mb-1">Card height (px)</div>
                       <Input
                         type="number"
                         value={opts.cardH}
-                        onChange={(e) =>
-                          setOpts((o) => ({
-                            ...o,
-                            cardH: Number(e.target.value) || 120,
-                          }))
-                        }
+                        onChange={(e) => setOpts((o) => ({ ...o, cardH: Number(e.target.value) || 120 }))}
                         className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
                       />
                     </div>
@@ -1248,71 +1029,36 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                         <Input
                           type="number"
                           value={opts.visible}
-                          onChange={(e) =>
-                            setOpts((o) => ({
-                              ...o,
-                              visible: Math.max(
-                                1,
-                                Number(e.target.value) || 3
-                              ),
-                            }))
-                          }
+                          onChange={(e) => setOpts((o) => ({ ...o, visible: Math.max(1, Number(e.target.value) || 3) }))}
                           className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
                         />
                       </div>
                       <div className="flex items-end">
                         <label className="flex items-center gap-2 text-sm w-full">
-                          <input
-                            type="checkbox"
-                            checked={!!opts.autoScroll}
-                            onChange={(e) =>
-                              setOpts((o) => ({
-                                ...o,
-                                autoScroll: !!e.target.checked,
-                              }))
-                            }
-                          />
+                          <input type="checkbox" checked={!!opts.autoScroll}
+                                 onChange={(e) => setOpts((o) => ({ ...o, autoScroll: !!e.target.checked }))} />
                           Auto-scroll
                         </label>
                       </div>
                       <div className="col-span-2">
-                        <div className="text-xs opacity-70 mb-1">
-                          Velocidade (seg/loop)
-                        </div>
+                        <div className="text-xs opacity-70 mb-1">Velocidade (seg/loop)</div>
                         <Input
                           type="number"
                           value={opts.scrollDur}
-                          onChange={(e) =>
-                            setOpts((o) => ({
-                              ...o,
-                              scrollDur: Math.max(
-                                5,
-                                Math.min(
-                                  180,
-                                  Number(e.target.value) || 30
-                                )
-                              ),
-                            }))
-                          }
+                          onChange={(e) => setOpts((o) => ({ ...o, scrollDur: Math.max(5, Math.min(180, Number(e.target.value) || 30)) }))}
                           className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
                         />
-                        <div className="text-[11px] opacity-60 mt-1">
-                          Menor valor = mais rápido. Pausa ao passar o rato.
-                        </div>
+                        <div className="text-[11px] opacity-60 mt-1">Menor valor = mais rápido. Pausa ao passar o rato.</div>
                       </div>
                     </div>
                   )}
 
                   <div className="grid grid-cols-2 gap-2 min-w-0">
                     <div>
-                      <div className="text-xs opacity-70 mb-1">
-                        Estilo do nome
-                      </div>
+                      <div className="text-xs opacity-70 mb-1">Estilo do nome</div>
                       <select
                         value={opts.nameStyle}
-                        onChange={(e) =>
-                          setOpts((o) => ({ ...o, nameStyle: e.target.value }))
-                        }
+                        onChange={(e) => setOpts((o) => ({ ...o, nameStyle: e.target.value }))}
                         className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
                       >
                         <option value="bar">Barra de vidro</option>
@@ -1321,14 +1067,10 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                       </select>
                     </div>
                     <div>
-                      <div className="text-xs opacity-70 mb-1">
-                        Estilo do bet
-                      </div>
+                      <div className="text-xs opacity-70 mb-1">Estilo do bet</div>
                       <select
                         value={opts.betStyle}
-                        onChange={(e) =>
-                          setOpts((o) => ({ ...o, betStyle: e.target.value }))
-                        }
+                        onChange={(e) => setOpts((o) => ({ ...o, betStyle: e.target.value }))}
                         className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
                       >
                         <option value="inline">Inline com nome</option>
@@ -1340,58 +1082,27 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 
                   <div className="grid grid-cols-1 gap-2 text-sm">
                     <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={!!opts.showIdx}
-                        onChange={(e) =>
-                          setOpts((o) => ({ ...o, showIdx: !!e.target.checked }))
-                        }
-                      />
+                      <input type="checkbox" checked={!!opts.showIdx} onChange={(e) => setOpts((o) => ({ ...o, showIdx: !!e.target.checked }))} />
                       Mostrar número (#)
                     </label>
                     <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={!!opts.showSuper}
-                        onChange={(e) =>
-                          setOpts((o) => ({
-                            ...o,
-                            showSuper: !!e.target.checked,
-                          }))
-                        }
-                      />
+                      <input type="checkbox" checked={!!opts.showSuper} onChange={(e) => setOpts((o) => ({ ...o, showSuper: !!e.target.checked }))} />
                       Mostrar selo SUPER
                     </label>
                     <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={!!opts.showBox}
-                        onChange={(e) =>
-                          setOpts((o) => ({ ...o, showBox: !!e.target.checked }))
-                        }
-                      />
+                      <input type="checkbox" checked={!!opts.showBox} onChange={(e) => setOpts((o) => ({ ...o, showBox: !!e.target.checked }))} />
                       Mostrar caixa (box) por trás dos cards
                     </label>
                     <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={!!opts.vInfo}
-                        onChange={(e) =>
-                          setOpts((o) => ({ ...o, vInfo: !!e.target.checked }))
-                        }
-                      />
+                      <input type="checkbox" checked={!!opts.vInfo} onChange={(e) => setOpts((o) => ({ ...o, vInfo: !!e.target.checked }))} />
                       Vertical infos (#/bet)
                     </label>
                     <div className="grid grid-cols-2 gap-2 min-w-0">
                       <div>
-                        <div className="text-xs opacity-70 mb-1">
-                          Posição das infos
-                        </div>
+                        <div className="text-xs opacity-70 mb-1">Posição das infos</div>
                         <select
                           value={opts.infoPos}
-                          onChange={(e) =>
-                            setOpts((o) => ({ ...o, infoPos: e.target.value }))
-                          }
+                          onChange={(e) => setOpts((o) => ({ ...o, infoPos: e.target.value }))}
                           className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
                         >
                           <option value="left">Left</option>
@@ -1427,7 +1138,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                         value={opts.kpiDir}
                         onChange={(e) => setOpts((o) => ({ ...o, kpiDir: e.target.value }))}
                         className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-                        disabled={opts.kpiPos !== "top" && opts.kpiPos !== "bottom"}
+                        disabled={!(opts.kpiPos === "top" || opts.kpiPos === "bottom")}
                       >
                         <option value="row">Horizontal</option>
                         <option value="column">Vertical</option>
@@ -1442,7 +1153,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                         value={opts.kpiAlign}
                         onChange={(e) => setOpts((o) => ({ ...o, kpiAlign: e.target.value }))}
                         className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-                        disabled={opts.kpiPos !== "top" && opts.kpiPos !== "bottom"}
+                        disabled={!(opts.kpiPos === "top" || opts.kpiPos === "bottom")}
                       >
                         <option value="left">Esquerda</option>
                         <option value="center">Centro</option>
@@ -1487,18 +1198,15 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                     </div>
                   </div>
 
-                 <div>
-  <div className="text-xs opacity-70 mb-1">Tamanho dos pills/box/circle (0.7–1.6)</div>
-  <input
-    type="range"
-    min={0.7}
-    max={1.6}
-    step={0.05}
-    value={opts.kpiSize}
-    onChange={(e) => setOpts((o) => ({ ...o, kpiSize: Number(e.target.value) }))}
-    className="w-full"
-  />
-</div>
+                  <div>
+                    <div className="text-xs opacity-70 mb-1">Tamanho dos pills/box/circle (0.7–1.6)</div>
+                    <input
+                      type="range" min={0.7} max={1.6} step={0.05}
+                      value={opts.kpiSize}
+                      onChange={(e) => setOpts((o) => ({ ...o, kpiSize: Number(e.target.value) }))}
+                      className="w-full"
+                    />
+                  </div>
 
                   <div className="grid grid-cols-2 gap-2 min-w-0">
                     <div>
@@ -1528,7 +1236,6 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                     </div>
                   </div>
 
-                  {/* Alternância com tempos + animação */}
                   <div className="grid grid-cols-2 gap-2 min-w-0">
                     <div>
                       <div className="text-xs opacity-70 mb-1">Ícone (ms, círculo)</div>
@@ -1550,23 +1257,15 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                     </div>
                   </div>
 
-                  {/* NOVO: Tamanho da letra do KPI */}
                   <div>
                     <div className="text-xs opacity-70 mb-1">Tamanho da letra do KPI (0.8–1.6)</div>
                     <input
-                      type="range"
-                      min={0.8}
-                      max={1.6}
-                      step={0.05}
+                      type="range" min={0.8} max={1.6} step={0.05}
                       value={opts.kpiFont}
-                      onChange={(e) =>
-                        setOpts((o) => ({ ...o, kpiFont: Number(e.target.value) }))
-                      }
+                      onChange={(e) => setOpts((o) => ({ ...o, kpiFont: Number(e.target.value) }))}
                       className="w-full"
                     />
-                    <div className="text-[11px] opacity-60 mt-1">
-                      Ajusta apenas a letra (mantém o tamanho do círculo/box).
-                    </div>
+                    <div className="text-[11px] opacity-60 mt-1">Ajusta apenas a letra (mantém o tamanho do círculo/box).</div>
                   </div>
 
                   {/* Cores */}
@@ -1614,209 +1313,150 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                         />
                       </div>
                     </div>
-                    <div className="text-[11px] opacity-60 mt-1">
-                      Dica: deixa os 3 overrides em branco para usar o preset.
-                    </div>
+                    <div className="text-[11px] opacity-60 mt-1">Dica: deixa os 3 overrides em branco para usar o preset.</div>
                   </div>
                 </div>
 
-       {/* SUPER glow/tag */}
-<div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
-
-  {/* Background start / end */}
-  <div className="grid grid-cols-2 gap-2 min-w-0">
-    <div>
-      <div className="text-xs opacity-70 mb-1">Background start</div>
-      <div className="flex items-center gap-2">
-        <input
-          type="color"
-          value={(opts.panelBgStart || "").startsWith("#") ? opts.panelBgStart : "#000000"}
-          onChange={(e) => setOpts((o) => ({ ...o, panelBgStart: e.target.value }))}
-          className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
-          title={opts.panelBgStart || ""}
-        />
-        <Input
-          type="text"
-          value={opts.panelBgStart ?? ""}
-          onChange={(e) => setOpts((o) => ({ ...o, panelBgStart: e.target.value }))}
-          placeholder="#RRGGBB ou rgba()"
-          className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-        />
-      </div>
-    </div>
-
-    <div>
-      <div className="text-xs opacity-70 mb-1">Background end</div>
-      <div className="flex items-center gap-2">
-        <input
-          type="color"
-          value={(opts.panelBgEnd || "").startsWith("#") ? opts.panelBgEnd : "#000000"}
-          onChange={(e) => setOpts((o) => ({ ...o, panelBgEnd: e.target.value }))}
-          className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
-          title={opts.panelBgEnd || ""}
-        />
-        <Input
-          type="text"
-          value={opts.panelBgEnd ?? ""}
-          onChange={(e) => setOpts((o) => ({ ...o, panelBgEnd: e.target.value }))}
-          placeholder="#RRGGBB ou rgba()"
-          className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-        />
-      </div>
-    </div>
-  </div>
-
-  {/* Linha/painel border */}
-  <div>
-    <div className="text-xs opacity-70 mb-1">Panel/Line border</div>
-    <div className="flex items-center gap-2">
-      <input
-        type="color"
-        value={(opts.panelBorder || "").startsWith("#") ? opts.panelBorder : "#000000"}
-        onChange={(e) => setOpts((o) => ({ ...o, panelBorder: e.target.value }))}
-        className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
-        title={opts.panelBorder || ""}
-      />
-      <Input
-        type="text"
-        value={opts.panelBorder ?? ""}
-        onChange={(e) => setOpts((o) => ({ ...o, panelBorder: e.target.value }))}
-        placeholder="rgba(255,255,255,.12) ou #hex"
-        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-      />
-    </div>
-  </div>
-
-  {/* Texto principal */}
-  <div>
-    <div className="text-xs opacity-70 mb-1">Text</div>
-    <div className="flex items-center gap-2">
-      <input
-        type="color"
-        value={(opts.textColor || "").startsWith("#") ? opts.textColor : "#e5e7eb"}
-        onChange={(e) => setOpts((o) => ({ ...o, textColor: e.target.value }))}
-        className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
-        title={opts.textColor || ""}
-      />
-      <Input
-        type="text"
-        value={opts.textColor ?? ""}
-        onChange={(e) => setOpts((o) => ({ ...o, textColor: e.target.value }))}
-        placeholder="#RRGGBB"
-        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-      />
-    </div>
-  </div>
-
-  {/* Subtexto */}
-  <div>
-    <div className="text-xs opacity-70 mb-1">Subtext</div>
-    <div className="flex items-center gap-2">
-      <input
-        type="color"
-        value={(opts.subtextColor || "").startsWith("#") ? opts.subtextColor : "#9ca3af"}
-        onChange={(e) => setOpts((o) => ({ ...o, subtextColor: e.target.value }))}
-        className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
-        title={opts.subtextColor || ""}
-      />
-      <Input
-        type="text"
-        value={opts.subtextColor ?? ""}
-        onChange={(e) => setOpts((o) => ({ ...o, subtextColor: e.target.value }))}
-        placeholder="#RRGGBB"
-        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-      />
-    </div>
-  </div>
-
-  {/* Acento */}
-  <div>
-    <div className="text-xs opacity-70 mb-1">Accent</div>
-    <div className="flex items-center gap-2">
-      <input
-        type="color"
-        value={(opts.accentColor || "").startsWith("#") ? opts.accentColor : "#fb7185"}
-        onChange={(e) => setOpts((o) => ({ ...o, accentColor: e.target.value }))}
-        className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
-        title={opts.accentColor || ""}
-      />
-      <Input
-        type="text"
-        value={opts.accentColor ?? ""}
-        onChange={(e) => setOpts((o) => ({ ...o, accentColor: e.target.value }))}
-        placeholder="#RRGGBB"
-        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-      />
-    </div>
-  </div>
-
-  {/* Fundo dos chips */}
-  <div>
-    <div className="text-xs opacity-70 mb-1">Chip bg</div>
-    <div className="flex items-center gap-2">
-      <input
-        type="color"
-        value={(opts.chipBg || "").startsWith("#") ? opts.chipBg : "#000000"}
-        onChange={(e) => setOpts((o) => ({ ...o, chipBg: e.target.value }))}
-        className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
-        title={opts.chipBg || ""}
-      />
-      <Input
-        type="text"
-        value={opts.chipBg ?? ""}
-        onChange={(e) => setOpts((o) => ({ ...o, chipBg: e.target.value }))}
-        placeholder="rgba(...) ou #hex"
-        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-      />
-    </div>
-  </div>
-</div>
-
-                {/* Panel/box presets */}
+                {/* SUPER glow/tag + cores painel */}
                 <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
-                  <div className="text-sm font-medium">Color presets</div>
-                  <div className="grid grid-cols-2 gap-2 min-w-0">
-                    {Object.keys(PANEL_PRESETS).map((name) => {
-                      const [a, b] = PANEL_PRESETS[name];
-                      return (
-                        <button
-                          key={name}
-                          onClick={() => applyPanelPreset(name)}
-                          className="h-12 rounded-lg border border-white/10 text-sm"
-                          style={{
-                            background: `linear-gradient(135deg, ${a} 0%, ${b} 100%)`,
-                          }}
-                          title={name}
-                        >
-                          <span className="drop-shadow">{name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
                   <div className="grid grid-cols-2 gap-2 min-w-0">
                     <div>
-                      <div className="text-xs opacity-70 mb-1">
-                        Background start
+                      <div className="text-xs opacity-70 mb-1">Background start</div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={(opts.panelBgStart || "").startsWith("#") ? opts.panelBgStart : "#000000"}
+                          onChange={(e) => setOpts((o) => ({ ...o, panelBgStart: e.target.value }))}
+                          className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
+                          title={opts.panelBgStart || ""}
+                        />
+                        <Input
+                          type="text"
+                          value={opts.panelBgStart ?? ""}
+                          onChange={(e) => setOpts((o) => ({ ...o, panelBgStart: e.target.value }))}
+                          placeholder="#RRGGBB ou rgba()"
+                          className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+                        />
                       </div>
-                      <input
-                        type="color"
-                        value={opts.panelBgStart}
-                        onChange={(e) =>
-                          setOpts((o) => ({ ...o, panelBgStart: e.target.value }))
-                        }
-                        className="h-9 w-full rounded-md bg-zinc-900 border border-white/10 p-1"
-                      />
                     </div>
+
                     <div>
                       <div className="text-xs opacity-70 mb-1">Background end</div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={(opts.panelBgEnd || "").startsWith("#") ? opts.panelBgEnd : "#000000"}
+                          onChange={(e) => setOpts((o) => ({ ...o, panelBgEnd: e.target.value }))}
+                          className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
+                          title={opts.panelBgEnd || ""}
+                        />
+                        <Input
+                          type="text"
+                          value={opts.panelBgEnd ?? ""}
+                          onChange={(e) => setOpts((o) => ({ ...o, panelBgEnd: e.target.value }))}
+                          placeholder="#RRGGBB ou rgba()"
+                          className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs opacity-70 mb-1">Panel/Line border</div>
+                    <div className="flex items-center gap-2">
                       <input
                         type="color"
-                        value={opts.panelBgEnd}
-                        onChange={(e) =>
-                          setOpts((o) => ({ ...o, panelBgEnd: e.target.value }))
-                        }
-                        className="h-9 w-full rounded-md bg-zinc-900 border border-white/10 p-1"
+                        value={(opts.panelBorder || "").startsWith("#") ? opts.panelBorder : "#000000"}
+                        onChange={(e) => setOpts((o) => ({ ...o, panelBorder: e.target.value }))}
+                        className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
+                        title={opts.panelBorder || ""}
+                      />
+                      <Input
+                        type="text"
+                        value={opts.panelBorder ?? ""}
+                        onChange={(e) => setOpts((o) => ({ ...o, panelBorder: e.target.value }))}
+                        placeholder="rgba(255,255,255,.12) ou #hex"
+                        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs opacity-70 mb-1">Text</div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={(opts.textColor || "").startsWith("#") ? opts.textColor : "#e5e7eb"}
+                        onChange={(e) => setOpts((o) => ({ ...o, textColor: e.target.value }))}
+                        className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
+                        title={opts.textColor || ""}
+                      />
+                      <Input
+                        type="text"
+                        value={opts.textColor ?? ""}
+                        onChange={(e) => setOpts((o) => ({ ...o, textColor: e.target.value }))}
+                        placeholder="#RRGGBB"
+                        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs opacity-70 mb-1">Subtext</div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={(opts.subtextColor || "").startsWith("#") ? opts.subtextColor : "#9ca3af"}
+                        onChange={(e) => setOpts((o) => ({ ...o, subtextColor: e.target.value }))}
+                        className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
+                        title={opts.subtextColor || ""}
+                      />
+                      <Input
+                        type="text"
+                        value={opts.subtextColor ?? ""}
+                        onChange={(e) => setOpts((o) => ({ ...o, subtextColor: e.target.value }))}
+                        placeholder="#RRGGBB"
+                        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs opacity-70 mb-1">Accent</div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={(opts.accentColor || "").startsWith("#") ? opts.accentColor : "#fb7185"}
+                        onChange={(e) => setOpts((o) => ({ ...o, accentColor: e.target.value }))}
+                        className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
+                        title={opts.accentColor || ""}
+                      />
+                      <Input
+                        type="text"
+                        value={opts.accentColor ?? ""}
+                        onChange={(e) => setOpts((o) => ({ ...o, accentColor: e.target.value }))}
+                        placeholder="#RRGGBB"
+                        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-xs opacity-70 mb-1">Chip bg</div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={(opts.chipBg || "").startsWith("#") ? opts.chipBg : "#000000"}
+                        onChange={(e) => setOpts((o) => ({ ...o, chipBg: e.target.value }))}
+                        className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
+                        title={opts.chipBg || ""}
+                      />
+                      <Input
+                        type="text"
+                        value={opts.chipBg ?? ""}
+                        onChange={(e) => setOpts((o) => ({ ...o, chipBg: e.target.value }))}
+                        placeholder="rgba(...) ou #hex"
+                        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
                       />
                     </div>
                   </div>
@@ -1832,9 +1472,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                   <input
                     type="checkbox"
                     checked={opts.showTitle !== false}
-                    onChange={(e) =>
-                      setOpts((o) => ({ ...o, showTitle: !!e.target.checked }))
-                    }
+                    onChange={(e) => setOpts((o) => ({ ...o, showTitle: !!e.target.checked }))}
                   />
                   Mostrar título do hunt
                 </label>
@@ -1842,9 +1480,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                   <input
                     type="checkbox"
                     checked={opts.showCurrent !== false}
-                    onChange={(e) =>
-                      setOpts((o) => ({ ...o, showCurrent: !!e.target.checked }))
-                    }
+                    onChange={(e) => setOpts((o) => ({ ...o, showCurrent: !!e.target.checked }))}
                   />
                   Mostrar slot atual
                 </label>
@@ -1852,8 +1488,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
             )}
 
             <div className="text-[11px] opacity-60">
-              Dica: em OBS, usa sempre o mesmo <b>Width/Height</b> do browser
-              source para evitar cortes.
+              Dica: em OBS, usa sempre o mesmo <b>Width/Height</b> do browser source para evitar cortes.
             </div>
           </div>
         </div>
@@ -1879,10 +1514,7 @@ function OverlayCard({ type, hunt, slots, opts, setOpts }) {
 
   const base = React.useMemo(
     () =>
-      `${window.location.origin}${window.location.pathname}`.replace(
-        /\/+$/,
-        ""
-      ),
+      `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, ""),
     []
   );
   const url = React.useMemo(() => {
@@ -1918,9 +1550,7 @@ function OverlayCard({ type, hunt, slots, opts, setOpts }) {
         <div className="font-medium flex-1">
           {type === "hunt" ? "Overlay (Hunt)" : "Overlay (Opening)"}
         </div>
-        <ChevronDown
-          className={cn("h-4 w-4 transition", open ? "rotate-180" : "")}
-        />
+        <ChevronDown className={cn("h-4 w-4 transition", open ? "rotate-180" : "")} />
       </button>
 
       {open && (
@@ -1930,9 +1560,7 @@ function OverlayCard({ type, hunt, slots, opts, setOpts }) {
               <div className="text-xs opacity-70 mb-1">Preset</div>
               <select
                 value={opts.design}
-                onChange={(e) =>
-                  setOpts((o) => ({ ...o, design: e.target.value }))
-                }
+                onChange={(e) => setOpts((o) => ({ ...o, design: e.target.value }))}
                 className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
               >
                 {type === "hunt" ? (
@@ -1950,9 +1578,7 @@ function OverlayCard({ type, hunt, slots, opts, setOpts }) {
               <Input
                 type="number"
                 value={opts.pad}
-                onChange={(e) =>
-                  setOpts((o) => ({ ...o, pad: Number(e.target.value) || 0 }))
-                }
+                onChange={(e) => setOpts((o) => ({ ...o, pad: Number(e.target.value) || 0 }))}
                 className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
               />
             </div>
@@ -1960,9 +1586,7 @@ function OverlayCard({ type, hunt, slots, opts, setOpts }) {
               <div className="text-xs opacity-70 mb-1">Align</div>
               <select
                 value={opts.align}
-                onChange={(e) =>
-                  setOpts((o) => ({ ...o, align: e.target.value }))
-                }
+                onChange={(e) => setOpts((o) => ({ ...o, align: e.target.value }))}
                 className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
               >
                 <option value="left">left</option>
@@ -1977,21 +1601,11 @@ function OverlayCard({ type, hunt, slots, opts, setOpts }) {
               <CopyIcon className="h-4 w-4 mr-2" />
               Copy URL
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-9"
-              onClick={openOverlay}
-            >
+            <Button type="button" variant="outline" className="h-9" onClick={openOverlay}>
               <ExternalLink className="h-4 w-4 mr-2" />
               Open overlay
             </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              className="h-9"
-              onClick={() => setOpenDesigner(true)}
-            >
+            <Button type="button" variant="secondary" className="h-9" onClick={() => setOpenDesigner(true)}>
               <SlidersHorizontal className="h-4 w-4 mr-2" />
               Open Designer
             </Button>
@@ -2038,10 +1652,7 @@ function AddBonusModal({ open, onClose, numberId, onAdded }) {
     let active = true;
     (async () => {
       if (!open) return;
-      if (!dQuery.trim()) {
-        setResults([]);
-        return;
-      }
+      if (!dQuery.trim()) { setResults([]); return; }
       try {
         setBusy(true);
         const { slots } = await searchCatalogSlots(dQuery, { limit: 20 });
@@ -2052,23 +1663,13 @@ function AddBonusModal({ open, onClose, numberId, onAdded }) {
         if (active) setBusy(false);
       }
     })();
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [open, dQuery]);
 
   const resetForm = () => {
-    setQuery("");
-    setResults([]);
-    setSelected(null);
-    setBetSize("");
-    setIsSuper(false);
-    setErr("");
+    setQuery(""); setResults([]); setSelected(null); setBetSize(""); setIsSuper(false); setErr("");
   };
-  const handleClose = () => {
-    resetForm();
-    onClose && onClose();
-  };
+  const handleClose = () => { resetForm(); onClose && onClose(); };
 
   async function handleAdd() {
     try {
@@ -2092,20 +1693,12 @@ function AddBonusModal({ open, onClose, numberId, onAdded }) {
 
   return (
     <div className="fixed inset-0 z-[70]">
-      <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={handleClose}
-      />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleClose} />
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-[680px]">
         <div className="rounded-2xl border border-white/10 bg-zinc-950 text-white shadow-2xl p-4 md:p-5">
           <div className="flex items-center justify-between mb-3">
             <div className="text-lg font-semibold">Add bonus</div>
-            <button
-              type="button"
-              onClick={handleClose}
-              className="p-2 rounded-lg hover:bg-white/10 transition"
-              aria-label="Fechar"
-            >
+            <button type="button" onClick={handleClose} className="p-2 rounded-lg hover:bg-white/10 transition" aria-label="Fechar">
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -2132,35 +1725,26 @@ function AddBonusModal({ open, onClose, numberId, onAdded }) {
                   </div>
                 )}
                 {!busy && results.length === 0 && dQuery && (
-                  <div className="px-3 py-3 text-sm opacity-60">
-                    Sem resultados.
-                  </div>
+                  <div className="px-3 py-3 text-sm opacity-60">Sem resultados.</div>
                 )}
-                {!busy &&
-                  results.map((s) => (
-                    <button
-                      key={s.id}
-                      onClick={() => setSelected(s)}
-                      className="w-full text-left px-3 py-2.5 hover:bg-white/5 flex items-center gap-3"
-                    >
-                      {s.thumbnail ? (
-                        <img
-                          src={s.thumbnail}
-                          alt=""
-                          className="h-8 w-8 rounded object-cover bg-black/30"
-                        />
-                      ) : (
-                        <div className="h-8 w-8 rounded bg-white/10" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate">{s.name}</div>
-                        <div className="text-xs opacity-70 truncate">
-                          {s.provider}
-                        </div>
-                      </div>
-                      <ChevronDown className="h-4 w-4 opacity-60" />
-                    </button>
-                  ))}
+                {!busy && results.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setSelected(s)}
+                    className="w-full text-left px-3 py-2.5 hover:bg-white/5 flex items-center gap-3"
+                  >
+                    {s.thumbnail ? (
+                      <img src={s.thumbnail} alt="" className="h-8 w-8 rounded object-cover bg-black/30" />
+                    ) : (
+                      <div className="h-8 w-8 rounded bg-white/10" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{s.name}</div>
+                      <div className="text-xs opacity-70 truncate">{s.provider}</div>
+                    </div>
+                    <ChevronDown className="h-4 w-4 opacity-60" />
+                  </button>
+                ))}
               </div>
             </div>
           ) : (
@@ -2169,30 +1753,18 @@ function AddBonusModal({ open, onClose, numberId, onAdded }) {
 
               <div className="flex items-center gap-3 p-3 rounded-xl border border-white/10 bg-zinc-900">
                 {selected.thumbnail ? (
-                  <img
-                    src={selected.thumbnail}
-                    alt=""
-                    className="h-12 w-12 rounded object-cover bg-black/30"
-                  />
+                  <img src={selected.thumbnail} alt="" className="h-12 w-12 rounded object-cover bg-black/30" />
                 ) : (
                   <div className="h-12 w-12 rounded bg-white/10" />
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold truncate">{selected.name}</div>
-                  <div className="text-xs opacity-70 truncate">
-                    {selected.provider}
-                  </div>
+                  <div className="text-xs opacity-70 truncate">{selected.provider}</div>
                 </div>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => {
-                    setSelected(null);
-                    setQuery("");
-                    setResults([]);
-                    setIsSuper(false);
-                    setBetSize("");
-                  }}
+                  onClick={() => { setSelected(null); setQuery(""); setResults([]); setIsSuper(false); setBetSize(""); }}
                   className="h-9"
                 >
                   <ChevronLeft className="h-4 w-4 mr-1" />
@@ -2229,15 +1801,8 @@ function AddBonusModal({ open, onClose, numberId, onAdded }) {
                     Super bonus
                   </button>
 
-                  <Button
-                    type="button"
-                    onClick={handleAdd}
-                    disabled={busy || !selected || !betSize}
-                    className="h-11 px-5"
-                  >
-                    {busy ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : null}
+                  <Button type="button" onClick={handleAdd} disabled={busy || !selected || !betSize} className="h-11 px-5">
+                    {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                     Adicionar
                   </Button>
                 </div>
@@ -2261,12 +1826,7 @@ function EditBonusModal({ open, row, onClose, onSaved }) {
     setBet(row ? row.bet_size ?? "" : "");
     setIsSuper(
       row
-        ? !!(
-            row?.is_super ??
-            row?.super ??
-            row?._raw?.is_super ??
-            row?._raw?.super
-          )
+        ? !!(row?.is_super ?? row?.super ?? row?._raw?.is_super ?? row?._raw?.super)
         : false
     );
   }, [row]);
@@ -2295,23 +1855,14 @@ function EditBonusModal({ open, row, onClose, onSaved }) {
         <div className="rounded-2xl border border-white/10 bg-zinc-950 text-white shadow-2xl p-4 md:p-5">
           <div className="flex items-center justify-between mb-3">
             <div className="text-lg font-semibold">Editar bonus</div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-2 rounded-lg hover:bg-white/10 transition"
-              aria-label="Fechar"
-            >
+            <button type="button" onClick={onClose} className="p-2 rounded-lg hover:bg-white/10 transition" aria-label="Fechar">
               <X className="h-5 w-5" />
             </button>
           </div>
 
           <div className="flex items-center gap-3 mb-3">
             {row?.thumbnail ? (
-              <img
-                src={row.thumbnail}
-                alt=""
-                className="h-10 w-10 rounded object-cover"
-              />
+              <img src={row.thumbnail} alt="" className="h-10 w-10 rounded object-cover" />
             ) : null}
             <div className="min-w-0">
               <div className="text-sm font-medium truncate">{row?.name}</div>
@@ -2344,9 +1895,7 @@ function EditBonusModal({ open, row, onClose, onSaved }) {
                     : "border-white/10 text-white/70 hover:bg-white/10"
                 )}
               >
-                <Star
-                  className={cn("h-4 w-4", isSuper ? "fill-fuchsia-400" : "")}
-                />
+                <Star className={cn("h-4 w-4", isSuper ? "fill-fuchsia-400" : "")} />
                 <span className="font-medium">Super bonus</span>
               </button>
             </div>
@@ -2354,9 +1903,7 @@ function EditBonusModal({ open, row, onClose, onSaved }) {
 
           <div className="mt-4 flex items-center justify-end gap-2">
             <Button type="button" onClick={save} disabled={busy}>
-              {busy ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : null}
+              {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
               Guardar
             </Button>
           </div>
@@ -2374,17 +1921,9 @@ function ConfirmDeleteModal({ open, slot, onCancel, onConfirm }) {
       <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-[520px]">
         <div className="rounded-2xl border border-white/10 bg-zinc-950 text-white shadow-2xl p-5">
-          <div className="text-lg font-semibold mb-3">
-            {t("eliminarBonus")}
-          </div>
+          <div className="text-lg font-semibold mb-3">{t("eliminarBonus")}</div>
           <div className="flex items-center gap-3 mb-4">
-            {slot?.thumbnail ? (
-              <img
-                src={slot.thumbnail}
-                alt=""
-                className="h-10 w-10 rounded object-cover"
-              />
-            ) : null}
+            {slot?.thumbnail ? <img src={slot.thumbnail} alt="" className="h-10 w-10 rounded object-cover" /> : null}
             <div className="min-w-0">
               <div className="text-sm font-medium truncate">{slot?.name}</div>
               <div className="text-xs opacity-70 truncate">{slot?.provider}</div>
@@ -2392,13 +1931,8 @@ function ConfirmDeleteModal({ open, slot, onCancel, onConfirm }) {
           </div>
           <div className="text-sm opacity-80 mb-5">{t("eliminarPerg")}</div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onCancel}>
-              {t("cancel")}
-            </Button>
-            <Button
-              className="bg-red-600 hover:bg-red-700 text-white"
-              onClick={onConfirm}
-            >
+            <Button variant="outline" onClick={onCancel}>{t("cancel")}</Button>
+            <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={onConfirm}>
               <Trash2 className="h-4 w-4 mr-2" />
               {t("delete")}
             </Button>
@@ -2444,17 +1978,16 @@ export default function HuntDetail({ numberId }) {
 
   const [sortBy, setSortBy] = React.useState({ key: "order", dir: 1 });
 
-const [huntOpts, setHuntOpts] = useOverlaySettings({
-  type: "hunt",
-  huntNumberId: nId,
-  defaultValue: DEFAULT_HUNT_OVERLAY,
-});
-const [openingOpts, setOpeningOpts] = useOverlaySettings({
-  type: "opening",
-  huntNumberId: nId,
-  defaultValue: DEFAULT_OPENING_OVERLAY,
-});
-
+  const [huntOpts, setHuntOpts] = useOverlaySettings({
+    type: "hunt",
+    huntNumberId: nId,
+    defaultValue: DEFAULT_HUNT_OVERLAY,
+  });
+  const [openingOpts, setOpeningOpts] = useOverlaySettings({
+    type: "opening",
+    huntNumberId: nId,
+    defaultValue: DEFAULT_OPENING_OVERLAY,
+  });
 
   const sortedSlots = React.useMemo(() => {
     const arr = [...slots];
@@ -2472,8 +2005,7 @@ const [openingOpts, setOpeningOpts] = useOverlaySettings({
     if (sortBy.key === "date") {
       const getTime = (r) => {
         const raw = r?._raw || {};
-        const c1 =
-          raw.created_at || raw.createdAt || raw.timestamp || r.created_at;
+        const c1 = raw.created_at || raw.createdAt || raw.timestamp || r.created_at;
         return c1 ? new Date(c1).getTime() : 0;
       };
       arr.sort((a, b) => (getTime(a) - getTime(b)) * sortBy.dir || a.id - b.id);
@@ -2493,12 +2025,8 @@ const [openingOpts, setOpeningOpts] = useOverlaySettings({
 
   // drag & drop
   const dragIndex = React.useRef(null);
-  function onDragStart(i) {
-    dragIndex.current = i;
-  }
-  function onDragOver(e) {
-    e.preventDefault();
-  }
+  function onDragStart(i) { dragIndex.current = i; }
+  function onDragOver(e) { e.preventDefault(); }
   async function onDrop(i) {
     const from = dragIndex.current;
     if (from == null || from === i) return;
@@ -2515,9 +2043,7 @@ const [openingOpts, setOpeningOpts] = useOverlaySettings({
     setSlots(arr);
     dragIndex.current = null;
 
-    try {
-      await persistOrder(arr);
-    } catch {}
+    try { await persistOrder(arr); } catch {}
   }
 
   React.useEffect(() => {
@@ -2562,16 +2088,11 @@ const [openingOpts, setOpeningOpts] = useOverlaySettings({
     }
   }, [nId]);
 
-  React.useEffect(() => {
-    refreshSlots();
-  }, [refreshSlots]);
+  React.useEffect(() => { refreshSlots(); }, [refreshSlots]);
 
   const kpis = React.useMemo(() => {
     const startFromHunt = Number(hunt?.start_cost);
-    const startFromSlots = slots.reduce(
-      (a, s) => a + (toNum(s.bet_size) || 0),
-      0
-    );
+    const startFromSlots = slots.reduce((a, s) => a + (toNum(s.bet_size) || 0), 0);
     const start = Number.isFinite(startFromHunt) ? startFromHunt : startFromSlots;
 
     const amountWon = slots.reduce((a, s) => a + (toNum(s.payout) || 0), 0);
@@ -2580,27 +2101,13 @@ const [openingOpts, setOpeningOpts] = useOverlaySettings({
     return { amountWon, bonusCount, startCost: start };
   }, [hunt, slots]);
 
-  function goBack() {
-    window.location.hash = "#/hunts";
-  }
-
-  const [openRedeem, setOpenRedeem] = React.useState(false);
+  function goBack() { window.location.hash = "#/hunts"; }
 
   const [confirmStart, setConfirmStart] = React.useState(false);
-
   const openStart = () => setConfirmStart(true);
-  const confirmStartYes = () => {
-    setConfirmStart(false);
-    setOpenRedeem(true);
-  };
+  const confirmStartYes = () => { setConfirmStart(false); /* aqui abririas o fluxo de redeem */ };
 
-  if (busy) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 py-10 text-sm opacity-70">
-        A carregar…
-      </div>
-    );
-  }
+  if (busy) return <div className="max-w-7xl mx-auto px-4 py-10 text-sm opacity-70">A carregar…</div>;
   if (!hunt) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-10">
@@ -2628,28 +2135,15 @@ const [openingOpts, setOpeningOpts] = useOverlaySettings({
         </div>
       </div>
 
-      {/* KPIs topo da página (não do overlay) */}
+      {/* KPIs topo da página */}
       <div className="grid md:grid-cols-4 gap-2 mb-3">
         {[
           ["Bonus Count", String(kpis.bonusCount), ""],
           [t("startCost"), fmtMoney(kpis.startCost), ""],
           [t("amountWon"), fmtMoney(kpis.amountWon), ""],
         ].map(([label, value, color], i) => (
-          <div
-            key={i}
-            className={cn(
-              "rounded-xl border p-3",
-              isDark ? "border-white/10 bg-white/5" : "border-zinc-200 bg-white"
-            )}
-          >
-            <div
-              className={cn(
-                "text-[11px] leading-none mb-1",
-                isDark ? "text-white/60" : "text-zinc-600"
-              )}
-            >
-              {label}
-            </div>
+          <div key={i} className={cn("rounded-xl border p-3", isDark ? "border-white/10 bg-white/5" : "border-zinc-200 bg-white")}>
+            <div className={cn("text-[11px] leading-none mb-1", isDark ? "text-white/60" : "text-zinc-600")}>{label}</div>
             <div className={cn("font-semibold", numCls, color)}>{value}</div>
           </div>
         ))}
@@ -2660,12 +2154,7 @@ const [openingOpts, setOpeningOpts] = useOverlaySettings({
         <Button
           variant="outline"
           className="h-10"
-          onClick={() =>
-            setSortBy((s) => ({
-              key: "betsize",
-              dir: s.key === "betsize" ? -s.dir : -1,
-            }))
-          }
+          onClick={() => setSortBy((s) => ({ key: "betsize", dir: s.key === "betsize" ? -s.dir : -1 }))}
         >
           <SlidersHorizontal className="mr-2 h-4 w-4" />
           {t("betsize")}
@@ -2673,21 +2162,12 @@ const [openingOpts, setOpeningOpts] = useOverlaySettings({
         <Button
           variant="outline"
           className="h-10"
-          onClick={() =>
-            setSortBy((s) => ({
-              key: "date",
-              dir: s.key === "date" ? -s.dir : -1,
-            }))
-          }
+          onClick={() => setSortBy((s) => ({ key: "date", dir: s.key === "date" ? -s.dir : -1 }))}
         >
           <CalendarIcon className="mr-2 h-4 w-4" />
           {t("date")}
         </Button>
-        <Button
-          variant="outline"
-          className="h-10"
-          onClick={() => setSortBy({ key: "random", dir: 1 })}
-        >
+        <Button variant="outline" className="h-10" onClick={() => setSortBy({ key: "random", dir: 1 })}>
           <Shuffle className="mr-2 h-4 w-4" />
           {t("random")}
         </Button>
@@ -2709,36 +2189,14 @@ const [openingOpts, setOpeningOpts] = useOverlaySettings({
       <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 mb-4">
         <div className="text-sm font-medium mb-2">Compact widget</div>
         <div className="grid lg:grid-cols-2 gap-3">
-          <OverlayCard
-            type="hunt"
-            hunt={hunt}
-            slots={sortedSlots}
-            opts={huntOpts}
-            setOpts={setHuntOpts}
-          />
-          <OverlayCard
-            type="opening"
-            hunt={hunt}
-            slots={sortedSlots}
-            opts={openingOpts}
-            setOpts={setOpeningOpts}
-          />
+          <OverlayCard type="hunt" hunt={hunt} slots={sortedSlots} opts={huntOpts} setOpts={setHuntOpts} />
+          <OverlayCard type="opening" hunt={hunt} slots={sortedSlots} opts={openingOpts} setOpts={setOpeningOpts} />
         </div>
       </div>
 
       {/* Tabela */}
-      <div
-        className={cn(
-          "rounded-xl border overflow-hidden",
-          isDark ? "border-white/10" : "border-zinc-200"
-        )}
-      >
-        <div
-          className={cn(
-            "grid grid-cols-12 items-center px-4 py-3 text-xs font-semibold",
-            isDark ? "bg-white/[0.04]" : "bg-zinc-50"
-          )}
-        >
+      <div className={cn("rounded-xl border overflow-hidden", isDark ? "border-white/10" : "border-zinc-200")}>
+        <div className={cn("grid grid-cols-12 items-center px-4 py-3 text-xs font-semibold", isDark ? "bg-white/[0.04]" : "bg-zinc-50")}>
           <div className="col-span-7">{t("bonus")}</div>
           <div className="col-span-1 text-center">{t("betsize")}</div>
           <div className="col-span-2 text-center">{t("payout")}</div>
@@ -2746,14 +2204,10 @@ const [openingOpts, setOpeningOpts] = useOverlaySettings({
           <div className="col-span-1 text-right">{t("actions")}</div>
         </div>
 
-        {errSlots && (
-          <div className="px-4 py-3 text-sm text-red-400">{errSlots}</div>
-        )}
+        {errSlots && <div className="px-4 py-3 text-sm text-red-400">{errSlots}</div>}
 
         {sortedSlots.length === 0 && !errSlots && (
-          <div className="px-4 py-6 text-sm opacity-70">
-            Ainda sem slots neste hunt.
-          </div>
+          <div className="px-4 py-6 text-sm opacity-70">Ainda sem slots neste hunt.</div>
         )}
 
         {sortedSlots.map((s, i) => {
@@ -2764,9 +2218,7 @@ const [openingOpts, setOpeningOpts] = useOverlaySettings({
               className={cn(
                 "grid grid-cols-12 items-center px-4 py-4 min-h-[56px] border-t",
                 isDark ? "border-white/10" : "border-zinc-200",
-                isSuper
-                  ? "bg-fuchsia-500/5 border-l-4 border-l-fuchsia-400/70"
-                  : ""
+                isSuper ? "bg-fuchsia-500/5 border-l-4 border-l-fuchsia-400/70" : ""
               )}
               draggable
               onDragStart={() => onDragStart(i)}
@@ -2776,11 +2228,7 @@ const [openingOpts, setOpeningOpts] = useOverlaySettings({
               <div className="col-span-7 flex items-center gap-3 min-w-0">
                 <div className="text-[11px] opacity-60 w-6">#{i + 1}</div>
                 {s.thumbnail ? (
-                  <img
-                    src={s.thumbnail}
-                    alt=""
-                    className="h-8 w-8 rounded object-cover"
-                  />
+                  <img src={s.thumbnail} alt="" className="h-8 w-8 rounded object-cover" />
                 ) : (
                   <div className="h-8 w-8 rounded bg-white/10" />
                 )}
@@ -2794,37 +2242,18 @@ const [openingOpts, setOpeningOpts] = useOverlaySettings({
                       </span>
                     )}
                   </div>
-                  <div className="text-xs opacity-70 truncate">
-                    {s.provider || "—"}
-                  </div>
+                  <div className="text-xs opacity-70 truncate">{s.provider || "—"}</div>
                 </div>
               </div>
 
-              <div
-                className={cn(
-                  "col-span-1 text-center flex items-center justify-center",
-                  numCls
-                )}
-              >
+              <div className={cn("col-span-1 text-center flex items-center justify-center", numCls)}>
                 {s.bet_size ?? "—"}
               </div>
-              <div
-                className={cn(
-                  "col-span-2 text-center flex items-center justify-center",
-                  numCls
-                )}
-              >
+              <div className={cn("col-span-2 text-center flex items-center justify-center", numCls)}>
                 {s.payout != null ? fmtMoney(s.payout) : "—"}
               </div>
-              <div
-                className={cn(
-                  "col-span-1 text-center flex items-center justify-center",
-                  numCls
-                )}
-              >
-                {s.multiplier != null
-                  ? Number(s.multiplier).toFixed(2)
-                  : "—"}
+              <div className={cn("col-span-1 text-center flex items-center justify-center", numCls)}>
+                {s.multiplier != null ? Number(s.multiplier).toFixed(2) : "—"}
               </div>
 
               <div className="col-span-1 flex items-center justify-end gap-2">
@@ -2834,10 +2263,7 @@ const [openingOpts, setOpeningOpts] = useOverlaySettings({
                   size="icon"
                   title="Editar"
                   className="h-7 w-7"
-                  onClick={() => {
-                    setEditRow(s);
-                    setEditOpen(true);
-                  }}
+                  onClick={() => { setEditRow(s); setEditOpen(true); }}
                 >
                   <Pencil className="h-4 w-4" />
                 </Button>
@@ -2848,10 +2274,7 @@ const [openingOpts, setOpeningOpts] = useOverlaySettings({
                   size="icon"
                   title="Eliminar"
                   className="h-7 w-7 text-white"
-                  onClick={() => {
-                    setDelRow(s);
-                    setDelOpen(true);
-                  }}
+                  onClick={() => { setDelRow(s); setDelOpen(true); }}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -2897,22 +2320,15 @@ const [openingOpts, setOpeningOpts] = useOverlaySettings({
       {/* Início do Redeem (apenas confirmação) */}
       {confirmStart && (
         <div className="fixed inset-0 z-[95]">
-          <div
-            className="absolute inset-0 bg-black/60"
-            onClick={() => setConfirmStart(false)}
-          />
+          <div className="absolute inset-0 bg-black/60" onClick={() => setConfirmStart(false)} />
           <div className="absolute left-1/2 top-1/2 w-[92vw] max-w-[520px] -translate-x-1/2 -translate-y-1/2">
             <div className="rounded-2xl border border-white/10 bg-zinc-950 text-white shadow-2xl p-5">
-              <div className="text-lg font-semibold mb-2">
-                Começar o Opening?
-              </div>
+              <div className="text-lg font-semibold mb-2">Começar o Opening?</div>
               <div className="text-sm opacity-80 mb-5">
                 Irás iniciar o redeeming das slots. Queres mesmo começar?
               </div>
               <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setConfirmStart(false)}>
-                  Cancelar
-                </Button>
+                <Button variant="outline" onClick={() => setConfirmStart(false)}>Cancelar</Button>
                 <Button onClick={confirmStartYes}>Começar</Button>
               </div>
             </div>
