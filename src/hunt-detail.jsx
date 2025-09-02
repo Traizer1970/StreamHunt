@@ -26,8 +26,17 @@ import {
   Wallet,
   Scale,
   Gift,
+  Info,
 } from "lucide-react";
 
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+import { Switch } from "@/components/ui/switch";
 import { getHuntByNumberId } from "@/lib/hunts";
 import {
   listHuntSlots,
@@ -309,10 +318,40 @@ function LayoutPresetChip({ label, variant, active, onClick }) {
   );
 }
 
+function Hint({ label, children, side = "top" }) {
+  return (
+    <TooltipProvider delayDuration={80}>
+      <Tooltip>
+        <TooltipTrigger asChild>{children}</TooltipTrigger>
+        <TooltipContent
+          side={side}
+          className="z-[200] px-2 py-1.5 rounded-lg border border-white/15 bg-zinc-950/80 backdrop-blur text-xs shadow-xl"
+        >
+          {label}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
+function HelpText({ children }) {
+  return (
+    <div className="text-[11px] mt-1 text-white/70 flex items-center gap-1">
+      <Info className="h-3.5 w-3.5 opacity-70" />
+      <span className="leading-snug">{children}</span>
+    </div>
+  );
+}
+
+// deixa os “segmenteds” quebrarem para não sobrepor
 function Segmented({ value, onChange, options, className = "" }) {
   return (
-    <div className={cn("inline-flex rounded-lg border border-white/10 bg-zinc-900 p-0.5", className)}>
+    <div
+      className={cn(
+        "inline-flex flex-wrap gap-1 rounded-lg border border-white/10 bg-zinc-900 p-0.5",
+        className
+      )}
+    >
       {options.map((o) => {
         const val = o.value ?? o;
         const label = o.label ?? o;
@@ -335,6 +374,20 @@ function Segmented({ value, onChange, options, className = "" }) {
   );
 }
 
+// switches estilizados para aquelas opções booleanas
+function Toggle({ label, checked, onChange, hint }) {
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-white/10 bg-zinc-900/60 px-3 py-2">
+      <div>
+        <div className="text-sm">{label}</div>
+        {hint ? <HelpText>{hint}</HelpText> : null}
+      </div>
+      <Switch checked={!!checked} onCheckedChange={onChange} />
+    </div>
+  );
+}
+
+
 function Field({ label, hint, children }) {
   return (
     <div>
@@ -345,25 +398,37 @@ function Field({ label, hint, children }) {
   );
 }
 
-function PresetChip({ name, colors = [], onClick, active }) {
+function PanelGradientSwatches({ value, onChange }) {
+  const entries = Object.entries(PANEL_PRESETS); // [name,[start,end]]
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "w-full flex items-center gap-2 h-9 px-3 rounded-lg border transition truncate",
-        active ? "border-white/30 bg-white/10" : "border-white/10 hover:bg-white/5"
-      )}
-      title={name}
-    >
-      <span
-        className="h-4 w-8 rounded shrink-0"
-        style={{ background: `linear-gradient(90deg, ${colors[0]} 0%, ${colors[1]} 100%)` }}
-      />
-      <span className="text-sm truncate">{name}</span>
-    </button>
+    <div className="flex flex-wrap gap-2">
+      {entries.map(([name, [start, end]]) => {
+        const active = value?.[0] === start && value?.[1] === end;
+        const btn = (
+          <button
+            type="button"
+            onClick={() => onChange([start, end])}
+            aria-label={name}
+            className={cn(
+              "w-10 h-8 rounded-md border",
+              active ? "ring-2 ring-white/70" : "opacity-85 hover:opacity-100"
+            )}
+            style={{
+              background: `linear-gradient(90deg, ${start} 0%, ${end} 100%)`,
+              borderColor: "rgba(255,255,255,.15)",
+            }}
+          />
+        );
+        return (
+          <Hint key={name} label={name}>
+            {btn}
+          </Hint>
+        );
+      })}
+    </div>
   );
 }
+
 
 /* ───────────────────────── db helpers ───────────────────────── */
 async function updateSuperFlag(rowId, value) {
@@ -1071,25 +1136,28 @@ function KpiPresetSwatches({ value, onChange }) {
     <div className="flex flex-wrap gap-2">
       {Object.entries(KPI_COLOR_PRESETS).map(([key, preset]) => {
         const active = value === key;
-        return (
+        const btn = (
           <button
-            key={key}
             type="button"
             onClick={() => onChange(key)}
-            title={key}                          // nome só em tooltip
+            aria-label={key}
             className={cn(
               "w-8 h-8 rounded-md border inline-flex items-center justify-center",
-              active ? "ring-2 ring-white/70" : "opacity-80 hover:opacity-100"
+              active ? "ring-2 ring-white/70" : "opacity-85 hover:opacity-100"
             )}
             style={{ background: preset.bg, borderColor: preset.border }}
-          >
-            <span className="sr-only">{key}</span>
-          </button>
+          />
+        );
+        return (
+          <Hint key={key} label={key}>
+            {btn}
+          </Hint>
         );
       })}
     </div>
   );
 }
+
 
 function PanelPresetSwatches({ value, onChange }) {
   // value: [start,end]
@@ -1226,14 +1294,10 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={!!opts.shine} onChange={(e) => setOpts(o => ({ ...o, shine: !!e.target.checked }))} />
-          Shine
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={!!opts.pulse} onChange={(e) => setOpts(o => ({ ...o, pulse: !!e.target.checked }))} />
-          Pulse
-        </label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+   <Toggle label="Shine" checked={!!opts.shine} onChange={(v)=>setOpts(o=>({...o,shine:!!v}))}/>
+   <Toggle label="Pulse" checked={!!opts.pulse} onChange={(v)=>setOpts(o=>({...o,pulse:!!v}))}/>
+ </div>
       </div>
       <div className="text-[11px] opacity-60">Dica: em OBS usa o mesmo Width/Height do browser source para evitar cortes.</div>
     </Section>
@@ -1293,10 +1357,8 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 
         {opts.layout === "carousel" && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={!!opts.autoScroll} onChange={(e) => setOpts(o => ({ ...o, autoScroll: !!e.target.checked }))} />
-              Auto-scroll
-            </label>
+  <Toggle label="Auto-scroll" checked={!!opts.autoScroll} onChange={(v)=>setOpts(o=>({...o,autoScroll:!!v}))}/>
+
             <Field label="Velocidade (seg/loop)" hint="Menor = mais rápido">
               <Input
                 type="number"
@@ -1503,48 +1565,55 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 
     {/* CORES & EFEITOS */}
 <Section
-  title="Colors & Effects"
-  right={
-    <Button
-      variant="outline"
-      className="h-8 px-2"
-      onClick={() =>
-        setOpts(o => ({
-          ...o,
-          panelBorder:"rgba(255,255,255,.12)",
-          textColor:"#e5e7eb",
-          subtextColor:"#9ca3af",
-          accentColor:"#fb7185",
-          chipBg:"rgba(255,255,255,.08)"
-        }))
-      }
-    >
-      Reset
-    </Button>
-  }
->
+   title="Colors & Effects"
+   right={
+     <Button
+       variant="outline"
+       className="h-8 px-2"
+       onClick={() =>
+         setOpts(o => ({
+           ...o,
+           panelBgStart: "#0b1020",
+           panelBgEnd: "#111827",
+           panelBorder: "rgba(255,255,255,.12)",
+           textColor: "#e5e7eb",
+           subtextColor: "#9ca3af",
+           accentColor: "#fb7185",
+           chipBg: "rgba(255,255,255,.08)",
+         }))
+       }
+     >
+       Reset
+     </Button>
+   }
+ >
   {/* Swatches de gradiente (nome só no hover) */}
   <Field label="Panel gradient">
-    <PanelPresetSwatches
-      value={[opts.panelBgStart, opts.panelBgEnd]}
-      onChange={([start, end]) =>
-        setOpts(o => ({ ...o, panelBgStart: start, panelBgEnd: end }))
-      }
-    />
-  </Field>
+  <PanelPresetSwatches
+    value={[opts.panelBgStart, opts.panelBgEnd]}
+    onChange={([start, end]) =>
+      setOpts(o => ({ ...o, panelBgStart: start, panelBgEnd: end }))
+    }
+  />
+</Field>
+
 
   {/* Background start/end — inputs com swatch */}
   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-    <ColorField
-      label="Background start"
-      value={opts.panelBgStart ?? ""}
-      onChange={(v) => setOpts(o => ({ ...o, panelBgStart: v }))}
-    />
-    <ColorField
-      label="Background end"
-      value={opts.panelBgEnd ?? ""}
-      onChange={(v) => setOpts(o => ({ ...o, panelBgEnd: v }))}
-    />
+    <Field label="Background start">
+      <ColorField
+        label=""
+        value={opts.panelBgStart ?? ""}
+        onChange={(v) => setOpts((o) => ({ ...o, panelBgStart: v }))}
+      />
+    </Field>
+    <Field label="Background end">
+      <ColorField
+        label=""
+        value={opts.panelBgEnd ?? ""}
+        onChange={(v) => setOpts((o) => ({ ...o, panelBgEnd: v }))}
+      />
+    </Field>
   </div>
 
   <ColorField
@@ -1623,14 +1692,9 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
     {/* OPENING header toggles (quando não é hunt) */}
     {type !== "hunt" && (
       <Section title="Header (Opening)">
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={opts.showTitle !== false} onChange={(e)=>setOpts(o=>({...o,showTitle:!!e.target.checked}))}/>
-          Mostrar título do hunt
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={opts.showCurrent !== false} onChange={(e)=>setOpts(o=>({...o,showCurrent:!!e.target.checked}))}/>
-          Mostrar slot atual
-        </label>
+ <Toggle label={t("showHuntTitle")} checked={opts.showTitle !== false} onChange={(v)=>setOpts(o=>({...o,showTitle:!!v}))}/>
+ <Toggle label={t("showCurrentSlot")} checked={opts.showCurrent !== false} onChange={(v)=>setOpts(o=>({...o,showCurrent:!!v}))}/>
+
       </Section>
     )}
   </div>
