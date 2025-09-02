@@ -268,23 +268,30 @@ async function persistOrder(slots) {
 
 /* ───────────────────────── small hooks ───────────────────────── */
 /* Salvar/ler opções do overlay no Supabase (com IS NULL + onConflict consistente) */
+/* ── substituir a versão atual por esta ── */
 function useOverlaySettings({ type, huntNumberId, defaultValue }) {
   const { user } = useAuth();
   const [opts, setOpts] = React.useState(defaultValue);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState(null);
+  const [rowId, setRowId] = React.useState(null);
+  const debounced = useDebounced(opts, 400);
 
+  // 1) Ler opções (e descobrir o id da linha, se existir)
   React.useEffect(() => {
     let alive = true;
     (async () => {
       try {
+        setLoading(true);
+        setError(null);
         if (!user) { setLoading(false); return; }
 
         let q = supabase
           .from("overlay_settings")
           .select("id, opts, updated_at")
           .eq("user_id", user.id)
-          .eq("type", type);
+          .eq("type", type)
+          .limit(1);
 
         if (huntNumberId == null) q = q.is("hunt_number_id", null);
         else                      q = q.eq("hunt_number_id", huntNumberId);
@@ -292,11 +299,14 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
         const { data, error } = await q.maybeSingle();
         if (error && error.code !== "PGRST116") throw error;
 
+        if (!alive) return;
+
+        if (data?.id) setRowId(data.id);
         const merged = { ...defaultValue, ...(data?.opts || {}) };
-        if (alive) setOpts(merged);
+        setOpts(merged);
       } catch (e) {
         if (alive) setError(e);
-        console.warn("overlay_settings load:", e?.message || e);
+        console.warn("[overlay_settings] load failed:", e?.message || e);
       } finally {
         if (alive) setLoading(false);
       }
@@ -304,10 +314,7 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
     return () => { alive = false; };
   }, [user?.id, type, huntNumberId]);
 
-  // debounce
-  const debounced = useDebounced(opts, 400);
-
-  // GUARDAR (upsert)
+  // 2) Gravar — compatível com PG14/PG15 e sem depender de onConflict
   React.useEffect(() => {
     (async () => {
       try {
@@ -321,19 +328,47 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
           updated_at: new Date().toISOString(),
         };
 
-        const { error } = await supabase
-          .from("overlay_settings")
-          .upsert(payload, {
-            onConflict: "user_id,type,hunt_number_id",
-            returning: "minimal",
-          });
+        if (rowId) {
+          const { error } = await supabase
+            .from("overlay_settings")
+            .update({ opts: payload.opts, updated_at: payload.updated_at })
+            .eq("id", rowId);
+          if (error) throw error;
+          return;
+        }
 
-        if (error) throw error;
+        // Se ainda não temos rowId, tentamos descobrir (evita duplicados)
+        let q = supabase
+          .from("overlay_settings")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("type", type)
+          .limit(1);
+        if (huntNumberId == null) q = q.is("hunt_number_id", null);
+        else                      q = q.eq("hunt_number_id", huntNumberId);
+        const probe = await q.maybeSingle();
+
+        if (probe.data?.id) {
+          setRowId(probe.data.id);
+          const { error } = await supabase
+            .from("overlay_settings")
+            .update({ opts: payload.opts, updated_at: payload.updated_at })
+            .eq("id", probe.data.id);
+          if (error) throw error;
+        } else {
+          const { data, error } = await supabase
+            .from("overlay_settings")
+            .insert(payload)
+            .select("id")
+            .single();
+          if (error) throw error;
+          if (data?.id) setRowId(data.id);
+        }
       } catch (e) {
-        console.warn("Falha a gravar overlay_settings:", e?.message || e);
+        console.warn("[overlay_settings] save failed:", e?.message || e);
       }
     })();
-  }, [user?.id, type, huntNumberId, debounced]);
+  }, [user?.id, type, huntNumberId, debounced, rowId]);
 
   return [opts, setOpts, { loading, error }];
 }
