@@ -2129,6 +2129,31 @@ const kpis = React.useMemo(() => {
   return { amountWon, bonusCount, startCost: start };
 }, [hunt, slots]);
 
+// Objetivo = Start - Stop (se Stop > 0), senão = Start
+const goalToWin = React.useMemo(() => {
+  const start = Number(kpis.startCost) || 0;
+  const stop  = toNum(stopBox.value);
+  return stop > 0 ? Math.max(0, start - stop) : start;
+}, [kpis.startCost, stopBox.value]);
+
+// Quanto falta para o objetivo
+const leftToGoal = React.useMemo(() => {
+  return Math.max(0, goalToWin - (Number(kpis.amountWon) || 0));
+}, [goalToWin, kpis.amountWon]);
+
+// Soma das bets dos bónus ainda por abrir (assumo payout == null)
+const remainingBet = React.useMemo(() => {
+  return slots
+    .filter(s => s.payout == null)
+    .reduce((a, s) => a + toNum(s.bet_size), 0);
+}, [slots]);
+
+// X médio necessário por bonus
+const beX = React.useMemo(() => {
+  return remainingBet > 0 ? leftToGoal / remainingBet : 0;
+}, [leftToGoal, remainingBet]);
+
+
 const beLeft = React.useMemo(() => {
   const stop = toNum(stopBox.value);
   const target = stop > 0 ? stop : kpis.startCost; // usa STOP se > 0, senão Start
@@ -2185,9 +2210,12 @@ const beLeft = React.useMemo(() => {
         {/* [ADICIONAR] B/E (usa STOP se definido) */}
 <div className={cn("rounded-xl border p-3", isDark ? "border-white/10 bg-white/5" : "border-zinc-200 bg-white")}>
   <div className={cn("text-[11px] leading-none mb-1", isDark ? "text-white/60" : "text-zinc-600")}>
-    {t("kpiBE")}
+    {t("kpiBE")} (X)
   </div>
-  <div className={cn("font-semibold", numCls)}>{fmtMoney(beLeft)}</div>
+  <div className={cn("font-semibold", numCls)}>{fmtPlain(beX, 2)}x</div>
+  <div className={cn("text-[11px] mt-0.5", isDark ? "text-white/50" : "text-zinc-500")}>
+    faltam {fmtMoney(leftToGoal)}
+  </div>
 </div>
 
 {/* [ADICIONAR] STOP (editável, por defeito 0) */}
