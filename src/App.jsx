@@ -249,15 +249,7 @@ const NavLink = ({ to, current, onClick, children }) => {
 /* ---------- Theme toggle ---------- */
 function ThemeIconToggle() {
   const { isDark, toggle } = useTheme();
-  return (
-    <button
-      onClick={toggle}
-      className={cn("p-2 rounded-xl border transition", isDark ? "border-white/10 hover:bg-white/5" : "border-zinc-300 hover:bg-zinc-100")}
-      title={isDark ? "Light mode" : "Dark mode"}
-    >
-      {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-    </button>
-  );
+  return null;
 }
 
 /* ---------- Simple modal ---------- */
@@ -411,8 +403,8 @@ const UserMenu = ({ onGoDashboard, onGoSettings, onLogout }) => {
 
 // ------------------ Shell ------------------
 const Shell = ({ route, navigate, children }) => {
-  const [isDark, setIsDark] = useState(true);
-  const toggle = () => setIsDark((v) => !v);
+  const isDark = true;
+  const toggle = () => {};
 
   // Auth modal
   const [showAuth, setShowAuth] = useState(false);
