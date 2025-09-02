@@ -232,6 +232,80 @@ function ColorField({ label, value, onChange, placeholder = "#RRGGBB ou rgba()" 
     </div>
   );
 }
+function Section({ title, defaultOpen = true, right, children }) {
+  const [open, setOpen] = React.useState(defaultOpen);
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/5">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full px-3 py-2 flex items-center justify-between"
+      >
+        <div className="text-sm font-medium">{title}</div>
+        <div className="flex items-center gap-2">
+          {right}
+          <ChevronDown className={cn("h-4 w-4 transition", open ? "rotate-180" : "")} />
+        </div>
+      </button>
+      {open && <div className="p-3 space-y-3">{children}</div>}
+    </div>
+  );
+}
+
+function Segmented({ value, onChange, options, className = "" }) {
+  return (
+    <div className={cn("inline-flex rounded-lg border border-white/10 bg-zinc-900 p-0.5", className)}>
+      {options.map((o) => {
+        const val = o.value ?? o;
+        const label = o.label ?? o;
+        const active = String(value) === String(val);
+        return (
+          <button
+            key={val}
+            type="button"
+            onClick={() => onChange(val)}
+            className={cn(
+              "px-3 h-9 rounded-md text-sm transition",
+              active ? "bg-white/10" : "text-white/70 hover:text-white"
+            )}
+          >
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function Field({ label, hint, children }) {
+  return (
+    <div>
+      <div className="text-xs opacity-70 mb-1">{label}</div>
+      {children}
+      {hint ? <div className="text-[11px] opacity-60 mt-1">{hint}</div> : null}
+    </div>
+  );
+}
+
+function PresetChip({ name, colors = [], onClick, active }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-2 h-9 px-3 rounded-lg border transition",
+        active ? "border-white/30 bg-white/10" : "border-white/10 hover:bg-white/5"
+      )}
+      title={name}
+    >
+      <span
+        className="h-4 w-8 rounded"
+        style={{ background: `linear-gradient(90deg, ${colors[0]} 0%, ${colors[1]} 100%)` }}
+      />
+      <span className="text-sm">{name}</span>
+    </button>
+  );
+}
 
 /* ───────────────────────── db helpers ───────────────────────── */
 async function updateSuperFlag(rowId, value) {
@@ -981,584 +1055,404 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 
       {/* Body */}
       <div className="absolute inset-x-0 top-14 bottom-0 md:flex overflow-hidden">
-        {/* Sidebar */}
-        <div className="border-r border-white/10 bg-zinc-950/70 overflow-auto w-full md:w-[360px] lg:w-[420px] xl:w-[480px] text-white min-w-0">
-          <div className="p-4 space-y-4">
-            {/* Canvas */}
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-              <div className="text-xs opacity-70 mb-1">Canvas / OBS</div>
-              <div className="grid grid-cols-2 gap-2 min-w-0">
-                <div>
-                  <div className="text-xs opacity-70 mb-1">Base width</div>
-                  <Input
-                    type="number"
-                    value={opts.baseW}
-                    onChange={(e) => setOpts((o) => ({ ...o, baseW: Number(e.target.value) || 0 }))}
-                    className="h-9 bg-zinc-900 border-white/10 text-white"
-                  />
-                </div>
-                <div>
-                  <div className="text-xs opacity-70 mb-1">Base height</div>
-                  <Input
-                    type="number"
-                    value={opts.baseH}
-                    onChange={(e) => setOpts((o) => ({ ...o, baseH: Number(e.target.value) || 0 }))}
-                    className="h-9 bg-zinc-900 border-white/10 text-white"
-                  />
-                </div>
-              </div>
+{/* Sidebar (novo layout) */}
+<div className="border-r border-white/10 bg-zinc-950/70 overflow-auto w-full md:w-[360px] lg:w-[420px] xl:w-[480px] text-white min-w-0">
+  <div className="p-4 space-y-4">
+    {/* CANVAS */}
+    <Section
+      title="Canvas / OBS"
+      right={
+        <Button
+          variant="outline"
+          className="h-8 px-2"
+          onClick={() => setOpts(o => ({ ...o, baseW: 560, baseH: type === "hunt" ? 280 : 320, pad: 16, align: "center", shine: true, pulse: true }))}
+        >
+          Reset
+        </Button>
+      }
+    >
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Base width">
+          <Input
+            type="number"
+            value={opts.baseW}
+            onChange={(e) => setOpts(o => ({ ...o, baseW: Number(e.target.value) || 0 }))}
+            className="h-9 bg-zinc-900 border-white/10 text-white"
+          />
+        </Field>
+        <Field label="Base height">
+          <Input
+            type="number"
+            value={opts.baseH}
+            onChange={(e) => setOpts(o => ({ ...o, baseH: Number(e.target.value) || 0 }))}
+            className="h-9 bg-zinc-900 border-white/10 text-white"
+          />
+        </Field>
+      </div>
 
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                <div>
-                  <div className="text-xs opacity-70 mb-1">Padding</div>
-                  <Input
-                    type="number"
-                    value={opts.pad}
-                    onChange={(e) => setOpts((o) => ({ ...o, pad: Number(e.target.value) || 0 }))}
-                    className="h-9 bg-zinc-900 border-white/10 text-white"
-                  />
-                </div>
-                <div>
-                  <div className="text-xs opacity-70 mb-1">Align</div>
-                  <select
-                    value={opts.align}
-                    onChange={(e) => setOpts((o) => ({ ...o, align: e.target.value }))}
-                    className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-                  >
-                    <option value="left">Left</option>
-                    <option value="center">Center</option>
-                    <option value="right">Right</option>
-                  </select>
-                </div>
-              </div>
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Padding">
+          <Input
+            type="number"
+            value={opts.pad}
+            onChange={(e) => setOpts(o => ({ ...o, pad: Number(e.target.value) || 0 }))}
+            className="h-9 bg-zinc-900 border-white/10 text-white"
+          />
+        </Field>
+        <Field label="Align">
+          <Segmented
+            value={opts.align}
+            onChange={(v) => setOpts(o => ({ ...o, align: v }))}
+            options={[
+              { value: "left", label: "Left" },
+              { value: "center", label: "Center" },
+              { value: "right", label: "Right" },
+            ]}
+          />
+        </Field>
+      </div>
 
-              <div className="mt-3 text-xs opacity-70">Effects</div>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" checked={!!opts.shine} onChange={(e) => setOpts((o) => ({ ...o, shine: !!e.target.checked }))} />
-                  Shine
-                </label>
-                <label className="flex items-center gap-2">
-                  <input type="checkbox" checked={!!opts.pulse} onChange={(e) => setOpts((o) => ({ ...o, pulse: !!e.target.checked }))} />
-                  Pulse
-                </label>
-              </div>
-            </div>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={!!opts.shine} onChange={(e) => setOpts(o => ({ ...o, shine: !!e.target.checked }))} />
+          Shine
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={!!opts.pulse} onChange={(e) => setOpts(o => ({ ...o, pulse: !!e.target.checked }))} />
+          Pulse
+        </label>
+      </div>
+      <div className="text-[11px] opacity-60">Dica: em OBS usa o mesmo Width/Height do browser source para evitar cortes.</div>
+    </Section>
 
-            {/* Layout presets (hunt) */}
-            {type === "hunt" && (
-              <>
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
-                  <div className="text-sm font-medium mb-1">Layout presets</div>
-                  <div className="grid grid-cols-2 gap-2 min-w-0">
-                    {["Default", "Compact", "Bar", "Minimal", "Head-to-Head"].map((n) => (
-                      <button
-                        key={n}
-                        className={cn("h-9 rounded-xl border px-3 text-sm",
-                          opts.layoutPreset === n ? "border-white/30 bg-white/10" : "border-white/10 hover:bg-white/5")}
-                        onClick={() => applyLayoutPreset(n)}
-                      >
-                        {n === "Head-to-Head" ? "Head-to-Head (overlay VS)" : n}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Cards & Carousel */}
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
-                  <div className="text-xs opacity-70 mb-1">Cards</div>
-                  <div className="grid grid-cols-2 gap-2 min-w-0">
-                    <div>
-                      <select
-                        value={opts.layout}
-                        onChange={(e) => setOpts((o) => ({ ...o, layout: e.target.value }))}
-                        className="h-9 w-full appearance-none pr-8 rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-                      >
-                        <option value="carousel">Rolante (N visíveis)</option>
-                        <option value="grid">Grid (até 16)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">Card height (px)</div>
-                      <Input
-                        type="number"
-                        value={opts.cardH}
-                        onChange={(e) => setOpts((o) => ({ ...o, cardH: Number(e.target.value) || 120 }))}
-                        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-                      />
-                    </div>
-                  </div>
-
-                  {opts.layout === "carousel" && (
-                    <div className="grid grid-cols-2 gap-2 min-w-0">
-                      <div>
-                        <div className="text-xs opacity-70 mb-1">Visíveis</div>
-                        <Input
-                          type="number"
-                          value={opts.visible}
-                          onChange={(e) => setOpts((o) => ({ ...o, visible: Math.max(1, Number(e.target.value) || 3) }))}
-                          className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-                        />
-                      </div>
-                      <div className="flex items-end">
-                        <label className="flex items-center gap-2 text-sm w-full">
-                          <input type="checkbox" checked={!!opts.autoScroll}
-                                 onChange={(e) => setOpts((o) => ({ ...o, autoScroll: !!e.target.checked }))} />
-                          Auto-scroll
-                        </label>
-                      </div>
-                      <div className="col-span-2">
-                        <div className="text-xs opacity-70 mb-1">Velocidade (seg/loop)</div>
-                        <Input
-                          type="number"
-                          value={opts.scrollDur}
-                          onChange={(e) => setOpts((o) => ({ ...o, scrollDur: Math.max(5, Math.min(180, Number(e.target.value) || 30)) }))}
-                          className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-                        />
-                        <div className="text-[11px] opacity-60 mt-1">Menor valor = mais rápido. Pausa ao passar o rato.</div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-2 min-w-0">
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">Estilo do nome</div>
-                      <select
-                        value={opts.nameStyle}
-                        onChange={(e) => setOpts((o) => ({ ...o, nameStyle: e.target.value }))}
-                        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-                      >
-                        <option value="bar">Barra de vidro</option>
-                        <option value="float">Flutuante</option>
-                        <option value="hidden">Oculto</option>
-                      </select>
-                    </div>
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">Estilo do bet</div>
-                      <select
-                        value={opts.betStyle}
-                        onChange={(e) => setOpts((o) => ({ ...o, betStyle: e.target.value }))}
-                        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-                      >
-                        <option value="inline">Inline com nome</option>
-                        <option value="chip">Chip no topo</option>
-                        <option value="none">Oculto</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-2 text-sm">
-                    <label className="flex items-center gap-2">
-                      <input type="checkbox" checked={!!opts.showIdx} onChange={(e) => setOpts((o) => ({ ...o, showIdx: !!e.target.checked }))} />
-                      Mostrar número (#)
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input type="checkbox" checked={!!opts.showSuper} onChange={(e) => setOpts((o) => ({ ...o, showSuper: !!e.target.checked }))} />
-                      Mostrar selo SUPER
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input type="checkbox" checked={!!opts.showBox} onChange={(e) => setOpts((o) => ({ ...o, showBox: !!e.target.checked }))} />
-                      Mostrar caixa (box) por trás dos cards
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input type="checkbox" checked={!!opts.vInfo} onChange={(e) => setOpts((o) => ({ ...o, vInfo: !!e.target.checked }))} />
-                      Vertical infos (#/bet)
-                    </label>
-                    <div className="grid grid-cols-2 gap-2 min-w-0">
-                      <div>
-                        <div className="text-xs opacity-70 mb-1">Posição das infos</div>
-                        <select
-                          value={opts.infoPos}
-                          onChange={(e) => setOpts((o) => ({ ...o, infoPos: e.target.value }))}
-                          className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-                        >
-                          <option value="left">Left</option>
-                          <option value="right">Right</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* KPIs */}
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
-                  <div className="text-xs opacity-70">KPIs (Start • B/E • #Bonus)</div>
-
-                  <div className="grid grid-cols-2 gap-2 min-w-0">
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">Posição</div>
-                      <select
-                        value={opts.kpiPos}
-                        onChange={(e) => setOpts((o) => ({ ...o, kpiPos: e.target.value }))}
-                        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-                      >
-                        <option value="top">Topo</option>
-                        <option value="bottom">Fundo</option>
-                        <option value="side">Vertical (lado)</option>
-                        <option value="hidden">Ocultar</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">Orientação</div>
-                      <select
-                        value={opts.kpiDir}
-                        onChange={(e) => setOpts((o) => ({ ...o, kpiDir: e.target.value }))}
-                        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-                        disabled={!(opts.kpiPos === "top" || opts.kpiPos === "bottom")}
-                      >
-                        <option value="row">Horizontal</option>
-                        <option value="column">Vertical</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 min-w-0">
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">Alinhamento</div>
-                      <select
-                        value={opts.kpiAlign}
-                        onChange={(e) => setOpts((o) => ({ ...o, kpiAlign: e.target.value }))}
-                        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-                        disabled={!(opts.kpiPos === "top" || opts.kpiPos === "bottom")}
-                      >
-                        <option value="left">Esquerda</option>
-                        <option value="center">Centro</option>
-                        <option value="right">Direita</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">Lado</div>
-                      <select
-                        value={opts.kpiSide}
-                        onChange={(e) => setOpts((o) => ({ ...o, kpiSide: e.target.value }))}
-                        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-                        disabled={opts.kpiPos !== "side"}
-                      >
-                        <option value="left">Esquerda</option>
-                        <option value="right">Direita</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 min-w-0">
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">KPI gap</div>
-                      <Input
-                        type="number"
-                        value={opts.kpiGap}
-                        onChange={(e) => setOpts((o) => ({ ...o, kpiGap: Number(e.target.value) || 0 }))}
-                        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-                      />
-                    </div>
-
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">KPI side spacing</div>
-                      <Input
-                        type="number"
-                        value={opts.kpiSideSpace}
-                        onChange={(e) => setOpts((o) => ({ ...o, kpiSideSpace: Number(e.target.value) || 0 }))}
-                        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-                        disabled={opts.kpiPos !== "side"}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs opacity-70 mb-1">Tamanho dos pills/box/circle (0.7–1.6)</div>
-                    <input
-                      type="range" min={0.7} max={1.6} step={0.05}
-                      value={opts.kpiSize}
-                      onChange={(e) => setOpts((o) => ({ ...o, kpiSize: Number(e.target.value) }))}
-                      className="w-full"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 min-w-0">
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">KPI shape</div>
-                      <select
-                        value={opts.kpiShape}
-                        onChange={(e) => setOpts((o) => ({ ...o, kpiShape: e.target.value }))}
-                        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-                      >
-                        <option value="box">Box</option>
-                        <option value="pill">Pill</option>
-                        <option value="circle">Circle</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">Arredondar valores</div>
-                      <select
-                        value={opts.kpiRound}
-                        onChange={(e) => setOpts((o) => ({ ...o, kpiRound: Number(e.target.value) }))}
-                        className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-                      >
-                        <option value={0}>Unidades</option>
-                        <option value={1}>Décimas</option>
-                        <option value={2}>Centesimas</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 min-w-0">
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">Ícone (ms, círculo)</div>
-                      <Input
-                        type="number"
-                        value={opts.kpiAltIconMs}
-                        onChange={(e) => setOpts((o) => ({ ...o, kpiAltIconMs: Math.max(0, Number(e.target.value) || 0) }))}
-                        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-                      />
-                    </div>
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">Valor (ms, círculo)</div>
-                      <Input
-                        type="number"
-                        value={opts.kpiAltValueMs}
-                        onChange={(e) => setOpts((o) => ({ ...o, kpiAltValueMs: Math.max(0, Number(e.target.value) || 0) }))}
-                        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs opacity-70 mb-1">Tamanho da letra do KPI (0.8–1.6)</div>
-                    <input
-                      type="range" min={0.8} max={1.6} step={0.05}
-                      value={opts.kpiFont}
-                      onChange={(e) => setOpts((o) => ({ ...o, kpiFont: Number(e.target.value) }))}
-                      className="w-full"
-                    />
-                    <div className="text-[11px] opacity-60 mt-1">Ajusta apenas a letra (mantém o tamanho do círculo/box).</div>
-                  </div>
-
-                  {/* Cores */}
-                  <div className="mt-2">
-                    <div className="text-xs opacity-70 mb-1">KPI color preset</div>
-                    <select
-                      value={opts.kpiColorPreset}
-                      onChange={(e) => setOpts((o) => ({ ...o, kpiColorPreset: e.target.value }))}
-                      className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-                    >
-                      {Object.keys(KPI_COLOR_PRESETS).map((k) => (
-                        <option key={k} value={k}>{k}</option>
-                      ))}
-                    </select>
-
-                    <div className="grid grid-cols-3 gap-2 mt-2">
-                      <div>
-                        <div className="text-xs opacity-70 mb-1">BG (override)</div>
-                        <Input
-                          type="text"
-                          placeholder="#RRGGBB ou rgba()"
-                          value={opts.kpiBg ?? ""}
-                          onChange={(e) => setOpts((o) => ({ ...o, kpiBg: e.target.value }))}
-                          className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-                        />
-                      </div>
-                      <div>
-                        <div className="text-xs opacity-70 mb-1">Border (override)</div>
-                        <Input
-                          type="text"
-                          placeholder="#RRGGBB ou rgba()"
-                          value={opts.kpiBorder ?? ""}
-                          onChange={(e) => setOpts((o) => ({ ...o, kpiBorder: e.target.value }))}
-                          className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-                        />
-                      </div>
-                      <div>
-                        <div className="text-xs opacity-70 mb-1">Text (override)</div>
-                        <Input
-                          type="text"
-                          placeholder="#RRGGBB"
-                          value={opts.kpiText ?? ""}
-                          onChange={(e) => setOpts((o) => ({ ...o, kpiText: e.target.value }))}
-                          className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-                        />
-                      </div>
-                    </div>
-                    <div className="text-[11px] opacity-60 mt-1">Dica: deixa os 3 overrides em branco para usar o preset.</div>
-                  </div>
-                </div>
-
-                {/* SUPER glow/tag + cores painel */}
-                <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-3">
-                  <div className="grid grid-cols-2 gap-2 min-w-0">
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">Background start</div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="color"
-                          value={(opts.panelBgStart || "").startsWith("#") ? opts.panelBgStart : "#000000"}
-                          onChange={(e) => setOpts((o) => ({ ...o, panelBgStart: e.target.value }))}
-                          className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
-                          title={opts.panelBgStart || ""}
-                        />
-                        <Input
-                          type="text"
-                          value={opts.panelBgStart ?? ""}
-                          onChange={(e) => setOpts((o) => ({ ...o, panelBgStart: e.target.value }))}
-                          placeholder="#RRGGBB ou rgba()"
-                          className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-xs opacity-70 mb-1">Background end</div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="color"
-                          value={(opts.panelBgEnd || "").startsWith("#") ? opts.panelBgEnd : "#000000"}
-                          onChange={(e) => setOpts((o) => ({ ...o, panelBgEnd: e.target.value }))}
-                          className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
-                          title={opts.panelBgEnd || ""}
-                        />
-                        <Input
-                          type="text"
-                          value={opts.panelBgEnd ?? ""}
-                          onChange={(e) => setOpts((o) => ({ ...o, panelBgEnd: e.target.value }))}
-                          placeholder="#RRGGBB ou rgba()"
-                          className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs opacity-70 mb-1">Panel/Line border</div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={(opts.panelBorder || "").startsWith("#") ? opts.panelBorder : "#000000"}
-                        onChange={(e) => setOpts((o) => ({ ...o, panelBorder: e.target.value }))}
-                        className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
-                        title={opts.panelBorder || ""}
-                      />
-                      <Input
-                        type="text"
-                        value={opts.panelBorder ?? ""}
-                        onChange={(e) => setOpts((o) => ({ ...o, panelBorder: e.target.value }))}
-                        placeholder="rgba(255,255,255,.12) ou #hex"
-                        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs opacity-70 mb-1">Text</div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={(opts.textColor || "").startsWith("#") ? opts.textColor : "#e5e7eb"}
-                        onChange={(e) => setOpts((o) => ({ ...o, textColor: e.target.value }))}
-                        className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
-                        title={opts.textColor || ""}
-                      />
-                      <Input
-                        type="text"
-                        value={opts.textColor ?? ""}
-                        onChange={(e) => setOpts((o) => ({ ...o, textColor: e.target.value }))}
-                        placeholder="#RRGGBB"
-                        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs opacity-70 mb-1">Subtext</div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={(opts.subtextColor || "").startsWith("#") ? opts.subtextColor : "#9ca3af"}
-                        onChange={(e) => setOpts((o) => ({ ...o, subtextColor: e.target.value }))}
-                        className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
-                        title={opts.subtextColor || ""}
-                      />
-                      <Input
-                        type="text"
-                        value={opts.subtextColor ?? ""}
-                        onChange={(e) => setOpts((o) => ({ ...o, subtextColor: e.target.value }))}
-                        placeholder="#RRGGBB"
-                        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs opacity-70 mb-1">Accent</div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={(opts.accentColor || "").startsWith("#") ? opts.accentColor : "#fb7185"}
-                        onChange={(e) => setOpts((o) => ({ ...o, accentColor: e.target.value }))}
-                        className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
-                        title={opts.accentColor || ""}
-                      />
-                      <Input
-                        type="text"
-                        value={opts.accentColor ?? ""}
-                        onChange={(e) => setOpts((o) => ({ ...o, accentColor: e.target.value }))}
-                        placeholder="#RRGGBB"
-                        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-xs opacity-70 mb-1">Chip bg</div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={(opts.chipBg || "").startsWith("#") ? opts.chipBg : "#000000"}
-                        onChange={(e) => setOpts((o) => ({ ...o, chipBg: e.target.value }))}
-                        className="h-9 w-[48px] rounded-md bg-zinc-900 border border-white/10 p-1"
-                        title={opts.chipBg || ""}
-                      />
-                      <Input
-                        type="text"
-                        value={opts.chipBg ?? ""}
-                        onChange={(e) => setOpts((o) => ({ ...o, chipBg: e.target.value }))}
-                        placeholder="rgba(...) ou #hex"
-                        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Opening controls */}
-            {type !== "hunt" && (
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
-                <div className="text-xs opacity-70 mb-1">Header</div>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={opts.showTitle !== false}
-                    onChange={(e) => setOpts((o) => ({ ...o, showTitle: !!e.target.checked }))}
-                  />
-                  Mostrar título do hunt
-                </label>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={opts.showCurrent !== false}
-                    onChange={(e) => setOpts((o) => ({ ...o, showCurrent: !!e.target.checked }))}
-                  />
-                  Mostrar slot atual
-                </label>
-              </div>
-            )}
-
-            <div className="text-[11px] opacity-60">
-              Dica: em OBS, usa sempre o mesmo <b>Width/Height</b> do browser source para evitar cortes.
-            </div>
-          </div>
+    {/* Presets rápidos (só hunt) */}
+    {type === "hunt" && (
+      <Section title="Presets de Layout">
+        <div className="grid grid-cols-2 gap-2">
+          {["Default", "Compact", "Bar", "Minimal", "Head-to-Head"].map((n) => (
+            <PresetChip
+              key={n}
+              name={n === "Head-to-Head" ? "Head-to-Head (VS)" : n}
+              onClick={() => applyLayoutPreset(n)}
+              active={opts.layoutPreset === n}
+              colors={["#0b1020", "#111827"]}
+            />
+          ))}
         </div>
+      </Section>
+    )}
+
+    {/* LAYOUT (hunt) */}
+    {type === "hunt" && (
+      <Section title="Cards & Carousel">
+        <Field label="Layout">
+          <Segmented
+            value={opts.layout}
+            onChange={(v) => setOpts(o => ({ ...o, layout: v }))}
+            options={[
+              { value: "carousel", label: "Rolante" },
+              { value: "grid", label: "Grid" },
+            ]}
+          />
+        </Field>
+
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Card height (px)">
+            <Input
+              type="number"
+              value={opts.cardH}
+              onChange={(e) => setOpts(o => ({ ...o, cardH: Number(e.target.value) || 120 }))}
+              className="h-9 bg-zinc-900 border-white/10 text-white"
+            />
+          </Field>
+          {opts.layout === "carousel" && (
+            <Field label="Visíveis">
+              <Input
+                type="number"
+                value={opts.visible}
+                onChange={(e) => setOpts(o => ({ ...o, visible: Math.max(1, Number(e.target.value) || 3) }))}
+                className="h-9 bg-zinc-900 border-white/10 text-white"
+              />
+            </Field>
+          )}
+        </div>
+
+        {opts.layout === "carousel" && (
+          <div className="grid grid-cols-2 gap-2">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={!!opts.autoScroll} onChange={(e) => setOpts(o => ({ ...o, autoScroll: !!e.target.checked }))} />
+              Auto-scroll
+            </label>
+            <Field label="Velocidade (seg/loop)" hint="Menor = mais rápido">
+              <Input
+                type="number"
+                value={opts.scrollDur}
+                onChange={(e) => setOpts(o => ({ ...o, scrollDur: Math.max(5, Math.min(180, Number(e.target.value) || 30)) }))}
+                className="h-9 bg-zinc-900 border-white/10 text-white"
+              />
+            </Field>
+          </div>
+        )}
+      </Section>
+    )}
+
+    {/* LABELS & INFOS (hunt) */}
+    {type === "hunt" && (
+      <Section title="Labels & Infos">
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="Nome">
+            <Segmented
+              value={opts.nameStyle}
+              onChange={(v) => setOpts(o => ({ ...o, nameStyle: v }))}
+              options={[{ value: "bar", label: "Barra" }, { value: "float", label: "Float" }, { value: "hidden", label: "Oculto" }]}
+            />
+          </Field>
+          <Field label="Bet">
+            <Segmented
+              value={opts.betStyle}
+              onChange={(v) => setOpts(o => ({ ...o, betStyle: v }))}
+              options={[{ value: "inline", label: "Inline" }, { value: "chip", label: "Chip" }, { value: "none", label: "Oculto" }]}
+            />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <label className="flex items-center gap-2"><input type="checkbox" checked={!!opts.showIdx} onChange={(e)=>setOpts(o=>({...o,showIdx:!!e.target.checked}))}/> Mostrar #</label>
+          <label className="flex items-center gap-2"><input type="checkbox" checked={!!opts.showSuper} onChange={(e)=>setOpts(o=>({...o,showSuper:!!e.target.checked}))}/> Selo SUPER</label>
+          <label className="flex items-center gap-2"><input type="checkbox" checked={!!opts.showBox} onChange={(e)=>setOpts(o=>({...o,showBox:!!e.target.checked}))}/> Caixa de fundo</label>
+          <label className="flex items-center gap-2"><input type="checkbox" checked={!!opts.vInfo} onChange={(e)=>setOpts(o=>({...o,vInfo:!!e.target.checked}))}/> Vertical infos</label>
+        </div>
+
+        <Field label="Posição das infos">
+          <Segmented
+            value={opts.infoPos}
+            onChange={(v) => setOpts(o => ({ ...o, infoPos: v }))}
+            options={[{ value: "left", label: "Left" }, { value: "right", label: "Right" }]}
+          />
+        </Field>
+      </Section>
+    )}
+
+    {/* KPIs */}
+    <Section
+      title="KPIs (Start • B/E • #Bonus)"
+      right={
+        <Button
+          variant="outline"
+          className="h-8 px-2"
+          onClick={() => setOpts(o => ({ ...o, kpiPos:"top", kpiDir:"row", kpiAlign:"center", kpiSide:"right", kpiGap:8, kpiSideSpace:18, kpiSize:1, kpiShape:"box", kpiRound:2, kpiShowLabels:true, kpiFont:1, kpiAltIconMs:1200, kpiAltValueMs:1800, kpiAnim:"fade", kpiColorPreset:"glass", kpiBg:"", kpiBorder:"", kpiText:"" }))}
+        >
+          Reset
+        </Button>
+      }
+    >
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Posição">
+          <Segmented
+            value={opts.kpiPos}
+            onChange={(v) => setOpts(o => ({ ...o, kpiPos: v }))}
+            options={[{value:"top",label:"Topo"},{value:"bottom",label:"Fundo"},{value:"side",label:"Lado"},{value:"hidden",label:"Ocultar"}]}
+          />
+        </Field>
+        {(opts.kpiPos === "top" || opts.kpiPos === "bottom") && (
+          <Field label="Orientação">
+            <Segmented
+              value={opts.kpiDir}
+              onChange={(v) => setOpts(o => ({ ...o, kpiDir: v }))}
+              options={[{value:"row",label:"Horizontal"},{value:"column",label:"Vertical"}]}
+            />
+          </Field>
+        )}
+      </div>
+
+      {(opts.kpiPos === "top" || opts.kpiPos === "bottom") && (
+        <Field label="Alinhamento">
+          <Segmented
+            value={opts.kpiAlign}
+            onChange={(v) => setOpts(o => ({ ...o, kpiAlign: v }))}
+            options={[{value:"left",label:"Esq."},{value:"center",label:"Centro"},{value:"right",label:"Dir."}]}
+          />
+        </Field>
+      )}
+
+      {opts.kpiPos === "side" && (
+        <Field label="Lado">
+          <Segmented
+            value={opts.kpiSide}
+            onChange={(v) => setOpts(o => ({ ...o, kpiSide: v }))}
+            options={[{value:"left",label:"Esq."},{value:"right",label:"Dir."}]}
+          />
+        </Field>
+      )}
+
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="KPI gap">
+          <Input type="number" value={opts.kpiGap} onChange={(e)=>setOpts(o=>({...o,kpiGap:Number(e.target.value)||0}))} className="h-9 bg-zinc-900 border-white/10 text-white"/>
+        </Field>
+        <Field label="Side spacing" hint={opts.kpiPos !== "side" ? "Só em Posic. Lado" : ""}>
+          <Input type="number" disabled={opts.kpiPos!=="side"} value={opts.kpiSideSpace} onChange={(e)=>setOpts(o=>({...o,kpiSideSpace:Number(e.target.value)||0}))} className="h-9 bg-zinc-900 border-white/10 text-white disabled:opacity-50"/>
+        </Field>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Tamanho (0.7–1.6)">
+          <input type="range" min={0.7} max={1.6} step={0.05} value={opts.kpiSize} onChange={(e)=>setOpts(o=>({...o,kpiSize:Number(e.target.value)}))} className="w-full"/>
+        </Field>
+        <Field label="Forma">
+          <Segmented
+            value={opts.kpiShape}
+            onChange={(v) => setOpts(o => ({ ...o, kpiShape: v }))}
+            options={[{value:"box",label:"Box"},{value:"pill",label:"Pill"},{value:"circle",label:"Circle"}]}
+          />
+        </Field>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Arredondar valores">
+          <Segmented
+            value={String(opts.kpiRound)}
+            onChange={(v) => setOpts(o => ({ ...o, kpiRound: Number(v) }))}
+            options={[{value:"0",label:"0"},{value:"1",label:"0.0"},{value:"2",label:"0.00"}]}
+          />
+        </Field>
+        <Field label="Font KPI (0.8–1.6)" hint="Só ajusta a letra">
+          <input type="range" min={0.8} max={1.6} step={0.05} value={opts.kpiFont} onChange={(e)=>setOpts(o=>({...o,kpiFont:Number(e.target.value)}))} className="w-full"/>
+        </Field>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Ícone (ms, círculo)">
+          <Input type="number" value={opts.kpiAltIconMs} onChange={(e)=>setOpts(o=>({...o,kpiAltIconMs:Math.max(0,Number(e.target.value)||0)}))} className="h-9 bg-zinc-900 border-white/10 text-white"/>
+        </Field>
+        <Field label="Valor (ms, círculo)">
+          <Input type="number" value={opts.kpiAltValueMs} onChange={(e)=>setOpts(o=>({...o,kpiAltValueMs:Math.max(0,Number(e.target.value)||0)}))} className="h-9 bg-zinc-900 border-white/10 text-white"/>
+        </Field>
+      </div>
+
+      {/* Cores KPI */}
+      <Field label="KPI color preset">
+        <Segmented
+          value={opts.kpiColorPreset}
+          onChange={(v) => setOpts(o => ({ ...o, kpiColorPreset: v }))}
+          options={Object.keys(KPI_COLOR_PRESETS).map(k => ({ value: k, label: k }))}
+        />
+      </Field>
+      <div className="grid grid-cols-3 gap-2">
+        <Field label="BG (override)" hint="Deixa vazio p/ usar preset">
+          <Input value={opts.kpiBg ?? ""} onChange={(e)=>setOpts(o=>({...o,kpiBg:e.target.value}))} placeholder="#RRGGBB ou rgba()" className="h-9 bg-zinc-900 border-white/10 text-white"/>
+        </Field>
+        <Field label="Border (override)">
+          <Input value={opts.kpiBorder ?? ""} onChange={(e)=>setOpts(o=>({...o,kpiBorder:e.target.value}))} placeholder="#RRGGBB ou rgba()" className="h-9 bg-zinc-900 border-white/10 text-white"/>
+        </Field>
+        <Field label="Text (override)">
+          <Input value={opts.kpiText ?? ""} onChange={(e)=>setOpts(o=>({...o,kpiText:e.target.value}))} placeholder="#RRGGBB" className="h-9 bg-zinc-900 border-white/10 text-white"/>
+        </Field>
+      </div>
+    </Section>
+
+    {/* CORES & EFEITOS */}
+    <Section
+      title="Cores & Efeitos"
+      right={
+        <Button
+          variant="outline"
+          className="h-8 px-2"
+          onClick={() => setOpts(o => ({
+            ...o,
+            panelBorder:"rgba(255,255,255,.12)",
+            textColor:"#e5e7eb",
+            subtextColor:"#9ca3af",
+            accentColor:"#fb7185",
+            chipBg:"rgba(255,255,255,.08)"
+          }))}
+        >
+          Reset
+        </Button>
+      }
+    >
+      {/* Presets de painel (gradiente) */}
+      <div className="grid grid-cols-2 gap-2">
+        {Object.entries(PANEL_PRESETS).map(([name, [start, end]]) => (
+          <PresetChip
+            key={name}
+            name={name}
+            colors={[start, end]}
+            onClick={() => applyPanelPreset(name)}
+            active={opts.panelBgStart === start && opts.panelBgEnd === end}
+          />
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Background start">
+          <ColorField label="" value={opts.panelBgStart ?? ""} onChange={(v)=>setOpts(o=>({...o,panelBgStart:v}))}/>
+        </Field>
+        <Field label="Background end">
+          <ColorField label="" value={opts.panelBgEnd ?? ""} onChange={(v)=>setOpts(o=>({...o,panelBgEnd:v}))}/>
+        </Field>
+      </div>
+
+      <Field label="Panel/Line border">
+        <ColorField label="" value={opts.panelBorder ?? ""} onChange={(v)=>setOpts(o=>({...o,panelBorder:v}))} placeholder="rgba(255,255,255,.12) ou #hex"/>
+      </Field>
+
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Text">
+          <ColorField label="" value={opts.textColor ?? ""} onChange={(v)=>setOpts(o=>({...o,textColor:v}))}/>
+        </Field>
+        <Field label="Subtext">
+          <ColorField label="" value={opts.subtextColor ?? ""} onChange={(v)=>setOpts(o=>({...o,subtextColor:v}))}/>
+        </Field>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <Field label="Accent">
+          <ColorField label="" value={opts.accentColor ?? ""} onChange={(v)=>setOpts(o=>({...o,accentColor:v}))}/>
+        </Field>
+        <Field label="Chip bg">
+          <ColorField label="" value={opts.chipBg ?? ""} onChange={(v)=>setOpts(o=>({...o,chipBg:v}))} placeholder="rgba(...) ou #hex"/>
+        </Field>
+      </div>
+
+      {/* SUPER (só hunt) */}
+      {type === "hunt" && (
+        <>
+          <div className="text-xs opacity-70 mt-2">Super bonus</div>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Glow color">
+              <ColorField label="" value={opts.superGlowColor ?? ""} onChange={(v)=>setOpts(o=>({...o,superGlowColor:v}))}/>
+            </Field>
+            <Field label="Glow strength">
+              <input type="range" min={0} max={1} step={0.05} value={opts.superGlowStrength ?? 0.6} onChange={(e)=>setOpts(o=>({...o,superGlowStrength:Number(e.target.value)}))} className="w-full mt-2"/>
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Super tag bg">
+              <ColorField label="" value={opts.superTagColor ?? ""} onChange={(v)=>setOpts(o=>({...o,superTagColor:v}))}/>
+            </Field>
+            <Field label="Super tag text">
+              <ColorField label="" value={opts.superTextColor ?? ""} onChange={(v)=>setOpts(o=>({...o,superTextColor:v}))}/>
+            </Field>
+          </div>
+        </>
+      )}
+    </Section>
+
+    {/* OPENING header toggles (quando não é hunt) */}
+    {type !== "hunt" && (
+      <Section title="Header (Opening)">
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={opts.showTitle !== false} onChange={(e)=>setOpts(o=>({...o,showTitle:!!e.target.checked}))}/>
+          Mostrar título do hunt
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={opts.showCurrent !== false} onChange={(e)=>setOpts(o=>({...o,showCurrent:!!e.target.checked}))}/>
+          Mostrar slot atual
+        </label>
+      </Section>
+    )}
+  </div>
+</div>
 
         {/* Preview */}
         <div className="flex-1 p-6 overflow-auto min-w-0">
