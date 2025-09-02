@@ -268,7 +268,6 @@ async function persistOrder(slots) {
 }
 
 /* ───────────────────────── Salvar/ler opções do overlay (DB + fallback) ───────────────────────── */
-/* ───────────────────────── Salvar/ler opções do overlay (DB + local fallback, sem overwrite) ───────────────────────── */
 function useOverlaySettings({ type, huntNumberId, defaultValue }) {
   const { user } = useAuth();
   const [opts, setOpts] = React.useState(defaultValue);
@@ -281,20 +280,80 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
     [type, huntNumberId]
   );
 
-  // 0) Carregar do localStorage imediato (para persistir no F5)
+  // helper: escolhe o campo certo vindo da BD
+  const pickOpts = (row) =>
+    row?.opts ?? row?.settings ?? row?.config ?? row?.data ?? row?.json ?? {};
+
+  // helper: tenta gravar na primeira coluna que exista
+  async function upsertToDb(value) {
+    if (!user) return;
+
+    const cols = ["opts", "settings", "config", "data", "json"];
+    const base = {
+      user_id: user.id,
+      type,
+      hunt_number_id: huntNumberId ?? null,
+      updated_at: new Date().toISOString(),
+    };
+
+    // update
+    if (rowId) {
+      let last;
+      for (const col of cols) {
+        const { error } = await supabase
+          .from("overlay_settings")
+          .update({ ...base, [col]: value })
+          .eq("id", rowId);
+        if (!error) return;
+        last = error; // tenta próxima coluna
+      }
+      throw last || new Error("Falha a atualizar overlay_settings.");
+    }
+
+    // insert (ou update se já existir)
+    // tenta descobrir se já há row
+    let q = supabase
+      .from("overlay_settings")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("type", type)
+      .limit(1);
+    if (huntNumberId == null) q = q.is("hunt_number_id", null);
+    else                      q = q.eq("hunt_number_id", huntNumberId);
+
+    const probe = await q.maybeSingle();
+    const existingId = probe?.data?.id ?? null;
+
+    if (existingId) {
+      setRowId(existingId);
+      return upsertToDb(value); // faz o update acima
+    }
+
+    // criar linha nova tentando as várias colunas
+    let last;
+    for (const col of cols) {
+      const { data, error } = await supabase
+        .from("overlay_settings")
+        .insert({ ...base, [col]: value })
+        .select("id")
+        .single();
+      if (!error && data?.id) { setRowId(data.id); return; }
+      last = error;
+    }
+    throw last || new Error("Falha a inserir overlay_settings.");
+  }
+
+  // 0) carregar imediatamente do localStorage
   React.useEffect(() => {
     try {
       const raw = localStorage.getItem(key);
-      if (raw) {
-        const fromLS = JSON.parse(raw);
-        setOpts((o) => ({ ...o, ...fromLS }));
-      }
+      if (raw) setOpts((o) => ({ ...o, ...JSON.parse(raw) }));
     } catch {}
   }, [key]);
 
   const debounced = useDebounced(opts, 400);
 
-  // 1) Ler da BD — SÓ aplica se houver linha (não volta ao default se não existir)
+  // 1) ler da BD (se existir linha)
   React.useEffect(() => {
     let alive = true;
     (async () => {
@@ -305,7 +364,7 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
 
         let q = supabase
           .from("overlay_settings")
-          .select("id, opts, updated_at")
+          .select("id, opts, settings, config, data, json, updated_at")
           .eq("user_id", user.id)
           .eq("type", type)
           .limit(1);
@@ -314,14 +373,13 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
         else                      q = q.eq("hunt_number_id", huntNumberId);
 
         const { data, error } = await q.maybeSingle();
-
-        // PGRST116 = no rows; não mexe nas opções (mantém as do localStorage)
-        if (error && error.code !== "PGRST116") throw error;
         if (!alive) return;
+
+        if (error && error.code !== "PGRST116") throw error;
 
         if (data?.id) {
           setRowId(data.id);
-          const merged = { ...defaultValue, ...(data.opts || {}) };
+          const merged = { ...defaultValue, ...pickOpts(data) };
           setOpts(merged);
           try { localStorage.setItem(key, JSON.stringify(merged)); } catch {}
         }
@@ -335,62 +393,12 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
     return () => { alive = false; };
   }, [user?.id, type, huntNumberId, key, defaultValue]);
 
-  // 2) Guardar (localStorage + BD)
+  // 2) gravar (local + BD)
   React.useEffect(() => {
-    // grava sempre local
     try { localStorage.setItem(key, JSON.stringify(debounced)); } catch {}
-
     (async () => {
-      try {
-        if (!user) return;
-
-        const base = {
-          user_id: user.id,
-          type,
-          hunt_number_id: huntNumberId ?? null,
-          updated_at: new Date().toISOString(),
-        };
-
-        if (rowId) {
-          const { error } = await supabase
-            .from("overlay_settings")
-            .update({ opts: debounced, updated_at: base.updated_at })
-            .eq("id", rowId);
-          if (error) throw error;
-          return;
-        }
-
-        // não havia rowId → tenta achar; se não existir, cria
-        let q = supabase
-          .from("overlay_settings")
-          .select("id")
-          .eq("user_id", user.id)
-          .eq("type", type)
-          .limit(1);
-        if (huntNumberId == null) q = q.is("hunt_number_id", null);
-        else                      q = q.eq("hunt_number_id", huntNumberId);
-
-        const probe = await q.maybeSingle();
-
-        if (probe.data?.id) {
-          setRowId(probe.data.id);
-          const { error } = await supabase
-            .from("overlay_settings")
-            .update({ opts: debounced, updated_at: base.updated_at })
-            .eq("id", probe.data.id);
-          if (error) throw error;
-        } else {
-          const { data, error } = await supabase
-            .from("overlay_settings")
-            .insert({ ...base, opts: debounced })
-            .select("id")
-            .single();
-          if (error) throw error;
-          if (data?.id) setRowId(data.id);
-        }
-      } catch (e) {
-        console.warn("[overlay_settings] save failed:", e?.message || e);
-      }
+      try { await upsertToDb(debounced); }
+      catch (e) { console.warn("[overlay_settings] save failed:", e?.message || e); }
     })();
   }, [debounced, key, user?.id, type, huntNumberId, rowId]);
 
