@@ -2194,6 +2194,26 @@ function RedeemModal({ open, onClose, slots, onSaved }) {
 function RedeemFlowModal({ open, onClose, hunt, slots, onSaved }) {
   const { t, lang } = useLang();
   const pageSize = 16;
+{/* TIP: aparece no canto sup. direito do modal */}
+{tip && (
+  <div key={tip.ts} className="pointer-events-none absolute right-4 top-4 z-50">
+    <div
+      className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-zinc-900/80 backdrop-blur text-sm shadow-xl"
+      style={{ animation: "tipFade 1400ms ease-out forwards" }}
+    >
+      <CopyIcon className="h-4 w-4 opacity-80" />
+      <span className="opacity-90">{tip.text}</span>
+    </div>
+  </div>
+)}
+<style>{`
+@keyframes tipFade {
+  0%   { opacity: 0; transform: translateY(-6px); }
+  15%  { opacity: 1; transform: translateY(0); }
+  85%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-6px); }
+}
+`}</style>
 
   // índice inicial = 1ª slot sem payout (ou 0)
   const firstIdx = React.useMemo(() => {
@@ -2213,7 +2233,18 @@ function RedeemFlowModal({ open, onClose, hunt, slots, onSaved }) {
   const [multTxt, setMultTxt] = React.useState("");
   const [betTxt, setBetTxt] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  const [tip, setTip] = React.useState(null);
+  const tipTimer = React.useRef(null);
 
+  const showTip = React.useCallback((msg) => {
+  setTip({ text: msg, ts: Date.now() });
+  if (tipTimer.current) clearTimeout(tipTimer.current);
+  tipTimer.current = setTimeout(() => setTip(null), 1400);
+}, []);
+
+React.useEffect(() => {
+  return () => { if (tipTimer.current) clearTimeout(tipTimer.current); };
+}, []);
   // 🔵 estilo do destaque da slot atual
   const currentGlow = {
     boxShadow:
@@ -2310,13 +2341,12 @@ function RedeemFlowModal({ open, onClose, hunt, slots, onSaved }) {
   }
 
   // Copiar nome (com alerta)
-  const copySlotName = async (name = row?.name) => {
-    if (!name) return;
-    try {
-      await navigator.clipboard.writeText(name);
-      alert(`${t("copied")} ${name}`);
-    } catch {}
-  };
+const copySlotName = async (name = row?.name) => {
+  if (!name) return;
+  try { await navigator.clipboard.writeText(name); } catch {}
+  showTip(`${t("copied")} ${name}`);
+};
+
 
   // Ctrl+clique na imagem da slot ativa
   const onActiveThumbClick = (e) => {
@@ -2335,15 +2365,10 @@ function RedeemFlowModal({ open, onClose, hunt, slots, onSaved }) {
     setIdx(Math.max(0, Math.min(slots.length - 1, iAbs)));
 
   // Ctrl+clique numa miniatura = copiar; clique normal = navegar
-  const onTileClick = (e, s, iAbs) => {
-    if (e.ctrlKey) {
-      e.preventDefault();
-      e.stopPropagation();
-      copySlotName(s?.name);
-    } else {
-      gotoCard(iAbs);
-    }
-  };
+const onTileClick = (e, s, iAbs) => {
+  if (e.ctrlKey) { e.preventDefault(); e.stopPropagation(); copySlotName(s?.name); }
+  else { gotoCard(iAbs); }
+};
 
   const currentBadge = lang === "pt" ? "ATUAL" : "CURRENT";
 
@@ -2353,7 +2378,7 @@ function RedeemFlowModal({ open, onClose, hunt, slots, onSaved }) {
     <div className="fixed inset-0 z-[120]">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[96vw] max-w-[1200px]">
-        <div className="rounded-2xl border border-white/10 bg-zinc-950 text-white shadow-2xl p-4 md:p-5">
+        <div className="relative rounded-2xl border border-white/10 bg-zinc-950 text-white shadow-2xl p-4 md:p-5">
           {/* Header */}
           <div className="flex items-center justify-between mb-3">
             <div className="text-lg font-semibold">
