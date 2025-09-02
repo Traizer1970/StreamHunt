@@ -326,6 +326,17 @@ function getPlanLabel(user, profile) {
   return plan.charAt(0).toUpperCase() + plan.slice(1);
 }
 
+/* ---- avatar fallback (imediato via Twitch) ---- */
+const getAuthAvatar = (user) => {
+  const md = user?.user_metadata || {};
+  return (
+    md.avatar_url ||
+    md.picture ||
+    (user?.identities?.[0]?.identity_data?.avatar_url) ||
+    ""
+  );
+};
+
 /* ---------------- User Menu ---------------- */
 const UserMenu = ({ onGoDashboard, onGoSettings, onLogout }) => {
   const { isDark } = useTheme();
@@ -339,7 +350,7 @@ const UserMenu = ({ onGoDashboard, onGoSettings, onLogout }) => {
     "User";
 
   const planLabel = getPlanLabel(user, profile) || "";
-  const avatar = profile?.avatar_url || "";
+  const avatar = profile?.avatar_url || getAuthAvatar(user) || "";
 
   return (
     <div className="relative">
@@ -423,16 +434,59 @@ const Shell = ({ route, navigate, children }) => {
     }
   };
 
+  // sincroniza avatar/username da OAuth para profiles
+  const maybeSyncProfileFromAuth = async (u) => {
+    try {
+      if (!u) return;
+      const md = u.user_metadata || {};
+      const nextAvatar = md.avatar_url || md.picture || null;
+      const nextUsername =
+        profile?.username ||
+        md.name ||
+        md.nickname ||
+        md.preferred_username ||
+        (u.email ? u.email.split("@")[0] : null);
+
+      const { data: existing } = await supabase
+        .from("profiles")
+        .select("username, avatar_url")
+        .eq("id", u.id)
+        .maybeSingle();
+
+      const needs =
+        !existing ||
+        existing.username !== nextUsername ||
+        (nextAvatar && existing.avatar_url !== nextAvatar);
+
+      if (needs) {
+        await supabase.from("profiles").upsert({
+          id: u.id,
+          username: nextUsername || existing?.username || null,
+          avatar_url: nextAvatar || existing?.avatar_url || null,
+        });
+      }
+    } catch (e) {
+      console.warn("sync profile from auth failed:", e?.message || e);
+    }
+  };
+
   // bootstrap auth
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      setUser(data.session?.user || null);
-      if (data.session?.user) refreshProfile(data.session.user);
+      const u = data.session?.user || null;
+      setUser(u);
+      if (u) {
+        maybeSyncProfileFromAuth(u).finally(() => refreshProfile(u));
+      }
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, sess) => {
-      setUser(sess?.user || null);
-      if (sess?.user) refreshProfile(sess.user);
-      else setProfile(null);
+      const u = sess?.user || null;
+      setUser(u);
+      if (u) {
+        maybeSyncProfileFromAuth(u).finally(() => refreshProfile(u));
+      } else {
+        setProfile(null);
+      }
     });
     return () => sub.subscription.unsubscribe();
   }, []);
@@ -459,46 +513,42 @@ const Shell = ({ route, navigate, children }) => {
     navigate("home");
   };
 
-// usa /auth (sem #) para evitar duplo hash)
-const handleTwitchLogin = async () => {
-  try {
-    const SITE_URL = import.meta.env.VITE_SITE_URL || window.location.origin;
-    const redirectTo = `${SITE_URL}/auth`; // ← sem hash
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "twitch",
-      options: {
-        redirectTo,
-        scopes: "user:read:email",
-      },
-    });
-    if (error) throw error;
-  } catch (err) {
-    showToast({
-      title: "Falha no login com Twitch",
-      message: err?.message || "Tenta outra vez.",
-      success: false,
-    });
-  }
-};
-
-useEffect(() => {
-  // Se viermos de /auth#access_token=..., o supabase-js (com detectSessionInUrl:true)
-  // processa os tokens automaticamente ao criar o client. Aqui só limpamos o URL.
-  const hasTokens = /access_token=|refresh_token=/.test(window.location.hash);
-  const onBoot = async () => {
-    if (hasTokens) {
-      // garante que a sessão já foi registada
-      await supabase.auth.getSession().catch(() => {});
-      // limpa o URL (volta à home ou dashboard como preferires)
-      history.replaceState({}, "", `${window.location.origin}/#/dashboard`);
-    } else if (window.location.pathname === "/auth") {
-      // se alguém abrir /auth direto, manda para home
-      history.replaceState({}, "", `${window.location.origin}/#/home`);
+  // usa /auth (sem #) para evitar duplo hash)
+  const handleTwitchLogin = async () => {
+    try {
+      const SITE_URL = import.meta.env.VITE_SITE_URL || window.location.origin;
+      const redirectTo = `${SITE_URL}/auth`; // ← sem hash
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "twitch",
+        options: {
+          redirectTo,
+          scopes: "user:read:email",
+        },
+      });
+      if (error) throw error;
+    } catch (err) {
+      showToast({
+        title: "Falha no login com Twitch",
+        message: err?.message || "Tenta outra vez.",
+        success: false,
+      });
     }
   };
-  onBoot();
-}, []);
 
+  useEffect(() => {
+    // Se viermos de /auth#access_token=..., o supabase-js processa automaticamente;
+    // aqui só limpamos o URL.
+    const hasTokens = /access_token=|refresh_token=/.test(window.location.hash);
+    const onBoot = async () => {
+      if (hasTokens) {
+        await supabase.auth.getSession().catch(() => {});
+        history.replaceState({}, "", `${window.location.origin}/#/dashboard`);
+      } else if (window.location.pathname === "/auth") {
+        history.replaceState({}, "", `${window.location.origin}/#/home`);
+      }
+    };
+    onBoot();
+  }, []);
 
   // erros vindos no hash (ex.: redirect mismatch)
   useEffect(() => {
