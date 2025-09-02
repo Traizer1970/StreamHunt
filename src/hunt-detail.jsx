@@ -1,6 +1,6 @@
 // /src/hunt-detail.jsx
 import React from "react";
-import { useTheme } from "@/contexts/auth-context";
+import { useTheme, useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -292,6 +292,69 @@ async function persistOrder(slots) {
 }
 
 /* ───────────────────────── small hooks ───────────────────────── */
+
+/* Salvar/ler opções do overlay no Supabase */
+function useOverlaySettings({ type, huntNumberId, defaultValue }) {
+  const { user } = useAuth();
+  const [opts, setOpts] = React.useState(defaultValue);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState(null);
+
+  // Carrega do Supabase
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        if (!user) { setLoading(false); return; }
+        const { data, error } = await supabase
+          .from("overlay_settings")
+          .select("opts")
+          .eq("user_id", user.id)
+          .eq("type", type)
+          .eq("hunt_number_id", huntNumberId ?? null)
+          .maybeSingle();
+        if (error && error.code !== "PGRST116") throw error;
+        // merge com defaults para não perder chaves novas
+        const merged = { ...defaultValue, ...(data?.opts || {}) };
+        if (alive) setOpts(merged);
+      } catch (e) {
+        if (alive) setError(e);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [user?.id, type, huntNumberId]);
+
+  // Debounce do state para não spammar updates
+  const debounced = useDebounced(opts, 400);
+
+  // Grava no Supabase (upsert)
+  React.useEffect(() => {
+    (async () => {
+      try {
+        if (!user) return;
+        const payload = {
+          user_id: user.id,
+          type,
+          hunt_number_id: huntNumberId ?? null,
+          opts: debounced,
+          updated_at: new Date().toISOString(),
+        };
+        const { error } = await supabase
+          .from("overlay_settings")
+          .upsert(payload, { onConflict: "user_id,hunt_number_id,type" });
+        if (error) throw error;
+      } catch (e) {
+        console.warn("Falha a gravar overlay_settings:", e?.message || e);
+      }
+    })();
+  }, [user?.id, type, huntNumberId, debounced]);
+
+  return [opts, setOpts, { loading, error }];
+}
+
+
 function useDebounced(value, delay = 250) {
   const [v, setV] = React.useState(value);
   React.useEffect(() => {
@@ -1424,18 +1487,18 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
                     </div>
                   </div>
 
-                  <div>
-                    <div className="text-xs opacity-70 mb-1">KPI size (0.7–1.6)</div>
-                    <input
-                      type="range"
-                      min={0.7}
-                      max={1.6}
-                      step={0.05}
-                      value={opts.kpiSize}
-                      onChange={(e) => setOpts((o) => ({ ...o, kpiSize: Number(e.target.value) }))}
-                      className="w-full"
-                    />
-                  </div>
+                 <div>
+  <div className="text-xs opacity-70 mb-1">Tamanho dos pills/box/circle (0.7–1.6)</div>
+  <input
+    type="range"
+    min={0.7}
+    max={1.6}
+    step={0.05}
+    value={opts.kpiSize}
+    onChange={(e) => setOpts((o) => ({ ...o, kpiSize: Number(e.target.value) }))}
+    className="w-full"
+  />
+</div>
 
                   <div className="grid grid-cols-2 gap-2 min-w-0">
                     <div>
@@ -2381,14 +2444,17 @@ export default function HuntDetail({ numberId }) {
 
   const [sortBy, setSortBy] = React.useState({ key: "order", dir: 1 });
 
-  const [huntOpts, setHuntOpts] = useLocalState(
-    "overlay.hunt.opts",
-    DEFAULT_HUNT_OVERLAY
-  );
-  const [openingOpts, setOpeningOpts] = useLocalState(
-    "overlay.opening.opts",
-    DEFAULT_OPENING_OVERLAY
-  );
+const [huntOpts, setHuntOpts] = useOverlaySettings({
+  type: "hunt",
+  huntNumberId: nId,
+  defaultValue: DEFAULT_HUNT_OVERLAY,
+});
+const [openingOpts, setOpeningOpts] = useOverlaySettings({
+  type: "opening",
+  huntNumberId: nId,
+  defaultValue: DEFAULT_OPENING_OVERLAY,
+});
+
 
   const sortedSlots = React.useMemo(() => {
     const arr = [...slots];
