@@ -1483,12 +1483,30 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
           </Field>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          <label className="flex items-center gap-2"><input type="checkbox" checked={!!opts.showIdx} onChange={(e)=>setOpts(o=>({...o,showIdx:!!e.target.checked}))}/> Mostrar #</label>
-          <label className="flex items-center gap-2"><input type="checkbox" checked={!!opts.showSuper} onChange={(e)=>setOpts(o=>({...o,showSuper:!!e.target.checked}))}/> Selo SUPER</label>
-          <label className="flex items-center gap-2"><input type="checkbox" checked={!!opts.showBox} onChange={(e)=>setOpts(o=>({...o,showBox:!!e.target.checked}))}/> Caixa de fundo</label>
-          <label className="flex items-center gap-2"><input type="checkbox" checked={!!opts.vInfo} onChange={(e)=>setOpts(o=>({...o,vInfo:!!e.target.checked}))}/> Vertical infos</label>
-        </div>
+        <div className="flex flex-wrap gap-2">
+  <Toggle
+    label="Mostrar #"
+    checked={!!opts.showIdx}
+    onChange={(v) => setOpts((o) => ({ ...o, showIdx: !!v }))}
+  />
+  <Toggle
+    label="Selo SUPER"
+    checked={!!opts.showSuper}
+    onChange={(v) => setOpts((o) => ({ ...o, showSuper: !!v }))}
+  />
+  <Toggle
+    label="Caixa de fundo"
+    checked={!!opts.showBox}
+    onChange={(v) => setOpts((o) => ({ ...o, showBox: !!v }))}
+  />
+  <Toggle
+    label="Vertical infos"
+    checked={!!opts.vInfo}
+    onChange={(v) => setOpts((o) => ({ ...o, vInfo: !!v }))}
+    hint="Se ligado, # e bet aparecem em coluna."
+  />
+</div>
+
 
         <Field label="Posição das infos">
           <Segmented
