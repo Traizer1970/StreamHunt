@@ -2400,13 +2400,13 @@ const onTileClick = (e, s, iAbs) => {
 
           {/* Header */}
           <div className="flex items-center justify-between mb-3">
-            <div className="text-lg font-semibold">
-              {t("startRedeeming")} — {row?.name || "—"} ({idx + 1}/{slots.length})
-            </div>
-            <button className="p-2 rounded-lg hover:bg-white/10" onClick={onClose} aria-label={t("close")}>
-              <X className="h-5 w-5" />
-            </button>
-          </div>
+  <div className="text-lg font-semibold">
+    {row?.name || "—"} ({idx + 1}/{slots.length})
+  </div>
+  <button className="p-2 rounded-lg hover:bg-white/10" onClick={onClose} aria-label={t("close")}>
+    <X className="h-5 w-5" />
+  </button>
+</div>
 
           {/* KPIs */}
           <div className="grid md:grid-cols-6 gap-2 mb-3">
