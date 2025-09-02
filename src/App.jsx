@@ -388,7 +388,7 @@ const UserMenu = ({ onGoDashboard, onGoSettings, onLogout }) => {
   );
 };
 
-/* ------------------ Shell ------------------ */
+// ------------------ Shell ------------------
 const Shell = ({ route, navigate, children }) => {
   const [isDark, setIsDark] = useState(true);
   const toggle = () => setIsDark((v) => !v);
@@ -396,12 +396,11 @@ const Shell = ({ route, navigate, children }) => {
   // Auth modal
   const [showAuth, setShowAuth] = useState(false);
 
-  // email/pass states (para contas antigas)
+  // email/pass (para contas antigas)
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPass, setLoginPass] = useState("");
 
   // toast
-  theconst = undefined;
   const [toast, setToast] = useState(null);
   const showToast = (payload) => setToast(payload);
 
@@ -412,7 +411,11 @@ const Shell = ({ route, navigate, children }) => {
   const refreshProfile = async (u = user) => {
     try {
       if (!u) { setProfile(null); return; }
-      const { data, error } = await supabase.from("profiles").select("*").eq("id", u.id).maybeSingle();
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", u.id)
+        .maybeSingle();
       if (error) throw error;
       setProfile(data || null);
     } catch (e) {
