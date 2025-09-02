@@ -1560,6 +1560,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 }
 
 /* ───────────────────────── OverlayCard ───────────────────────── */
+/* ───────────────────────── OverlayCard (limpo, sem cabeçalhos inúteis) ───────────────────────── */
 function OverlayCard({ type, hunt, slots, opts, setOpts }) {
   const { t } = useLang();
   const [open, setOpen] = React.useState(false);
@@ -1570,6 +1571,7 @@ function OverlayCard({ type, hunt, slots, opts, setOpts }) {
       `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, ""),
     []
   );
+
   const url = React.useMemo(() => {
     if (!hunt?.number_id) return "";
     return type === "hunt"
@@ -1592,6 +1594,7 @@ function OverlayCard({ type, hunt, slots, opts, setOpts }) {
 
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.03]">
+      {/* Header colapsável */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -1603,67 +1606,40 @@ function OverlayCard({ type, hunt, slots, opts, setOpts }) {
         <div className="font-medium flex-1">
           {type === "hunt" ? "Overlay (Hunt)" : "Overlay (Opening)"}
         </div>
-        <ChevronDown className={cn("h-4 w-4 transition", open ? "rotate-180" : "")} />
+        <ChevronDown
+          className={cn("h-4 w-4 transition", open ? "rotate-180" : "")}
+        />
       </button>
 
       {open && (
         <div className="px-3 pb-3 space-y-3">
-          <div className="grid md:grid-cols-3 gap-2">
-            <div>
-              <div className="text-xs opacity-70 mb-1">Preset</div>
-              <select
-                value={opts.design}
-                onChange={(e) => setOpts((o) => ({ ...o, design: e.target.value }))}
-                className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-              >
-                {type === "hunt" ? (
-                  <option value="cards">Cards (Start • B/E • #Bonus)</option>
-                ) : (
-                  <>
-                    <option value="default">Default</option>
-                    <option value="minimal">Minimal</option>
-                  </>
-                )}
-              </select>
-            </div>
-            <div>
-              <div className="text-xs opacity-70 mb-1">Padding</div>
-              <Input
-                type="number"
-                value={opts.pad}
-                onChange={(e) => setOpts((o) => ({ ...o, pad: Number(e.target.value) || 0 }))}
-                className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-              />
-            </div>
-            <div>
-              <div className="text-xs opacity-70 mb-1">Align</div>
-              <select
-                value={opts.align}
-                onChange={(e) => setOpts((o) => ({ ...o, align: e.target.value }))}
-                className="h-9 w-full rounded-xl bg-zinc-900 border-white/10 text-white px-3"
-              >
-                <option value="left">left</option>
-                <option value="center">center</option>
-                <option value="right">right</option>
-              </select>
-            </div>
-          </div>
-
+          {/* Só os botões — sem “Preset / Padding / Align” */}
           <div className="flex items-center gap-2">
             <Button type="button" className="h-9" onClick={copyUrl}>
               <CopyIcon className="h-4 w-4 mr-2" />
               Copy URL
             </Button>
-            <Button type="button" variant="outline" className="h-9" onClick={openOverlay}>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9"
+              onClick={openOverlay}
+            >
               <ExternalLink className="h-4 w-4 mr-2" />
               Open overlay
             </Button>
-            <Button type="button" variant="secondary" className="h-9" onClick={() => setOpenDesigner(true)}>
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-9"
+              onClick={() => setOpenDesigner(true)}
+            >
               <SlidersHorizontal className="h-4 w-4 mr-2" />
               Open Designer
             </Button>
           </div>
 
+          {/* Preview */}
           <div className="overflow-auto">
             {type === "hunt" ? (
               <HuntOverlayPreview hunt={hunt} slots={slots} opts={opts} />
@@ -1672,6 +1648,7 @@ function OverlayCard({ type, hunt, slots, opts, setOpts }) {
             )}
           </div>
 
+          {/* Designer (continua a controlar tudo lá dentro) */}
           <Designer
             open={openDesigner}
             onClose={() => setOpenDesigner(false)}
