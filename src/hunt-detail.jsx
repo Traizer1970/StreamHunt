@@ -2196,15 +2196,15 @@ function RedeemFlowModal({ open, onClose, hunt, slots, onSaved }) {
   const pageSize = 16;
 
   // índice inicial = 1ª slot sem payout (ou 0)
-  const firstIdx = React.useMemo(() => {
-    const i = Math.max(0, slots.findIndex((s) => s.payout == null));
-    return i === -1 ? 0 : i;
-  }, [slots]);
+const firstIdx = React.useMemo(() => {
+  const i = slots.findIndex((s) => s.payout == null);
+  return i === -1 ? 0 : i;
+}, [slots]);
 
-  const [idx, setIdx] = React.useState(0);
-  React.useEffect(() => {
-    if (open) setIdx(firstIdx);
-  }, [open, firstIdx]);
+
+// RedeemFlowModal
+const [idx, setIdx] = React.useState(0);
+const [page, setPage] = React.useState(0); // ← ADICIONAR
 
   const row = slots[idx] || null;
 
@@ -2454,33 +2454,32 @@ const onTileClick = (e, s, iAbs) => {
               <div className="grid md:grid-cols-3 gap-3 mt-3">
                 <div>
                   <div className="text-xs opacity-70 mb-1">Payout</div>
-                  <Input
+<Input
   value={payoutTxt}
   onChange={(e) => onChangePayout(e.target.value)}
+  inputMode="decimal"
+  placeholder="0"
+  className="h-11 rounded-xl bg-zinc-800 border-white/10 text-white pl-4 pr-3"
+/>            </div>
+                <div>
+                  <div className="text-xs opacity-70 mb-1">Multiplier</div>
+                  <Input
+  value={multTxt}
+  onChange={(e) => onChangeMult(e.target.value)}
   inputMode="decimal"
   placeholder="0"
   className="h-11 rounded-xl bg-zinc-800 border-white/10 text-white pl-4 pr-3"
 />
                 </div>
                 <div>
-                  <div className="text-xs opacity-70 mb-1">Multiplier</div>
-                  <Input
-                    value={multTxt}
-                    onChange={(e) => onChangeMult(e.target.value)}
-                    inputMode="decimal"
-                    placeholder="0"
-                    className="h-11 rounded-xl bg-zinc-800 border-white/10 text-white"
-                  />
-                </div>
-                <div>
                   <div className="text-xs opacity-70 mb-1">{t("betsizeReq")}</div>
-                  <Input
-                    value={betTxt}
-                    onChange={(e) => onChangeBet(e.target.value)}
-                    inputMode="decimal"
-                    placeholder="0"
-                    className="h-11 rounded-xl bg-zinc-800 border-white/10 text-white"
-                  />
+<Input
+  value={betTxt}
+  onChange={(e) => onChangeBet(e.target.value)}
+  inputMode="decimal"
+  placeholder="0"
+  className="h-11 rounded-xl bg-zinc-800 border-white/10 text-white pl-4 pr-3"
+/>
                 </div>
               </div>
 
