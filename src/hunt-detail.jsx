@@ -2192,32 +2192,42 @@ function RedeemModal({ open, onClose, slots, onSaved }) {
 }
 
 function RedeemFlowModal({ open, onClose, hunt, slots, onSaved }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const pageSize = 16;
 
   // índice inicial = 1ª slot sem payout (ou 0)
   const firstIdx = React.useMemo(() => {
-    const i = Math.max(0, slots.findIndex(s => s.payout == null));
+    const i = Math.max(0, slots.findIndex((s) => s.payout == null));
     return i === -1 ? 0 : i;
   }, [slots]);
 
   const [idx, setIdx] = React.useState(0);
-  React.useEffect(() => { if (open) setIdx(firstIdx); }, [open, firstIdx]);
+  React.useEffect(() => {
+    if (open) setIdx(firstIdx);
+  }, [open, firstIdx]);
 
   const row = slots[idx] || null;
 
-  // Campos (texto) para aceitar vírgula ou ponto
+  // Campos texto (aceitam vírgula/ponto)
   const [payoutTxt, setPayoutTxt] = React.useState("");
-  const [multTxt, setMultTxt]     = React.useState("");
-  const [betTxt, setBetTxt]       = React.useState("");
-  const [busy, setBusy]           = React.useState(false);
+  const [multTxt, setMultTxt] = React.useState("");
+  const [betTxt, setBetTxt] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+
+  // 🔵 estilo do destaque da slot atual
+  const currentGlow = {
+    boxShadow:
+      "0 0 0 2px rgba(56,189,248,.9), 0 0 24px rgba(56,189,248,.55)",
+    borderColor: "rgba(56,189,248,.85)",
+  };
 
   // Quando muda a slot ativa, inicializa campos
   React.useEffect(() => {
     if (!row) return;
     const bet = row.bet_size ?? "";
     const payout = row.payout ?? "";
-    const mult = (toNum(bet) > 0 && payout !== "" ) ? (toNum(payout) / toNum(bet)) : "";
+    const mult =
+      toNum(bet) > 0 && payout !== "" ? toNum(payout) / toNum(bet) : "";
     setBetTxt(String(bet ?? ""));
     setPayoutTxt(payout === "" ? "" : String(payout).replace(".", ","));
     setMultTxt(mult === "" ? "" : String(mult).replace(".", ","));
@@ -2226,36 +2236,53 @@ function RedeemFlowModal({ open, onClose, hunt, slots, onSaved }) {
   // Sync inputs
   const onChangeBet = (v) => {
     setBetTxt(v);
-    const b = toNum(v), m = toNum(multTxt);
-    if (b > 0 && multTxt !== "") setPayoutTxt(String(b * m).replace(".", ","));
+    const b = toNum(v),
+      m = toNum(multTxt);
+    if (b > 0 && multTxt !== "")
+      setPayoutTxt(String(b * m).replace(".", ","));
   };
   const onChangePayout = (v) => {
     setPayoutTxt(v);
-    const b = toNum(betTxt), p = toNum(v);
+    const b = toNum(betTxt),
+      p = toNum(v);
     if (b > 0 && v !== "") setMultTxt(String(p / b).replace(".", ","));
   };
   const onChangeMult = (v) => {
     setMultTxt(v);
-    const b = toNum(betTxt), m = toNum(v);
+    const b = toNum(betTxt),
+      m = toNum(v);
     if (b > 0 && v !== "") setPayoutTxt(String(b * m).replace(".", ","));
   };
 
   // KPIs (iguais ao layout antigo)
   const totals = React.useMemo(() => {
-    const startFromHunt  = Number(hunt?.start_cost);
-    const totalBetAll    = slots.reduce((a, s) => a + toNum(s.bet_size), 0);
-    const startCost      = Number.isFinite(startFromHunt) ? startFromHunt : totalBetAll;
+    const startFromHunt = Number(hunt?.start_cost);
+    const totalBetAll = slots.reduce((a, s) => a + toNum(s.bet_size), 0);
+    const startCost = Number.isFinite(startFromHunt)
+      ? startFromHunt
+      : totalBetAll;
 
-    const amountWon      = slots.reduce((a, s) => a + toNum(s.payout), 0);
-    const openedBet      = slots.filter(s => s.payout != null).reduce((a, s) => a + toNum(s.bet_size), 0);
-    const remainingBet   = Math.max(0, totalBetAll - openedBet);
+    const amountWon = slots.reduce((a, s) => a + toNum(s.payout), 0);
+    const openedBet = slots
+      .filter((s) => s.payout != null)
+      .reduce((a, s) => a + toNum(s.bet_size), 0);
+    const remainingBet = Math.max(0, totalBetAll - openedBet);
 
-    const pl             = amountWon - startCost;
-    const avgRequiredX   = remainingBet > 0 ? Math.max(0, startCost - amountWon) / remainingBet : 0;
-    const currentAvgX    = openedBet > 0 ? amountWon / openedBet : 0;
-    const cumulativeX    = totalBetAll > 0 ? amountWon / totalBetAll : 0;
+    const pl = amountWon - startCost;
+    const avgRequiredX =
+      remainingBet > 0 ? Math.max(0, startCost - amountWon) / remainingBet : 0;
+    const currentAvgX = openedBet > 0 ? amountWon / openedBet : 0;
+    const cumulativeX = totalBetAll > 0 ? amountWon / totalBetAll : 0;
 
-    return { startCost, amountWon, pl, avgRequiredX, currentAvgX, cumulativeX, totalBetAll };
+    return {
+      startCost,
+      amountWon,
+      pl,
+      avgRequiredX,
+      currentAvgX,
+      cumulativeX,
+      totalBetAll,
+    };
   }, [hunt?.start_cost, slots]);
 
   // Guardar esta slot
@@ -2265,13 +2292,13 @@ function RedeemFlowModal({ open, onClose, hunt, slots, onSaved }) {
       setBusy(true);
       const bet = betTxt === "" ? null : toNum(betTxt);
       const payout = payoutTxt === "" ? null : toNum(payoutTxt);
-      const mult = (bet != null && bet > 0 && payout != null) ? payout / bet : null;
+      const mult =
+        bet != null && bet > 0 && payout != null ? payout / bet : null;
 
       await updateHuntSlot(row.id, { bet_size: bet, payout, multiplier: mult });
       onSaved && onSaved();
 
       if (goNext) {
-        // próximo sem payout; se não houver, seguinte
         const nextIdx = slots.findIndex((s, i) => i > idx && s.payout == null);
         setIdx(nextIdx >= 0 ? nextIdx : Math.min(idx + 1, slots.length - 1));
       }
@@ -2282,17 +2309,43 @@ function RedeemFlowModal({ open, onClose, hunt, slots, onSaved }) {
     }
   }
 
-  // Copiar nome
-  const copySlotName = async () => {
-    if (!row) return;
-    try { await navigator.clipboard.writeText(row.name || ""); } catch {}
+  // Copiar nome (com alerta)
+  const copySlotName = async (name = row?.name) => {
+    if (!name) return;
+    try {
+      await navigator.clipboard.writeText(name);
+      alert(`${t("copied")} ${name}`);
+    } catch {}
+  };
+
+  // Ctrl+clique na imagem da slot ativa
+  const onActiveThumbClick = (e) => {
+    if (e.ctrlKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      copySlotName(row?.name);
+    }
   };
 
   // Paginação (16 por página)
   const page = Math.floor(idx / pageSize);
   const pages = Math.max(1, Math.ceil(slots.length / pageSize));
   const view = slots.slice(page * pageSize, page * pageSize + pageSize);
-  const gotoCard = (iAbs) => setIdx(Math.max(0, Math.min(slots.length - 1, iAbs)));
+  const gotoCard = (iAbs) =>
+    setIdx(Math.max(0, Math.min(slots.length - 1, iAbs)));
+
+  // Ctrl+clique numa miniatura = copiar; clique normal = navegar
+  const onTileClick = (e, s, iAbs) => {
+    if (e.ctrlKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      copySlotName(s?.name);
+    } else {
+      gotoCard(iAbs);
+    }
+  };
+
+  const currentBadge = lang === "pt" ? "ATUAL" : "CURRENT";
 
   if (!open) return null;
 
@@ -2323,23 +2376,31 @@ function RedeemFlowModal({ open, onClose, hunt, slots, onSaved }) {
             ].map(([label, value, color], i) => (
               <div key={i} className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
                 <div className="text-[11px] leading-none mb-1 text-white/70">{label}</div>
-                <div className={cn("font-semibold", numCls, color)}>{value}</div>
+                <div className={cn("font-semibold", "tabular-nums whitespace-nowrap", color)}>{value}</div>
               </div>
             ))}
           </div>
 
-          {/* Slot ativo */}
+          {/* Slot ativa */}
           {row && (
             <div className="rounded-xl border border-white/10 bg-zinc-900 p-3 mb-3">
               <div className="flex items-center gap-3">
                 {row.thumbnail ? (
-                  <img src={row.thumbnail} alt="" className="h-12 w-12 rounded object-cover" />
-                ) : <div className="h-12 w-12 rounded bg-white/10" />}
+                  <img
+                    src={row.thumbnail}
+                    alt=""
+                    className="h-12 w-12 rounded object-cover cursor-pointer"
+                    onClick={onActiveThumbClick}
+                    title="Ctrl + Clique copia o nome"
+                  />
+                ) : (
+                  <div className="h-12 w-12 rounded bg-white/10" />
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold truncate">{row.name}</div>
                   <div className="text-xs opacity-70 truncate">{row.provider}</div>
                 </div>
-                <Button variant="outline" className="h-9" onClick={copySlotName}>
+                <Button variant="outline" className="h-9" onClick={() => copySlotName(row?.name)}>
                   <CopyIcon className="h-4 w-4 mr-2" />
                   {t("copySlot")}
                 </Button>
@@ -2391,7 +2452,7 @@ function RedeemFlowModal({ open, onClose, hunt, slots, onSaved }) {
             </div>
           )}
 
-          {/* Grelha de slots + paginação */}
+          {/* Grelha + paginação */}
           <div className="rounded-xl border border-white/10 bg-zinc-900 p-3">
             <div className="grid grid-cols-8 gap-2">
               {view.map((s, i) => {
@@ -2401,23 +2462,39 @@ function RedeemFlowModal({ open, onClose, hunt, slots, onSaved }) {
                 return (
                   <button
                     key={s.id}
-                    onClick={() => gotoCard(iAbs)}
+                    onClick={(e) => onTileClick(e, s, iAbs)}
                     className={cn(
                       "relative rounded-lg overflow-hidden border text-left",
                       selected ? "border-white/60" : "border-white/10 hover:border-white/25"
                     )}
+                    style={selected ? currentGlow : undefined}
                     title={s.name}
                   >
                     <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">
                       #{iAbs + 1}
                     </div>
+
                     {isSuper && (
                       <div className="absolute right-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-fuchsia-500/90 text-black">
                         SUPER
                       </div>
                     )}
+
+                    {selected && (
+                      <div className="absolute inset-x-0 bottom-1 z-10 flex justify-center">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-400 text-black shadow">
+                          {currentBadge}
+                        </span>
+                      </div>
+                    )}
+
                     {s.thumbnail ? (
-                      <img src={s.thumbnail} alt="" className="h-16 w-full object-cover object-bottom" />
+                      <img
+                        src={s.thumbnail}
+                        alt=""
+                        className="h-16 w-full object-cover object-bottom"
+                        title="Ctrl + Clique copia o nome"
+                      />
                     ) : (
                       <div className="h-16 w-full bg-white/10" />
                     )}
@@ -2427,11 +2504,23 @@ function RedeemFlowModal({ open, onClose, hunt, slots, onSaved }) {
             </div>
 
             <div className="mt-3 flex items-center justify-center gap-2">
-              <Button variant="outline" className="h-9" onClick={() => setIdx(Math.max(0, idx - pageSize))} disabled={page === 0}>
+              <Button
+                variant="outline"
+                className="h-9"
+                onClick={() => setIdx(Math.max(0, idx - pageSize))}
+                disabled={page === 0}
+              >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <div className="text-sm opacity-80">{page + 1} / {pages}</div>
-              <Button variant="outline" className="h-9" onClick={() => setIdx(Math.min(slots.length - 1, idx + pageSize))} disabled={page + 1 >= pages}>
+              <div className="text-sm opacity-80">
+                {page + 1} / {pages}
+              </div>
+              <Button
+                variant="outline"
+                className="h-9"
+                onClick={() => setIdx(Math.min(slots.length - 1, idx + pageSize))}
+                disabled={page + 1 >= pages}
+              >
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
@@ -2441,6 +2530,7 @@ function RedeemFlowModal({ open, onClose, hunt, slots, onSaved }) {
     </div>
   );
 }
+
 
 
 export default function HuntDetail({ numberId }) {
@@ -2646,7 +2736,7 @@ const beLeft = React.useMemo(() => {
  // vai para o ecrã de Opening/Redeem depois de confirmares
 const confirmStartYes = React.useCallback(() => {
   setConfirmStart(false);
-  setRedeemFlowOpen(true);
+  setRedeemFlowOpen(true); // <- abre o modal
 }, []);
 
   if (busy) return <div className="max-w-7xl mx-auto px-4 py-10 text-sm opacity-70">A carregar…</div>;
