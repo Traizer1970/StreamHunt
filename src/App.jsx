@@ -459,20 +459,46 @@ const Shell = ({ route, navigate, children }) => {
     navigate("home");
   };
 
-  // Twitch OAuth
-  const handleTwitchLogin = async () => {
-    try {
-      const SITE_URL = import.meta.env.VITE_SITE_URL || window.location.origin;
-      const redirectTo = `${SITE_URL}/#/auth`;
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "twitch",
-        options: { redirectTo, scopes: "user:read:email" }
-      });
-      if (error) throw error;
-    } catch (err) {
-      showToast({ title: "Falha no login com Twitch", message: err?.message || "Tenta outra vez.", success: false });
+// usa /auth (sem #) para evitar duplo hash)
+const handleTwitchLogin = async () => {
+  try {
+    const SITE_URL = import.meta.env.VITE_SITE_URL || window.location.origin;
+    const redirectTo = `${SITE_URL}/auth`; // ← sem hash
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "twitch",
+      options: {
+        redirectTo,
+        scopes: "user:read:email",
+      },
+    });
+    if (error) throw error;
+  } catch (err) {
+    showToast({
+      title: "Falha no login com Twitch",
+      message: err?.message || "Tenta outra vez.",
+      success: false,
+    });
+  }
+};
+
+useEffect(() => {
+  // Se viermos de /auth#access_token=..., o supabase-js (com detectSessionInUrl:true)
+  // processa os tokens automaticamente ao criar o client. Aqui só limpamos o URL.
+  const hasTokens = /access_token=|refresh_token=/.test(window.location.hash);
+  const onBoot = async () => {
+    if (hasTokens) {
+      // garante que a sessão já foi registada
+      await supabase.auth.getSession().catch(() => {});
+      // limpa o URL (volta à home ou dashboard como preferires)
+      history.replaceState({}, "", `${window.location.origin}/#/dashboard`);
+    } else if (window.location.pathname === "/auth") {
+      // se alguém abrir /auth direto, manda para home
+      history.replaceState({}, "", `${window.location.origin}/#/home`);
     }
   };
+  onBoot();
+}, []);
+
 
   // erros vindos no hash (ex.: redirect mismatch)
   useEffect(() => {
