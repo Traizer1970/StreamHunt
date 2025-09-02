@@ -211,27 +211,30 @@ function anyToRgba(color, a = 1) {
 }
 
 /* Campo cor com swatch */
-function ColorField({ label, value, onChange, placeholder = "#RRGGBB ou rgba()" }) {
+function ColorField({ label, value, onChange, placeholder = "#RRGGBB or rgba()" }) {
   const css = String(value ?? "");
   return (
     <div>
-      <div className="text-xs opacity-70 mb-1">{label}</div>
+      {label ? <div className="text-xs opacity-70 mb-1">{label}</div> : null}
       <div className="relative">
         <div
-          className="absolute left-2 top-1/2 -translate-y-1/2 h-5 w-8 rounded border border-white/20"
+          className="absolute left-2 top-1/2 -translate-y-1/2 h-5 w-8 rounded-md border border-white/20"
           style={{ background: css || "transparent" }}
+          aria-hidden
         />
         <Input
           type="text"
           value={value ?? ""}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="h-9 pl-12 rounded-xl bg-zinc-900 border-white/10 text-white placeholder:text-white/40"
+          className="h-9 pl-12 rounded-xl bg-zinc-900 border-white/10 text-white placeholder:text-white/40
+                     focus:outline-none focus:ring-2 focus:ring-white/20"
         />
       </div>
     </div>
   );
 }
+
 function Section({ title, defaultOpen = true, right, children }) {
   const [open, setOpen] = React.useState(defaultOpen);
   return (
@@ -1088,6 +1091,36 @@ function KpiPresetSwatches({ value, onChange }) {
   );
 }
 
+function PanelPresetSwatches({ value, onChange }) {
+  // value: [start,end]
+  return (
+    <div className="flex flex-wrap gap-2">
+      {Object.entries(PANEL_PRESETS).map(([name, [start, end]]) => {
+        const active = Array.isArray(value) && value[0] === start && value[1] === end;
+        return (
+          <button
+            key={name}
+            type="button"
+            title={name} // nome só no hover
+            onClick={() => onChange([start, end])}
+            className={cn(
+              "w-10 h-8 rounded-md border inline-flex items-center justify-center",
+              active ? "ring-2 ring-white/70" : "opacity-85 hover:opacity-100"
+            )}
+            style={{
+              background: `linear-gradient(90deg, ${start} 0%, ${end} 100%)`,
+              borderColor: "rgba(255,255,255,.15)",
+            }}
+          >
+            <span className="sr-only">{name}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+
 function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
   if (!open) return null;
 
@@ -1469,92 +1502,123 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
     </Section>
 
     {/* CORES & EFEITOS */}
-    <Section
-      title="Cores & Efeitos"
-      right={
-        <Button
-          variant="outline"
-          className="h-8 px-2"
-          onClick={() => setOpts(o => ({
-            ...o,
-            panelBorder:"rgba(255,255,255,.12)",
-            textColor:"#e5e7eb",
-            subtextColor:"#9ca3af",
-            accentColor:"#fb7185",
-            chipBg:"rgba(255,255,255,.08)"
-          }))}
-        >
-          Reset
-        </Button>
+<Section
+  title="Colors & Effects"
+  right={
+    <Button
+      variant="outline"
+      className="h-8 px-2"
+      onClick={() =>
+        setOpts(o => ({
+          ...o,
+          panelBorder:"rgba(255,255,255,.12)",
+          textColor:"#e5e7eb",
+          subtextColor:"#9ca3af",
+          accentColor:"#fb7185",
+          chipBg:"rgba(255,255,255,.08)"
+        }))
       }
     >
-      {/* Presets de painel (gradiente) */}
+      Reset
+    </Button>
+  }
+>
+  {/* Swatches de gradiente (nome só no hover) */}
+  <Field label="Panel gradient">
+    <PanelPresetSwatches
+      value={[opts.panelBgStart, opts.panelBgEnd]}
+      onChange={([start, end]) =>
+        setOpts(o => ({ ...o, panelBgStart: start, panelBgEnd: end }))
+      }
+    />
+  </Field>
+
+  {/* Background start/end — inputs com swatch */}
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+    <ColorField
+      label="Background start"
+      value={opts.panelBgStart ?? ""}
+      onChange={(v) => setOpts(o => ({ ...o, panelBgStart: v }))}
+    />
+    <ColorField
+      label="Background end"
+      value={opts.panelBgEnd ?? ""}
+      onChange={(v) => setOpts(o => ({ ...o, panelBgEnd: v }))}
+    />
+  </div>
+
+  <ColorField
+    label="Panel/Line border"
+    value={opts.panelBorder ?? ""}
+    onChange={(v) => setOpts(o => ({ ...o, panelBorder: v }))}
+    placeholder="rgba(255,255,255,.12) or #hex"
+  />
+
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+    <ColorField
+      label="Text"
+      value={opts.textColor ?? ""}
+      onChange={(v) => setOpts(o => ({ ...o, textColor: v }))}
+    />
+    <ColorField
+      label="Subtext"
+      value={opts.subtextColor ?? ""}
+      onChange={(v) => setOpts(o => ({ ...o, subtextColor: v }))}
+    />
+  </div>
+
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+    <ColorField
+      label="Accent"
+      value={opts.accentColor ?? ""}
+      onChange={(v) => setOpts(o => ({ ...o, accentColor: v }))}
+    />
+    <ColorField
+      label="Chip bg"
+      value={opts.chipBg ?? ""}
+      onChange={(v) => setOpts(o => ({ ...o, chipBg: v }))}
+      placeholder="rgba(...) or #hex"
+    />
+  </div>
+
+  {/* Super (mantém, agora com ColorField estilizado) */}
+  {type === "hunt" && (
+    <>
+      <div className="text-xs opacity-70 mt-2">Super bonus</div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-        {Object.entries(PANEL_PRESETS).map(([name, [start, end]]) => (
-          <PresetChip
-            key={name}
-            name={name}
-            colors={[start, end]}
-            onClick={() => applyPanelPreset(name)}
-            active={opts.panelBgStart === start && opts.panelBgEnd === end}
+        <ColorField
+          label="Glow color"
+          value={opts.superGlowColor ?? ""}
+          onChange={(v) => setOpts(o => ({ ...o, superGlowColor: v }))}
+        />
+        <Field label="Glow strength">
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={opts.superGlowStrength ?? 0.6}
+            onChange={(e) => setOpts(o => ({ ...o, superGlowStrength: Number(e.target.value) }))}
+            className="w-full mt-2"
           />
-        ))}
+        </Field>
       </div>
-
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-        <Field label="Background start">
-          <ColorField label="" value={opts.panelBgStart ?? ""} onChange={(v)=>setOpts(o=>({...o,panelBgStart:v}))}/>
-        </Field>
-        <Field label="Background end">
-          <ColorField label="" value={opts.panelBgEnd ?? ""} onChange={(v)=>setOpts(o=>({...o,panelBgEnd:v}))}/>
-        </Field>
+        <ColorField
+          label="Super tag bg"
+          value={opts.superTagColor ?? ""}
+          onChange={(v) => setOpts(o => ({ ...o, superTagColor: v }))}
+        />
+        <ColorField
+          label="Super tag text"
+          value={opts.superTextColor ?? ""}
+          onChange={(v) => setOpts(o => ({ ...o, superTextColor: v }))}
+        />
       </div>
+    </>
+  )}
+</Section>
 
-      <Field label="Panel/Line border">
-        <ColorField label="" value={opts.panelBorder ?? ""} onChange={(v)=>setOpts(o=>({...o,panelBorder:v}))} placeholder="rgba(255,255,255,.12) ou #hex"/>
-      </Field>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-        <Field label="Text">
-          <ColorField label="" value={opts.textColor ?? ""} onChange={(v)=>setOpts(o=>({...o,textColor:v}))}/>
-        </Field>
-        <Field label="Subtext">
-          <ColorField label="" value={opts.subtextColor ?? ""} onChange={(v)=>setOpts(o=>({...o,subtextColor:v}))}/>
-        </Field>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-        <Field label="Accent">
-          <ColorField label="" value={opts.accentColor ?? ""} onChange={(v)=>setOpts(o=>({...o,accentColor:v}))}/>
-        </Field>
-        <Field label="Chip bg">
-          <ColorField label="" value={opts.chipBg ?? ""} onChange={(v)=>setOpts(o=>({...o,chipBg:v}))} placeholder="rgba(...) ou #hex"/>
-        </Field>
-      </div>
-
-      {/* SUPER (só hunt) */}
-      {type === "hunt" && (
-        <>
-          <div className="text-xs opacity-70 mt-2">Super bonus</div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-            <Field label="Glow color">
-              <ColorField label="" value={opts.superGlowColor ?? ""} onChange={(v)=>setOpts(o=>({...o,superGlowColor:v}))}/>
-            </Field>
-            <Field label="Glow strength">
-              <input type="range" min={0} max={1} step={0.05} value={opts.superGlowStrength ?? 0.6} onChange={(e)=>setOpts(o=>({...o,superGlowStrength:Number(e.target.value)}))} className="w-full mt-2"/>
-            </Field>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-            <Field label="Super tag bg">
-              <ColorField label="" value={opts.superTagColor ?? ""} onChange={(v)=>setOpts(o=>({...o,superTagColor:v}))}/>
-            </Field>
-            <Field label="Super tag text">
-              <ColorField label="" value={opts.superTextColor ?? ""} onChange={(v)=>setOpts(o=>({...o,superTextColor:v}))}/>
-            </Field>
-          </div>
-        </>
-      )}
-    </Section>
 
     {/* OPENING header toggles (quando não é hunt) */}
     {type !== "hunt" && (
