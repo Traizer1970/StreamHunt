@@ -1191,7 +1191,8 @@ function PanelPresetSwatches({ value, onChange }) {
 
 function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
   if (!open) return null;
-
+  const { t } = useLang();
+  
   function applyPanelPreset(name) {
     const [start, end] = PANEL_PRESETS[name] || PANEL_PRESETS.Neon;
     setOpts((o) => ({ ...o, panelBgStart: start, panelBgEnd: end }));
