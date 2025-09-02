@@ -275,6 +275,10 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
   const [error, setError] = React.useState(null);
   const [rowId, setRowId] = React.useState(null);
 
+    React.useEffect(() => {
+    setRowId(null);
+  }, [type, huntNumberId, user?.id]);
+
   const key = React.useMemo(
     () => `overlay:${type}:${huntNumberId == null ? "null" : String(huntNumberId)}`,
     [type, huntNumberId]
@@ -373,19 +377,6 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
         else                      q = q.eq("hunt_number_id", huntNumberId);
 
         const { data, error } = await q.maybeSingle();
-
-        if (error && error.code !== "PGRST116") throw error;
-
-if (data?.id) {
-  setRowId(data.id);
-  const merged = { ...defaultValue, ...pickOpts(data) };
-  setOpts(merged);
-  try { localStorage.setItem(key, JSON.stringify(merged)); } catch {}
-} else {
-  // 👇 muito importante para não atualizar a row do hunt anterior
-  setRowId(null);
-}
-
 
         if (!alive) return;
 
@@ -2243,12 +2234,6 @@ const [page, setPage] = React.useState(0); // ← ADICIONAR
   if (tipTimer.current) clearTimeout(tipTimer.current);
   tipTimer.current = setTimeout(() => setTip(null), 1400);
 }, []);
-
-// Sempre que muda o tipo ou o hunt_number_id, limpa o rowId
-React.useEffect(() => {
-  setRowId(null);
-}, [type, huntNumberId, user?.id]);
-
 
 React.useEffect(() => {
   return () => { if (tipTimer.current) clearTimeout(tipTimer.current); };
