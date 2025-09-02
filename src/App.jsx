@@ -261,10 +261,13 @@ function ThemeIconToggle() {
 }
 
 /* ---------- Simple modal ---------- */
+/* ---------- Simple modal (FIX: só bloqueia scroll quando open=true) ---------- */
 function BareModal({ open, onClose, children }) {
   const { isDark } = useTheme();
 
   React.useEffect(() => {
+    if (!open) return; // não tocar no body se o modal estiver fechado
+
     const html = document.documentElement;
     const body = document.body;
     const sbw = window.innerWidth - html.clientWidth;
@@ -280,9 +283,10 @@ function BareModal({ open, onClose, children }) {
     html.style.background = "transparent";
     body.style.background = "transparent";
     body.style.margin = "0";
-    body.style.overflow = "hidden";
+    body.style.overflow = "hidden"; // bloqueia scroll só enquanto o modal está aberto
     if (sbw > 0) body.style.marginRight = `${sbw}px`;
 
+    // ao fechar o modal, repõe os estilos originais
     return () => {
       html.style.background = prev.htmlBg;
       body.style.background = prev.bodyBg;
@@ -290,21 +294,27 @@ function BareModal({ open, onClose, children }) {
       body.style.overflow = prev.overflow;
       body.style.marginRight = prev.marginRight;
     };
-  }, []);
+  }, [open]);
 
   if (!open) return null;
+
   return (
     <div className="fixed inset-0 z-[60] overflow-hidden">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden />
       <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-[520px]">
-        <div className={cn("rounded-2xl p-6 border shadow-2xl max-h-[90vh] overflow-auto",
-          isDark ? "bg-gradient-to-b from-zinc-900 to-zinc-950 border-white/10" : "bg-white border-zinc-200")}>
+        <div
+          className={cn(
+            "rounded-2xl p-6 border shadow-2xl max-h-[90vh] overflow-auto",
+            isDark ? "bg-gradient-to-b from-zinc-900 to-zinc-950 border-white/10" : "bg-white border-zinc-200"
+          )}
+        >
           {children}
         </div>
       </div>
     </div>
   );
 }
+
 
 /* -------- auth helpers -------- */
 function mapAuthErrorInfo(err) {
