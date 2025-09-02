@@ -377,45 +377,8 @@ function Segmented({ value, onChange, options, className = "" }) {
 }
 
 // switches estilizados para aquelas opções booleanas
+// substitui o Toggle atual por este
 function Toggle({ label, checked, onChange, hint }) {
-
-  const trackRef = React.useRef(null);
-  const draggingRef = React.useRef(false);
-  const [dragPos, setDragPos] = React.useState(null); // 0..1 ou null
-  const active = dragPos != null ? dragPos > 0.5 : !!checked;
-  // distância do knob (em px). translate-x-4 = 16px
-  const knobPx = (dragPos != null ? dragPos : checked ? 1 : 0) * 16;
-
-  function startDrag(e) {
-    e.preventDefault();
-    const rect = trackRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    draggingRef.current = true;
-    const getX = (ev) =>
-      (ev?.clientX ?? ev?.touches?.[0]?.clientX ?? ev?.changedTouches?.[0]?.clientX ?? 0);
-    const update = (clientX) => {
-      const p = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-      setDragPos(p);
-    };
-    update(getX(e));
-    const onMove = (ev) => update(getX(ev));
-    const onUp = (ev) => {
-      document.removeEventListener("pointermove", onMove);
-      document.removeEventListener("pointerup", onUp);
-      document.removeEventListener("touchmove", onMove);
-      document.removeEventListener("touchend", onUp);
-      const finalVal = (dragPos ?? (checked ? 1 : 0)) > 0.5;
-      setDragPos(null);
-      draggingRef.current = false;
-      if (finalVal !== !!checked) onChange(finalVal);
-    };
-    // pointer + touch (Safari antigo)
-    document.addEventListener("pointermove", onMove);
-    document.addEventListener("pointerup", onUp, { once: true });
-    document.addEventListener("touchmove", onMove, { passive: false });
-    document.addEventListener("touchend", onUp, { once: true });
-  }
-
   function onKeyDown(e) {
     if (e.key === " " || e.key === "Enter") {
       e.preventDefault();
@@ -428,46 +391,38 @@ function Toggle({ label, checked, onChange, hint }) {
       <button
         type="button"
         role="switch"
-        aria-checked={active}
-        draggable={false}
+        aria-checked={!!checked}
+        onClick={() => onChange(!checked)}
         onKeyDown={onKeyDown}
-        onClick={() => {
-          // se acabou de arrastar, ignora o click fantasma
-          if (draggingRef.current) return;
-          onChange(!checked);
-        }}
         className={cn(
           "h-9 px-3 rounded-xl border inline-flex items-center gap-2 select-none transition shadow-sm hover:shadow",
-          active
+          checked
             ? "bg-sky-500/10 text-sky-100 border-sky-400/40 ring-1 ring-sky-400/30"
             : "bg-zinc-900/60 text-white/80 border-white/10 hover:text-white"
         )}
-        style={{ touchAction: "pan-x" }}
+        style={{ touchAction: "manipulation" }} // evita gestos de arrastar no telemóvel
       >
         <span className="text-sm">{label}</span>
+
         <span
-          ref={trackRef}
-          onPointerDown={startDrag}
-          onTouchStart={startDrag}
           className={cn(
             "ml-1 relative h-5 w-9 rounded-full transition",
-            active ? "bg-sky-400/70" : "bg-white/15"
+            checked ? "bg-sky-400/70" : "bg-white/15"
           )}
           aria-hidden
         >
           <span
-            className="absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow"
-            style={{
-              transform: `translateX(${knobPx}px)`,
-              transition: dragPos != null ? "none" : "transform 150ms ease"
-            }}
+            className="absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform"
+            style={{ transform: `translateX(${checked ? 16 : 0}px)` }}
           />
         </span>
       </button>
+
       {hint ? <HelpText>{hint}</HelpText> : null}
     </div>
   );
 }
+
 
 
 
