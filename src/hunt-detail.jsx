@@ -2030,6 +2030,167 @@ function OpeningModal({ open, onClose, huntNumberId, opts }) {
   );
 }
 
+function RedeemModal({ open, onClose, slots, onSaved }) {
+  const [form, setForm] = React.useState({});
+  const [saving, setSaving] = React.useState({});
+  const [savingAll, setSavingAll] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const map = {};
+    for (const s of slots) map[s.id] = s.payout ?? "";
+    setForm(map);
+  }, [open, slots]);
+
+  const setVal = (id, v) => setForm((f) => ({ ...f, [id]: v }));
+
+  async function saveOne(row) {
+    try {
+      setSaving((m) => ({ ...m, [row.id]: true }));
+      const payout = toNum(form[row.id]);
+      const bet = toNum(row.bet_size);
+      const multiplier = bet > 0 ? payout / bet : null;
+      await updateHuntSlot(row.id, { payout, multiplier });
+      onSaved && onSaved();
+    } catch (e) {
+      alert(e.message || "Falha ao guardar.");
+    } finally {
+      setSaving((m) => {
+        const { [row.id]: _, ...rest } = m;
+        return rest;
+      });
+    }
+  }
+
+  async function saveAll() {
+    try {
+      setSavingAll(true);
+      for (const s of slots) {
+        const v = form[s.id];
+        if (v === "" || String(v) === String(s.payout ?? "")) continue;
+        const payout = toNum(v);
+        const bet = toNum(s.bet_size);
+        const multiplier = bet > 0 ? payout / bet : null;
+        await updateHuntSlot(s.id, { payout, multiplier });
+      }
+      onSaved && onSaved();
+    } catch (e) {
+      alert(e.message || "Falha ao guardar.");
+    } finally {
+      setSavingAll(false);
+    }
+  }
+
+  const fillPreset = (row, mul) => {
+    const v = mul === 0 ? 0 : toNum(row.bet_size) * mul;
+    setVal(row.id, String(v).replace(".", ",")); // aceita vírgula
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[120]">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[96vw] max-w-[1100px]">
+        <div className="rounded-2xl border border-white/10 bg-zinc-950 text-white shadow-2xl p-4 md:p-5">
+          {/* Topbar */}
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-lg font-semibold">Opening — Earnings</div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" className="h-9" onClick={onClose}>
+                <X className="h-4 w-4 mr-2" />
+                Fechar
+              </Button>
+              <Button className="h-9" onClick={saveAll} disabled={savingAll}>
+                {savingAll ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                Guardar tudo
+              </Button>
+            </div>
+          </div>
+
+          {/* Tabela */}
+          <div className="rounded-xl border border-white/10 overflow-hidden">
+            <div className="grid grid-cols-12 px-3 py-2 text-xs font-semibold bg-white/[0.04]">
+              <div className="col-span-6">Bónus</div>
+              <div className="col-span-2 text-center">Bet</div>
+              <div className="col-span-3 text-center">Earnings (€)</div>
+              <div className="col-span-1 text-center">X</div>
+            </div>
+
+            <div className="max-h-[65vh] overflow-auto">
+              {slots.map((row, i) => {
+                const bet = toNum(row.bet_size);
+                const payout = toNum(form[row.id]);
+                const mult = bet > 0 && payout ? payout / bet : 0;
+
+                return (
+                  <div key={row.id} className="grid grid-cols-12 items-center px-3 py-2 border-t border-white/10">
+                    <div className="col-span-6 flex items-center gap-3 min-w-0">
+                      <div className="text-[11px] opacity-60 w-6">#{i + 1}</div>
+                      {row.thumbnail ? (
+                        <img src={row.thumbnail} alt="" className="h-8 w-8 rounded object-cover" />
+                      ) : (
+                        <div className="h-8 w-8 rounded bg-white/10" />
+                      )}
+                      <div className="min-w-0">
+                        <div className="truncate font-medium">{row.name}</div>
+                        <div className="text-xs opacity-70 truncate">{row.provider}</div>
+                      </div>
+                    </div>
+
+                    <div className={cn("col-span-2 text-center", numCls)}>{row.bet_size ?? "—"}</div>
+
+                    <div className="col-span-3">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={form[row.id] ?? ""}
+                          onChange={(e) => setVal(row.id, e.target.value)}
+                          placeholder="0"
+                          className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
+                          inputMode="decimal"
+                        />
+                        <Button
+                          variant="secondary"
+                          className="h-9"
+                          onClick={() => saveOne(row)}
+                          disabled={!!saving[row.id]}
+                          title="Guardar linha"
+                        >
+                          {saving[row.id] ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Save className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
+                      <div className="mt-1 flex items-center gap-1 text-[11px]">
+                        <button className="px-2 py-0.5 rounded border border-white/10 hover:bg-white/10" onClick={() => fillPreset(row, 0)}>0</button>
+                        <button className="px-2 py-0.5 rounded border border-white/10 hover:bg-white/10" onClick={() => fillPreset(row, 1)}>1x</button>
+                        <button className="px-2 py-0.5 rounded border border-white/10 hover:bg-white/10" onClick={() => fillPreset(row, 2)}>2x</button>
+                        <button className="px-2 py-0.5 rounded border border-white/10 hover:bg-white/10" onClick={() => fillPreset(row, 5)}>5x</button>
+                        <button className="px-2 py-0.5 rounded border border-white/10 hover:bg-white/10" onClick={() => fillPreset(row, 10)}>10x</button>
+                      </div>
+                    </div>
+
+                    <div className={cn("col-span-1 text-center", numCls)}>
+                      {mult ? fmtPlain(mult, 2) + "x" : "—"}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mt-3 text-[11px] opacity-60">
+            Dica: podes escrever com vírgula ou ponto; o multiplicador é guardado automaticamente.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 export default function HuntDetail({ numberId }) {
   const { isDark } = useTheme();
   const { t } = useLang();
@@ -2049,7 +2210,7 @@ export default function HuntDetail({ numberId }) {
     return () => window.removeEventListener("hashchange", onHash);
   }, [numberId]);
 
-  const [openOpening, setOpenOpening] = React.useState(false);
+  const [redeemOpen, setRedeemOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(true);
   const [hunt, setHunt] = React.useState(null);
   const [slots, setSlots] = React.useState([]);
@@ -2231,8 +2392,9 @@ const beLeft = React.useMemo(() => {
  // vai para o ecrã de Opening/Redeem depois de confirmares
 const confirmStartYes = React.useCallback(() => {
   setConfirmStart(false);
-  setOpenOpening(true);     // abre o modal
+  setRedeemOpen(true);   // abre o modal de redeem
 }, []);
+
 
 
 
@@ -2473,12 +2635,13 @@ const confirmStartYes = React.useCallback(() => {
         }}
       />
 
-        <OpeningModal
-  open={openOpening}
-  onClose={() => setOpenOpening(false)}
-  huntNumberId={hunt.number_id}
-  opts={openingOpts}
+<RedeemModal
+  open={redeemOpen}
+  onClose={() => setRedeemOpen(false)}
+  slots={sortedSlots}
+  onSaved={refreshSlots}
 />
+
 
 
       {/* Início do Redeem (apenas confirmação) */}
