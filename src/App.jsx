@@ -1129,6 +1129,7 @@ export default function App() {
   // detail routes
   const huntDetailMatch = route.match(/^\/?hunts\/([^\/?#]+)$/);
   const tournamentDetailMatch = route.match(/^\/?tournaments\/([^\/?#]+)$/);
+  const battleDetailMatch = route.match(/^\/?battles\/([^\/?#]+)$/);
 
  if (route.startsWith("hunt-widget")) {
    return (
@@ -1162,6 +1163,7 @@ if (isOverlay) {
   const isDetailRoute =
     !!huntDetailMatch ||
     !!tournamentDetailMatch ||
+    !!battleDetailMatch ||
     route.startsWith("battles/") ||
     route.startsWith("overlay/battle/");
 
@@ -1170,6 +1172,9 @@ if (isOverlay) {
   if (huntDetailMatch) {
     const numberId = huntDetailMatch[1];
     content = <HuntDetail numberId={numberId} />;
+    } else if (battleDetailMatch) {                   // <-- NOVO
+  const battleId = battleDetailMatch[1];
+  content = <BattleView battleId={battleId} />;   // usa o componente já importado
   } else if (route.startsWith("w/")) {
     content = <WidgetByToken />;
   } else if (tournamentDetailMatch) {
