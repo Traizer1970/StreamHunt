@@ -124,6 +124,13 @@ function readOptsFromQS(qs) {
   if (qs.has("kbr")) out.kpiBorder = "#" + qs.get("kbr");
   if (qs.has("ktx")) out.kpiText = "#" + qs.get("ktx");
 
+  // ── opções específicas do OPENING ──
+  if (qs.has("title")) out.showTitle = qs.get("title") !== "0";
+  if (qs.has("current")) out.showCurrent = qs.get("current") !== "0";
+  const ls = getStr("listside"); if (ls) out.listSide = ls;       // left | right
+  if (qs.has("bestworst")) out.showBestWorst = qs.get("bestworst") !== "0";
+  const metric = getStr("metric"); if (metric) out.metric = metric; // "x" | "payout"
+
   // remove undefineds
   Object.keys(out).forEach((k) => out[k] === undefined && delete out[k]);
   return out;
@@ -194,6 +201,26 @@ const DEFAULTS = {
   kpiBg: "",
   kpiBorder: "",
   kpiText: "",
+};
+
+// Defaults específicos do OPENING
+const OPENING_DEFAULTS = {
+  baseW: 560,
+  baseH: 320,
+  pad: 16,
+  align: "center",
+  shine: true,
+  pulse: true,
+
+  showTitle: true,
+  showCurrent: true,
+
+  // layout opening
+  visible: 5,            // nº de cartas grandes (3/5/7/9…)
+  listSide: "left",      // "left" | "right"
+  showBox: true,         // caixa/gradiente de fundo
+  showBestWorst: true,   // mostrar BEST / WORST
+  metric: "x",           // "x" (multiplicador) | "payout"
 };
 
 /* ───────────────── “active” → numberId ───────────────── */
@@ -271,10 +298,10 @@ export default function HuntWidgetPage() {
   const [err, setErr] = React.useState("");
 
   const qsOpts = React.useMemo(() => readOptsFromQS(qs), [qs]);
-  const mergedOpts = React.useMemo(
-    () => ({ ...DEFAULTS, ...dbOpts, ...qsOpts }), // QS só sobrepõe se existir no URL
-    [dbOpts, qsOpts]
-  );
+  const mergedOpts = React.useMemo(() => {
+    const base = (type === "opening") ? OPENING_DEFAULTS : DEFAULTS;
+    return { ...base, ...dbOpts, ...qsOpts }; // QS só sobrepõe se existir no URL
+  }, [type, dbOpts, qsOpts]);
 
   React.useEffect(() => {
     let alive = true;
@@ -343,10 +370,14 @@ export default function HuntWidgetPage() {
     );
   }
 
-  return <HuntOverlayCanvas hunt={hunt} slots={slots} opts={mergedOpts} />;
+  return (
+    type === "opening"
+      ? <OpeningOverlayCanvas hunt={hunt} slots={slots} opts={mergedOpts} />
+      : <HuntOverlayCanvas    hunt={hunt} slots={slots} opts={mergedOpts} />
+  );
 }
 
-/* ───────────────── Render do overlay ───────────────── */
+/* ───────────────── Render do overlay HUNT ───────────────── */
 function HuntOverlayCanvas({ hunt, slots, opts }) {
   const baseW = Number(opts.baseW || 560);
   const baseH = Number(opts.baseH || 280);
@@ -549,6 +580,148 @@ function HuntOverlayCanvas({ hunt, slots, opts }) {
   );
 }
 
+/* ───────────────── Render do overlay OPENING ───────────────── */
+function OpeningOverlayCanvas({ hunt, slots, opts }) {
+  const baseW = Number(opts.baseW || 560);
+  const baseH = Number(opts.baseH || 320);
+  const visible  = Math.max(1, Number(opts.visible || 5));
+  const listSide = String(opts.listSide || "left");
+  const showBox  = opts.showBox !== false;
+
+  const alignMap = { left: "flex-start", center: "center", right: "flex-end" };
+  const justify  = alignMap[String(opts.align || "center")] || "center";
+
+  // BEST / WORST
+  const scored = slots
+    .map((s) => {
+      const bet = toNum(s.bet_size);
+      const payout = toNum(s.payout);
+      const x = bet > 0 ? payout / bet : 0;
+      const score = (opts.metric === "payout") ? payout : x;
+      return { ...s, _score: score };
+    })
+    .filter((s) => s._score > 0);
+
+  const best  = opts.showBestWorst && scored.length ? scored.reduce((a,b)=>a._score>b._score?a:b) : null;
+  const worst = opts.showBestWorst && scored.length ? scored.reduce((a,b)=>a._score<b._score?a:b) : null;
+
+  const hero = slots.slice(0, visible); // cartas grandes ao centro
+
+  const bg1 = opts.panelBgStart || "#0b1020";
+  const bg2 = opts.panelBgEnd   || "#111827";
+
+  const Wrap = ({children}) => (
+    <div
+      style={{
+        width: baseW, height: baseH, padding: opts.pad || 0,
+        margin: "0 auto", borderRadius: 12, overflow: "hidden",
+        background: showBox ? `linear-gradient(135deg, ${bg1} 0%, ${bg2} 100%)` : "transparent",
+        border: showBox ? "1px solid rgba(255,255,255,.12)" : "none",
+        color: "#e5e7eb", fontFamily: RUBIK, position: "relative",
+      }}
+    >
+      {children}
+    </div>
+  );
+
+  const Badge = ({label, color}) => (
+    <span
+      style={{
+        position: "absolute", top: -8, right: 8, zIndex: 10,
+        padding: "2px 8px", borderRadius: 999,
+        fontSize: 10, fontWeight: 800, background: color, color: "#0b0b0b",
+        boxShadow: "0 6px 16px rgba(0,0,0,.35)",
+      }}
+    >
+      {label}
+    </span>
+  );
+
+  const SideList = () => (
+    <div style={{ width: 176, maxHeight: baseH - 60, overflow: "auto" }}>
+      {slots.map((s, i) => (
+        <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <div style={{ width: 24, textAlign: "right", fontSize: 11, opacity: .65 }}>#{i+1}</div>
+          {s.thumbnail
+            ? <img src={s.thumbnail} alt="" style={{ height: 36, width: 56, borderRadius: 8, objectFit: "cover" }} />
+            : <div style={{ height: 36, width: 56, borderRadius: 8, background: "rgba(255,255,255,.1)" }} />
+          }
+          <div style={{ fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {s.name}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <Wrap>
+      {/* header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px 8px" }}>
+        {opts.showTitle !== false ? (
+          <div style={{ padding: "6px 12px", borderRadius: 999, border: "1px solid rgba(255,255,255,.15)", background: "rgba(255,255,255,.08)", fontSize: 12 }}>
+            {(hunt?.title || "Hunt")} — Opening
+          </div>
+        ) : <div />}
+
+        {opts.showCurrent !== false ? (
+          <div style={{ padding: "6px 12px", borderRadius: 999, border: "1px solid rgba(255,255,255,.15)", background: "rgba(255,255,255,.08)", fontSize: 12, maxWidth: baseW * 0.4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {hero[0]?.name || "—"}
+          </div>
+        ) : <div />}
+      </div>
+
+      {/* corpo */}
+      <div style={{ display: "flex", gap: 12, padding: "0 12px", height: `calc(100% - 46px)` }}>
+        {listSide === "left" && <SideList />}
+
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: justify, overflow: "hidden" }}>
+          <div style={{ display: "flex", gap: 24 }}>
+            {hero.map((s, i) => (
+              <div key={s.id}
+                style={{
+                  position: "relative", width: 160, height: 220, borderRadius: 12,
+                  overflow: "hidden", border: "1px solid rgba(255,255,255,.12)",
+                  boxShadow: "0 12px 28px rgba(0,0,0,.35)",
+                }}
+                title={s.name}
+              >
+                {s.thumbnail
+                  ? <img src={s.thumbnail} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+                  : <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,.1)" }} />
+                }
+
+                <div style={{ position: "absolute", left: 6, top: 6, zIndex: 10,
+                              fontSize: 10, fontWeight: 700, padding: "2px 6px",
+                              borderRadius: 6, background: "rgba(0,0,0,.65)" }}>
+                  #{i+1}
+                </div>
+
+                {/* BEST / WORST */}
+                {best && s.id === best.id   && opts.showBestWorst && <Badge label="BEST"  color="#22c55e" />}
+                {worst && s.id === worst.id && opts.showBestWorst && <Badge label="WORST" color="#ef4444" />}
+
+                {/* nome */}
+                <div style={{
+                  position: "absolute", left: 8, right: 8, bottom: 8,
+                  borderRadius: 10, border: "1px solid rgba(255,255,255,.18)",
+                  background: "rgba(0,0,0,.45)", padding: "6px 8px",
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                }}>
+                  {s.name}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {listSide === "right" && <SideList />}
+      </div>
+    </Wrap>
+  );
+}
+
+/* ───────────────── Card usado no overlay HUNT ───────────────── */
 function Card({ s, i, width, cardH, opts }) {
   const isSuper = !!(
     s?.is_super ?? s?.super ?? s?._raw?.is_super ?? s?._raw?.super

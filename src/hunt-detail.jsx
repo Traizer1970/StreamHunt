@@ -802,6 +802,11 @@ const DEFAULT_OPENING_OVERLAY = {
   showTitle: true,
   showCurrent: true,
   kpiFont: 1.0,
+  visible: 5,              // quantas “cards” grandes (3/5/7…)
+  listSide: "left",        // "left" | "right"
+  showBox: true,           // caixa/gradiente de fundo
+  showBestWorst: true,     // badges BEST / WORST
+  metric: "x",             // "x" (multiplicador) | "payout"
 };
 
 /* ───────────────────────── URLs ───────────────────────── */
@@ -863,6 +868,14 @@ function buildOpeningOverlayUrl(base, huntNumberId, opts) {
   qs.set("bh", String(opts.baseH || 320));
   qs.set("title", opts.showTitle === false ? "0" : "1");
   qs.set("current", opts.showCurrent === false ? "0" : "1");
+
+  // NOVO
+  qs.set("visible", String(opts.visible || 5));
+  qs.set("listside", String(opts.listSide || "left"));
+  qs.set("box", opts.showBox ? "1" : "0");
+  qs.set("bestworst", opts.showBestWorst ? "1" : "0");
+  qs.set("metric", String(opts.metric || "x"));
+
   return `${base}#/hunt-widget/opening/${huntNumberId}?${qs.toString()}`;
 }
 
@@ -1180,45 +1193,127 @@ return (
 
 /* ───────────────────────── Opening Preview ───────────────────────── */
 function OpeningOverlayPreview({ hunt, slots, opts }) {
-  const current = slots[0] || null;
   const baseW = Number(opts.baseW || 560);
   const baseH = Number(opts.baseH || 320);
+  const visible = Math.max(1, Number(opts.visible || 5));
+  const listSide = String(opts.listSide || "left");
 
-  return (
+  // BEST / WORST por métrica
+  const scored = slots.map(s => {
+    const bet = toNum(s.bet_size);
+    const payout = toNum(s.payout);
+    const x = bet > 0 ? payout / bet : 0;
+    const score = (opts.metric === "payout") ? payout : x;
+    return { ...s, _score: score };
+  }).filter(s => s._score > 0);
+
+  const best = opts.showBestWorst && scored.length ? scored.reduce((a,b)=>a._score>b._score?a:b) : null;
+  const worst = opts.showBestWorst && scored.length ? scored.reduce((a,b)=>a._score<b._score?a:b) : null;
+
+  const hero = slots.slice(0, visible);   // as “cards” grandes no centro
+  const side = slots;                      // lista lateral
+
+  const Box = ({children}) => (
     <div
-      className="rounded-xl border border-white/10 overflow-hidden relative"
+      className="rounded-xl overflow-hidden relative"
       style={{
         width: baseW,
         height: baseH,
-        background: "linear-gradient(135deg, rgba(15,16,33,1) 0%, rgba(24,16,40,1) 100%)",
+        border: opts.showBox ? "1px solid rgba(255,255,255,.12)" : "none",
+        background: opts.showBox
+          ? "linear-gradient(135deg, rgba(15,16,33,1) 0%, rgba(24,16,40,1) 100%)"
+          : "transparent",
         fontFamily: RUBIK_STACK,
       }}
+    >{children}</div>
+  );
+
+  const BestChip = ({label, color="#22c55e"}) => (
+    <span
+      className="absolute -top-2 right-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold shadow"
+      style={{ background: color, color: "#0b0b0b" }}
     >
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap');`}</style>
+      {label}
+    </span>
+  );
+
+  return (
+    <Box>
+      {/* header */}
       <div className="px-3 pt-3 pb-2 flex items-center justify-between">
         {opts.showTitle !== false ? (
           <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
             {hunt?.title || "Hunt"} — Opening
           </div>
         ) : <div />}
+
         {opts.showCurrent !== false ? (
           <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
-            {current ? current.name : "—"}
+            {hero[0]?.name || "—"}
           </div>
         ) : <div />}
       </div>
 
-      <div className="px-3" style={{ display: "grid", gridTemplateColumns: "repeat(8,minmax(0,1fr))", gap: 8 }}>
-        {slots.slice(0, 24).map((s, i) => (
-          <div key={s.id} className="relative rounded-lg overflow-hidden border border-white/10" title={s.name}>
-            <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">#{i + 1}</div>
-            {s.thumbnail ? (
-              <img src={s.thumbnail} alt="" className="h-14 w-full object-cover object-bottom" />
-            ) : (<div className="h-14 w-full bg-white/10" />)}
+      {/* corpo */}
+      <div className="px-3 h-[calc(100%-46px)] flex gap-3">
+        {/* lista lateral */}
+        {listSide === "left" && (
+          <div className="w-44 shrink-0 overflow-auto">
+            {side.map((s,i)=>(
+              <div key={s.id} className="flex items-center gap-2 mb-2">
+                <div className="text-[11px] opacity-60 w-6">#{i+1}</div>
+                {s.thumbnail
+                  ? <img src={s.thumbnail} className="h-9 w-14 rounded object-cover" />
+                  : <div className="h-9 w-14 rounded bg-white/10" />}
+                <div className="text-[12px] truncate">{s.name}</div>
+              </div>
+            ))}
           </div>
-        ))}
+        )}
+
+        {/* heros */}
+        <div className="flex-1 flex items-center justify-center overflow-hidden">
+          <div className="flex gap-12">
+            {hero.map((s,i)=>(
+              <div key={s.id} className="relative rounded-xl overflow-hidden border border-white/12 shadow-[0_12px_28px_rgba(0,0,0,.35)]" style={{width: 160, height: 220}}>
+                {s.thumbnail
+                  ? <img src={s.thumbnail} className="absolute inset-0 w-full h-full object-cover" />
+                  : <div className="absolute inset-0 bg-white/10" />}
+
+                <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">#{i+1}</div>
+
+                {/* BEST/WORST */}
+                {best && s.id===best.id && opts.showBestWorst && (
+                  <BestChip label="BEST" color="#22c55e" />
+                )}
+                {worst && s.id===worst.id && opts.showBestWorst && (
+                  <BestChip label="WORST" color="#ef4444" />
+                )}
+
+                <div className="absolute inset-x-2 bottom-2 rounded-lg px-2 py-1 text-white/95 text-[12px] bg-black/45 border border-white/15 truncate">
+                  {s.name}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* lista lateral (direita) */}
+        {listSide === "right" && (
+          <div className="w-44 shrink-0 overflow-auto">
+            {side.map((s,i)=>(
+              <div key={s.id} className="flex items-center gap-2 mb-2">
+                <div className="text-[11px] opacity-60 w-6">#{i+1}</div>
+                {s.thumbnail
+                  ? <img src={s.thumbnail} className="h-9 w-14 rounded object-cover" />
+                  : <div className="h-9 w-14 rounded bg-white/10" />}
+                <div className="text-[12px] truncate">{s.name}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-    </div>
+    </Box>
   );
 }
 
@@ -1910,13 +2005,41 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 
 
     {/* OPENING header toggles (quando não é hunt) */}
-    {type !== "hunt" && (
-      <Section title="Header (Opening)">
- <Toggle label={t("showHuntTitle")} checked={opts.showTitle !== false} onChange={(v)=>setOpts(o=>({...o,showTitle:!!v}))}/>
- <Toggle label={t("showCurrentSlot")} checked={opts.showCurrent !== false} onChange={(v)=>setOpts(o=>({...o,showCurrent:!!v}))}/>
+{type !== "hunt" && (
+  <Section title="Layout (Opening)">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      <Field label="Cards visíveis">
+        <Segmented
+          value={String(opts.visible ?? 5)}
+          onChange={(v)=>setOpts(o=>({...o, visible: Number(v)}))}
+          options={[{value:"3",label:"3"},{value:"5",label:"5"},{value:"7",label:"7"},{value:"9",label:"9"}]}
+        />
+      </Field>
 
-      </Section>
-    )}
+      <Field label="Lista lateral">
+        <Segmented
+          value={opts.listSide || "left"}
+          onChange={(v)=>setOpts(o=>({...o, listSide: v}))}
+          options={[{value:"left",label:"Esquerda"},{value:"right",label:"Direita"}]}
+        />
+      </Field>
+    </div>
+
+    <div className="flex flex-wrap gap-2">
+      <Toggle label="Caixa de fundo" checked={!!opts.showBox} onChange={(v)=>setOpts(o=>({...o, showBox: !!v}))}/>
+      <Toggle label="Mostrar Best/Worst" checked={!!opts.showBestWorst} onChange={(v)=>setOpts(o=>({...o, showBestWorst: !!v}))}/>
+    </div>
+
+    <Field label="Métrica para Best/Worst">
+      <Segmented
+        value={opts.metric || "x"}
+        onChange={(v)=>setOpts(o=>({...o, metric: v}))}
+        options={[{value:"x",label:"X"},{value:"payout",label:"Payout €"}]}
+      />
+    </Field>
+  </Section>
+)}
+
   </div>
 </div>
 <style>{`
