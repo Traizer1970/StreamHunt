@@ -1,240 +1,240 @@
 // src/pages/opening-designer.jsx
 import React from "react";
-import { supabase } from "@/lib/supabase";
 
-/* ───────────────── helpers ───────────────── */
-const RUBIK = "'Rubik', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial";
-
-function parseHash() {
+/* ---------------- helpers ---------------- */
+const LOCALE = "pt-PT";
+const toInt = (v, d = 0) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.round(n) : d;
+};
+const getHashQS = () => {
   const raw = (window.location.hash || "#").slice(1);
-  const [path, query] = raw.split("?");
-  let parts = (path || "").split("/").filter(Boolean);
-
-  // suportar "#/designer/opening/..." ou "#/opening/designer/..." ou variações
-  if (parts[0] === "designer") parts = parts.slice(1);
-  const type = parts[0] || "opening";
-  const numberId = parts[1] || "active";
-  const qs = new URLSearchParams(query || "");
-  return { type, numberId, qs };
-}
-function useHashRoute() {
-  const [route, setRoute] = React.useState(parseHash());
-  React.useEffect(() => {
-    const onHash = () => setRoute(parseHash());
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
-  }, []);
-  return route;
-}
-
-/* ───────────────── defaults ───────────────── */
-const DEFAULTS = {
-  // apenas opções relevantes ao Opening
-  visible: 9,
-  listSide: "right",         // left | right
-  showBox: true,
-  showBestWorst: false,
-  bestWorstMetric: "payout", // payout | mult | bet
+  const [, q] = raw.split("?");
+  return new URLSearchParams(q || "");
+};
+const setHashQS = (mut) => {
+  const raw = (window.location.hash || "#").slice(1);
+  const [path] = raw.split("?");
+  const qs = getHashQS();
+  Object.entries(mut).forEach(([k, v]) => {
+    if (v === undefined || v === null || v === "") qs.delete(k);
+    else qs.set(k, String(v));
+  });
+  const next = `#${path}?${qs.toString()}`;
+  if (next !== window.location.hash) {
+    window.location.hash = next;
+  } else {
+    // força atualização local
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  }
 };
 
-/* ───────────────── storage helpers ───────────────── */
-async function loadOpeningOpts({ owner, huntNumberId }) {
-  if (!owner) return {};
-  const r = await supabase
-    .from("overlay_settings")
-    .select("*")
-    .eq("user_id", owner)
-    .eq("type", "opening")
-    .eq("hunt_number_id", huntNumberId || null)
-    .maybeSingle();
+/* map: estado interno <-> querystring do widget */
+function readStateFromQS(qs) {
+  return {
+    visible: toInt(qs.get("visible") ?? 3, 3),
+    listSide: (qs.get("infoside") || "left") === "right" ? "right" : "left",
+    showBox: (qs.get("box") ?? "1") !== "0",
+    showBW: (qs.get("showBW") ?? "1") !== "0",
 
-  if (!r.error && r.data) {
-    // tentar nos campos usuais
-    for (const c of ["opts", "settings", "config", "data", "json"]) {
-      if (r.data[c]) return r.data[c] || {};
-    }
-  }
-  return {};
-}
-async function saveOpeningOpts({ owner, huntNumberId, opts }) {
-  if (!owner) return;
-  // upsert simples; se tiveres onConflict diferente, ajusta a coluna
-  await supabase
-    .from("overlay_settings")
-    .upsert({
-      user_id: owner,
-      type: "opening",
-      hunt_number_id: huntNumberId || null,
-      opts,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "user_id,type,hunt_number_id" });
+    // NOVO: rolagem e velocidade
+    autoScroll: (qs.get("scroll") ?? "0") === "1",
+    speedSec: Math.min(180, Math.max(5, toInt(qs.get("speed") ?? 30, 30))),
+  };
 }
 
-/* ───────────────── UI atoms ───────────────── */
-function Section({ title, children, actions }) {
-  return (
-    <div style={{
-      background: "rgba(17,24,39,.6)",
-      border: "1px solid rgba(255,255,255,.08)",
-      borderRadius: 12,
-      padding: 12,
-      fontFamily: RUBIK,
-      color: "#e5e7eb"
-    }}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-        <b style={{opacity:.9}}>{title}</b>
-        {actions}
-      </div>
-      {children}
-    </div>
-  );
-}
-function Pill({ active, onClick, children }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        padding: "6px 10px",
-        borderRadius: 999,
-        border: `1px solid ${active ? "rgba(255,255,255,.28)" : "rgba(255,255,255,.14)"}`,
-        background: active ? "rgba(255,255,255,.10)" : "transparent",
-        color: "#e5e7eb",
-        fontFamily: RUBIK,
-        fontSize: 12,
-        cursor: "pointer"
-      }}
-    >
-      {children}
-    </button>
-  );
-}
+/* ---------------- UI atoms ---------------- */
 function Toggle({ checked, onChange, label }) {
   return (
-    <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
-      <input type="checkbox" checked={checked} onChange={(e)=>onChange(e.target.checked)} />
-      <span style={{fontSize:13,opacity:.9}}>{label}</span>
+    <label style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+      <span style={{ fontSize: 14 }}>{label}</span>
+      <span
+        onClick={() => onChange(!checked)}
+        style={{
+          width: 44,
+          height: 24,
+          borderRadius: 999,
+          background: checked ? "#0ea5e9" : "rgba(255,255,255,.15)",
+          position: "relative",
+          cursor: "pointer",
+          display: "inline-block",
+        }}
+        role="switch"
+        aria-checked={checked}
+      >
+        <span
+          style={{
+            position: "absolute",
+            top: 3,
+            left: checked ? 24 : 3,
+            width: 18,
+            height: 18,
+            borderRadius: 999,
+            background: "#fff",
+            transition: "left .15s ease",
+          }}
+        />
+      </span>
     </label>
   );
 }
 
-/* ───────────────── PAGE ───────────────── */
-export default function OpeningDesignerPage(){
-  const { numberId, qs } = useHashRoute();
-  const owner = qs.get("owner") || "";
+function Segmented({ value, onChange, options }) {
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        background: "rgba(255,255,255,.08)",
+        padding: 3,
+        borderRadius: 10,
+      }}
+    >
+      {options.map((opt) => {
+        const active = opt.value === value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            style={{
+              minWidth: 40,
+              padding: "6px 10px",
+              borderRadius: 8,
+              border: "none",
+              cursor: "pointer",
+              fontWeight: 600,
+              background: active ? "#0ea5e9" : "transparent",
+              color: active ? "#0b1020" : "#e5e7eb",
+            }}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
-  const [opts, setOpts] = React.useState(DEFAULTS);
-  const [loading, setLoading] = React.useState(true);
+/* ---------------- Page ---------------- */
+export default function OpeningDesigner() {
+  const [state, setState] = React.useState(() => readStateFromQS(getHashQS()));
 
   React.useEffect(() => {
-    let alive = true;
-    (async () => {
-      setLoading(true);
-      try {
-        const huntNumberId = Number(numberId) || null;
-        const db = await loadOpeningOpts({ owner, huntNumberId });
-        if (!alive) return;
-        setOpts({ ...DEFAULTS, ...db });
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => { alive = false; };
-  }, [numberId, owner]);
+    const onHash = () => setState(readStateFromQS(getHashQS()));
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
-  const update = (patch) => setOpts((o) => ({ ...o, ...patch }));
-
-  const reset = () => setOpts(DEFAULTS);
-
-  const save = async () => {
-    const huntNumberId = Number(numberId) || null;
-    await saveOpeningOpts({ owner, huntNumberId, opts });
+  const update = (patch) => {
+    setState((s) => ({ ...s, ...patch }));
+    const mut = {};
+    if ("visible" in patch) mut.visible = patch.visible;
+    if ("listSide" in patch) mut.infoside = patch.listSide === "right" ? "right" : "left";
+    if ("showBox" in patch) mut.box = patch.showBox ? "1" : "0";
+    if ("showBW" in patch) mut.showBW = patch.showBW ? "1" : "0";
+    if ("autoScroll" in patch) mut.scroll = patch.autoScroll ? "1" : "0";
+    if ("speedSec" in patch) mut.speed = patch.speedSec;
+    setHashQS(mut);
   };
 
-  if (loading) {
-    return (
-      <div style={{
-        display:"grid",placeItems:"center",height:"100vh",
-        fontFamily:RUBIK,color:"#e5e7eb",background:"#0b1020"
-      }}>
-        A carregar Designer (Opening)…
-      </div>
-    );
-  }
-
-  // ——— APENAS ESTA SECÇÃO ———
   return (
-    <div style={{
-      minHeight:"100vh",
-      background:"#0b1020",
-      padding:16,
-      fontFamily:RUBIK,
-      color:"#e5e7eb",
-      display:"grid",
-      gridTemplateColumns:"minmax(280px,420px)",
-      justifyContent:"center"
-    }}>
-      <Section
-        title="Layout (Opening)"
-        actions={(
-          <div style={{display:"flex",gap:8}}>
-            <Pill onClick={reset}>Reset</Pill>
-            <Pill onClick={save} active>Guardar</Pill>
-          </div>
-        )}
+    <div style={{ padding: 12, color: "#e5e7eb", fontFamily: "'Rubik', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial" }}>
+      {/* ÚNICO GRUPO: Layout (Opening) */}
+      <div
+        style={{
+          background: "rgba(255,255,255,.06)",
+          border: "1px solid rgba(255,255,255,.12)",
+          borderRadius: 12,
+          padding: 16,
+          maxWidth: 460,
+        }}
       >
-        {/* Cards visíveis */}
-        <div style={{marginBottom:14}}>
-          <div style={{fontSize:12,opacity:.8,marginBottom:8}}>Cards visíveis</div>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-            {[3,5,7,9,11].map(n => (
-              <Pill key={n} active={Number(opts.visible)===n} onClick={()=>update({visible:n})}>
-                {n}
-              </Pill>
-            ))}
+        <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 12 }}>
+          Layout (Opening)
+        </div>
+
+        <div style={{ display: "grid", gap: 14 }}>
+          {/* Cards visíveis */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 130, opacity: 0.85 }}>Cards visíveis</div>
+            <Segmented
+              value={state.visible}
+              onChange={(v) => update({ visible: v })}
+              options={[
+                { value: 3, label: "3" },
+                { value: 5, label: "5" },
+                { value: 7, label: "7" },
+                { value: 9, label: "9" },
+              ]}
+            />
           </div>
-        </div>
 
-        {/* Lista lateral */}
-        <div style={{marginBottom:14}}>
-          <div style={{fontSize:12,opacity:.8,marginBottom:8}}>Lista lateral</div>
-          <div style={{display:"flex",gap:8}}>
-            <Pill active={opts.listSide==="left"} onClick={()=>update({listSide:"left"})}>Esquerda</Pill>
-            <Pill active={opts.listSide==="right"} onClick={()=>update({listSide:"right"})}>Direita</Pill>
+          {/* Lista lateral */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 130, opacity: 0.85 }}>Lista lateral</div>
+            <Segmented
+              value={state.listSide}
+              onChange={(v) => update({ listSide: v })}
+              options={[
+                { value: "left", label: "Esquerda" },
+                { value: "right", label: "Direita" },
+              ]}
+            />
           </div>
-        </div>
 
-        {/* Caixa de fundo */}
-        <div style={{marginBottom:14}}>
-          <Toggle
-            checked={opts.showBox!==false}
-            onChange={(v)=>update({showBox: !!v})}
-            label="Caixa de fundo"
-          />
-        </div>
+          {/* Caixa de fundo */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 130, opacity: 0.85 }}>Caixa de fundo</div>
+            <Toggle
+              checked={state.showBox}
+              onChange={(v) => update({ showBox: v })}
+              label=""
+            />
+          </div>
 
-        {/* Best/Worst */}
-        <div style={{display:"grid",gap:10}}>
-          <Toggle
-            checked={!!opts.showBestWorst}
-            onChange={(v)=>update({showBestWorst: !!v})}
-            label="Mostrar Best/Worst"
-          />
-          <div>
-            <div style={{fontSize:12,opacity:.8,marginBottom:8}}>Métrica para Best/Worst</div>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              {[
-                ["payout","Payout €"],
-                ["mult","Multiplier"],
-                ["bet","Bet €"],
-              ].map(([k, lbl]) => (
-                <Pill key={k} active={opts.bestWorstMetric===k} onClick={()=>update({bestWorstMetric:k})}>
-                  {lbl}
-                </Pill>
-              ))}
+          {/* Best/Worst */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 130, opacity: 0.85 }}>Mostrar Best/Worst</div>
+            <Toggle
+              checked={state.showBW}
+              onChange={(v) => update({ showBW: v })}
+              label=""
+            />
+          </div>
+
+          {/* NOVO: Rolagem automática nomes (lista esquerda) */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 130, opacity: 0.85 }}>Rolar nomes</div>
+            <Toggle
+              checked={state.autoScroll}
+              onChange={(v) => update({ autoScroll: v })}
+              label=""
+            />
+          </div>
+
+          {/* NOVO: Velocidade da rolagem */}
+          {state.autoScroll && (
+            <div style={{ display: "grid", gap: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ opacity: 0.85 }}>Velocidade</span>
+                <b>{new Intl.NumberFormat(LOCALE).format(state.speedSec)}s</b>
+              </div>
+              <input
+                type="range"
+                min={5}
+                max={180}
+                step={1}
+                value={state.speedSec}
+                onChange={(e) => update({ speedSec: toInt(e.target.value, 30) })}
+                style={{ width: "100%" }}
+              />
+              <div style={{ fontSize: 12, opacity: 0.7 }}>
+                Duração de um ciclo completo (mais alto = mais devagar).
+              </div>
             </div>
-          </div>
+          )}
         </div>
-      </Section>
+      </div>
     </div>
   );
 }
