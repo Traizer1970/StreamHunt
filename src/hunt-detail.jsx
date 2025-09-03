@@ -807,6 +807,8 @@ const DEFAULT_OPENING_OVERLAY = {
   showBox: true,           // caixa/gradiente de fundo
   showBestWorst: true,     // badges BEST / WORST
   metric: "x",             // "x" (multiplicador) | "payout"
+  listAutoScroll: true,
+  listSpeedSec: 18,
 };
 
 /* ───────────────────────── URLs ───────────────────────── */
@@ -2015,8 +2017,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
   )}
 </Section>
 )}
-
-    {/* OPENING header toggles (quando não é hunt) */}
+{/* OPENING header toggles (quando não é hunt) */}
 {type !== "hunt" && (
   <Section title="Layout (Opening)">
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -2024,7 +2025,12 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         <Segmented
           value={String(opts.visible ?? 5)}
           onChange={(v)=>setOpts(o=>({...o, visible: Number(v)}))}
-          options={[{value:"3",label:"3"},{value:"5",label:"5"},{value:"7",label:"7"},{value:"9",label:"9"}]}
+          options={[
+            {value:"3",label:"3"},
+            {value:"5",label:"5"},
+            {value:"7",label:"7"},
+            {value:"9",label:"9"}
+          ]}
         />
       </Field>
 
@@ -2032,21 +2038,63 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         <Segmented
           value={opts.listSide || "left"}
           onChange={(v)=>setOpts(o=>({...o, listSide: v}))}
-          options={[{value:"left",label:"Esquerda"},{value:"right",label:"Direita"}]}
+          options={[
+            {value:"left",label:"Esquerda"},
+            {value:"right",label:"Direita"}
+          ]}
         />
       </Field>
     </div>
 
     <div className="flex flex-wrap gap-2">
-      <Toggle label="Caixa de fundo" checked={!!opts.showBox} onChange={(v)=>setOpts(o=>({...o, showBox: !!v}))}/>
-      <Toggle label="Mostrar Best/Worst" checked={!!opts.showBestWorst} onChange={(v)=>setOpts(o=>({...o, showBestWorst: !!v}))}/>
+      <Toggle
+        label="Caixa de fundo"
+        checked={!!opts.showBox}
+        onChange={(v)=>setOpts(o=>({...o, showBox: !!v}))}
+      />
+      <Toggle
+        label="Mostrar Best/Worst"
+        checked={!!opts.showBestWorst}
+        onChange={(v)=>setOpts(o=>({...o, showBestWorst: !!v}))}
+      />
+
+      {/* 👇 NOVO: rolar automaticamente a lista da esquerda */}
+      <Toggle
+        label="Rolar nomes (lista esquerda)"
+        checked={opts.listAutoScroll !== false}
+        onChange={(v)=>setOpts(o=>({...o, listAutoScroll: !!v}))}
+      />
     </div>
+
+    {/* 👇 NOVO: velocidade da rolagem */}
+    <Field label="Velocidade da rolagem (seg/loop)">
+      <div className="flex items-center gap-3">
+        <input
+          type="range"
+          min={4}
+          max={120}
+          step={1}
+          value={Number(opts.listSpeedSec ?? 18)}
+          onChange={(e)=>{
+            const v = Math.max(4, Math.min(120, Number(e.target.value) || 18));
+            setOpts(o=>({...o, listSpeedSec: v}));
+          }}
+          className="flex-1"
+        />
+        <span className="tabular-nums w-10 text-right">
+          {Number(opts.listSpeedSec ?? 18)}
+        </span>
+      </div>
+    </Field>
 
     <Field label="Métrica para Best/Worst">
       <Segmented
         value={opts.metric || "x"}
         onChange={(v)=>setOpts(o=>({...o, metric: v}))}
-        options={[{value:"x",label:"X"},{value:"payout",label:"Payout €"}]}
+        options={[
+          {value:"x",label:"X"},
+          {value:"payout",label:"Payout €"}
+        ]}
       />
     </Field>
   </Section>
