@@ -130,6 +130,8 @@ function readOptsFromQS(qs) {
   const ls = getStr("listside"); if (ls) out.listSide = ls;       // left | right
   if (qs.has("bestworst")) out.showBestWorst = qs.get("bestworst") !== "0";
   const metric = getStr("metric"); if (metric) out.metric = metric; // "x" | "payout"
+  if (qs.has("shine")) out.shine = qs.get("shine") !== "0";
+  if (qs.has("pulse")) out.pulse = qs.get("pulse") !== "0";
 
   // remove undefineds
   Object.keys(out).forEach((k) => out[k] === undefined && delete out[k]);
@@ -580,7 +582,7 @@ function HuntOverlayCanvas({ hunt, slots, opts }) {
   );
 }
 
-/* ───────────────── Render do overlay OPENING ───────────────── */
+/* ───────────────── Render do overlay OPENING (revamp) ───────────────── */
 function OpeningOverlayCanvas({ hunt, slots, opts }) {
   const baseW = Number(opts.baseW || 560);
   const baseH = Number(opts.baseH || 320);
@@ -590,6 +592,11 @@ function OpeningOverlayCanvas({ hunt, slots, opts }) {
 
   const alignMap = { left: "flex-start", center: "center", right: "flex-end" };
   const justify  = alignMap[String(opts.align || "center")] || "center";
+
+  // centro real (para header e destaque)
+  const centerIdx = Math.max(0, Math.floor((visible - 1) / 2));
+  const hero = slots.slice(0, visible);
+  const current = hero[centerIdx];
 
   // BEST / WORST
   const scored = slots
@@ -605,10 +612,9 @@ function OpeningOverlayCanvas({ hunt, slots, opts }) {
   const best  = opts.showBestWorst && scored.length ? scored.reduce((a,b)=>a._score>b._score?a:b) : null;
   const worst = opts.showBestWorst && scored.length ? scored.reduce((a,b)=>a._score<b._score?a:b) : null;
 
-  const hero = slots.slice(0, visible); // cartas grandes ao centro
-
   const bg1 = opts.panelBgStart || "#0b1020";
   const bg2 = opts.panelBgEnd   || "#111827";
+  const accent = opts.superTagColor || "#22d3ee";
 
   const Wrap = ({children}) => (
     <div
@@ -620,6 +626,18 @@ function OpeningOverlayCanvas({ hunt, slots, opts }) {
         color: "#e5e7eb", fontFamily: RUBIK, position: "relative",
       }}
     >
+      <style>{`
+        .openingSideList::-webkit-scrollbar { width: 6px; height: 6px; }
+        .openingSideList::-webkit-scrollbar-thumb { background: rgba(255,255,255,.2); border-radius: 999px; }
+        @keyframes sheen {
+          0%   { transform: translateX(-120%); }
+          100% { transform: translateX(120%); }
+        }
+        @keyframes pulseSoft {
+          0%,100% { box-shadow: 0 12px 28px rgba(0,0,0,.35); }
+          50%     { box-shadow: 0 16px 40px rgba(0,0,0,.55); }
+        }
+      `}</style>
       {children}
     </div>
   );
@@ -637,22 +655,147 @@ function OpeningOverlayCanvas({ hunt, slots, opts }) {
     </span>
   );
 
+  const metricValue = (s) => {
+    if (!s) return "—";
+    const bet = toNum(s.bet_size), payout = toNum(s.payout);
+    if (opts.metric === "payout") return fmtPlain(payout, 2);
+    const x = bet > 0 ? payout / bet : 0;
+    return x > 0 ? `${fmtPlain(x, 2)}×` : "—";
+  };
+
   const SideList = () => (
-    <div style={{ width: 176, maxHeight: baseH - 60, overflow: "auto" }}>
-      {slots.map((s, i) => (
-        <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-          <div style={{ width: 24, textAlign: "right", fontSize: 11, opacity: .65 }}>#{i+1}</div>
-          {s.thumbnail
-            ? <img src={s.thumbnail} alt="" style={{ height: 36, width: 56, borderRadius: 8, objectFit: "cover" }} />
-            : <div style={{ height: 36, width: 56, borderRadius: 8, background: "rgba(255,255,255,.1)" }} />
-          }
-          <div style={{ fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {s.name}
+    <div
+      className="openingSideList"
+      style={{
+        width: 190,
+        maxHeight: baseH - 60,
+        overflow: "auto",
+        background: "rgba(17,24,39,.55)",
+        border: "1px solid rgba(255,255,255,.12)",
+        borderRadius: 12,
+        padding: 8,
+        backdropFilter: "blur(8px)",
+        boxShadow: "0 10px 30px rgba(0,0,0,.35) inset",
+      }}
+    >
+      {slots.map((s, i) => {
+        const active = current && s.id === current.id;
+        return (
+          <div
+            key={s.id}
+            title={s.name || ""}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "28px 56px 1fr auto",
+              alignItems: "center",
+              columnGap: 8,
+              padding: 6,
+              marginBottom: 6,
+              borderRadius: 10,
+              border: active ? `1px solid ${anyToRgba(accent,.65)}` : "1px solid rgba(255,255,255,.08)",
+              background: active ? anyToRgba(accent,.12) : "rgba(255,255,255,.04)",
+              transition: "transform .15s ease, background .15s ease, border-color .15s ease",
+            }}
+          >
+            <div style={{ width: 24, textAlign: "right", fontSize: 11, opacity: .7 }}>#{i+1}</div>
+            {s.thumbnail
+              ? <img src={s.thumbnail} alt="" style={{ height: 36, width: 56, borderRadius: 8, objectFit: "cover" }} />
+              : <div style={{ height: 36, width: 56, borderRadius: 8, background: "rgba(255,255,255,.1)" }} />
+            }
+            <div style={{ fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {s.name}
+            </div>
+            <div style={{ fontSize: 11, opacity: .9 }}>{metricValue(s)}</div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
+
+  const EdgeFade = ({side}) => (
+    <div style={{
+      position: "absolute",
+      top: 60,
+      bottom: 16,
+      [side]: 190 + 20, // largura da lista + gap
+      width: 24,
+      pointerEvents: "none",
+      background: side === "left"
+        ? "linear-gradient(to right, rgba(11,16,32,1), rgba(11,16,32,0))"
+        : "linear-gradient(to left, rgba(11,16,32,1), rgba(11,16,32,0))",
+      borderRadius: side === "left" ? "12px 0 0 12px" : "0 12px 12px 0",
+      opacity: .65
+    }}/>
+  );
+
+  const HeroCard = ({s, i}) => {
+    const isCenter = i === centerIdx;
+    const scale = isCenter ? 1.0 : i < centerIdx ? 0.92 : 0.92;
+    const rotate = isCenter ? 0 : (i < centerIdx ? -2 : 2);
+    return (
+      <div
+        title={s.name}
+        style={{
+          position: "relative",
+          width: 160, height: 220,
+          transform: `scale(${scale}) rotate(${rotate}deg)`,
+          transformOrigin: "center",
+          borderRadius: 14,
+          overflow: "hidden",
+          border: "1px solid rgba(255,255,255,.12)",
+          boxShadow: "0 12px 28px rgba(0,0,0,.35)",
+          transition: "transform .2s ease",
+          animation: isCenter && opts.pulse !== false ? "pulseSoft 2.4s ease-in-out infinite" : undefined,
+        }}
+      >
+        {s.thumbnail
+          ? <img src={s.thumbnail} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+          : <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,.1)" }} />
+        }
+
+        {/* sheen na carta do meio */}
+        {isCenter && opts.shine !== false && (
+          <div style={{
+            position: "absolute",
+            inset: 0,
+            overflow: "hidden",
+            pointerEvents: "none"
+          }}>
+            <div style={{
+              position: "absolute",
+              top: 0, bottom: 0, left: "-60%",
+              width: "40%",
+              transform: "skewX(-20deg)",
+              background: "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.35) 50%, rgba(255,255,255,0) 100%)",
+              filter: "blur(6px)",
+              animation: "sheen 2.8s linear infinite",
+            }}/>
+          </div>
+        )}
+
+        <div style={{ position: "absolute", left: 6, top: 6, zIndex: 10,
+                      fontSize: 10, fontWeight: 700, padding: "2px 6px",
+                      borderRadius: 6, background: "rgba(0,0,0,.65)" }}>
+          #{i+1}
+        </div>
+
+        {/* BEST / WORST */}
+        {best && s.id === best.id   && opts.showBestWorst && <Badge label="BEST"  color="#22c55e" />}
+        {worst && s.id === worst.id && opts.showBestWorst && <Badge label="WORST" color="#ef4444" />}
+
+        {/* nome */}
+        <div style={{
+          position: "absolute", left: 8, right: 8, bottom: 8,
+          borderRadius: 10, border: "1px solid rgba(255,255,255,.18)",
+          background: "rgba(0,0,0,.45)", padding: "6px 8px",
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          fontWeight: 600
+        }}>
+          {s.name}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <Wrap>
@@ -665,8 +808,16 @@ function OpeningOverlayCanvas({ hunt, slots, opts }) {
         ) : <div />}
 
         {opts.showCurrent !== false ? (
-          <div style={{ padding: "6px 12px", borderRadius: 999, border: "1px solid rgba(255,255,255,.15)", background: "rgba(255,255,255,.08)", fontSize: 12, maxWidth: baseW * 0.4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {hero[0]?.name || "—"}
+          <div style={{
+            padding: "6px 12px",
+            borderRadius: 999,
+            border: `1px solid ${anyToRgba(accent,.35)}`,
+            background: anyToRgba(accent,.12),
+            fontSize: 12,
+            maxWidth: baseW * 0.5,
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
+          }}>
+            {current?.name || "—"}
           </div>
         ) : <div />}
       </div>
@@ -675,43 +826,13 @@ function OpeningOverlayCanvas({ hunt, slots, opts }) {
       <div style={{ display: "flex", gap: 12, padding: "0 12px", height: `calc(100% - 46px)` }}>
         {listSide === "left" && <SideList />}
 
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: justify, overflow: "hidden" }}>
+        <div style={{ position: "relative", flex: 1, display: "flex", alignItems: "center", justifyContent: justify, overflow: "hidden" }}>
+          {/* fades laterais para dar depth */}
+          <EdgeFade side="left" />
+          <EdgeFade side="right" />
+
           <div style={{ display: "flex", gap: 24 }}>
-            {hero.map((s, i) => (
-              <div key={s.id}
-                style={{
-                  position: "relative", width: 160, height: 220, borderRadius: 12,
-                  overflow: "hidden", border: "1px solid rgba(255,255,255,.12)",
-                  boxShadow: "0 12px 28px rgba(0,0,0,.35)",
-                }}
-                title={s.name}
-              >
-                {s.thumbnail
-                  ? <img src={s.thumbnail} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
-                  : <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,.1)" }} />
-                }
-
-                <div style={{ position: "absolute", left: 6, top: 6, zIndex: 10,
-                              fontSize: 10, fontWeight: 700, padding: "2px 6px",
-                              borderRadius: 6, background: "rgba(0,0,0,.65)" }}>
-                  #{i+1}
-                </div>
-
-                {/* BEST / WORST */}
-                {best && s.id === best.id   && opts.showBestWorst && <Badge label="BEST"  color="#22c55e" />}
-                {worst && s.id === worst.id && opts.showBestWorst && <Badge label="WORST" color="#ef4444" />}
-
-                {/* nome */}
-                <div style={{
-                  position: "absolute", left: 8, right: 8, bottom: 8,
-                  borderRadius: 10, border: "1px solid rgba(255,255,255,.18)",
-                  background: "rgba(0,0,0,.45)", padding: "6px 8px",
-                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                }}>
-                  {s.name}
-                </div>
-              </div>
-            ))}
+            {hero.map((s, i) => <HeroCard key={s.id} s={s} i={i} />)}
           </div>
         </div>
 
