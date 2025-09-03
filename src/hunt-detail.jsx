@@ -1011,9 +1011,9 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     );
   }
 
-// ---- NiceSlider (global) ----
 function NiceSlider({ min=0, max=100, step=1, value, onChange, ariaLabel }) {
   const pct = Math.max(0, Math.min(100, ((Number(value ?? 0) - min) / (max - min)) * 100));
+
   return (
     <div className="py-1">
       <input
@@ -1025,7 +1025,7 @@ function NiceSlider({ min=0, max=100, step=1, value, onChange, ariaLabel }) {
         aria-label={ariaLabel}
         onChange={(e) => onChange(Number(e.target.value))}
         className="nice-slider w-full h-8 appearance-none bg-transparent"
-        style={{ ["--pct"]: `${pct}%` }}
+        style={{ ['--pct']: `${pct}%` }}
       />
     </div>
   );
@@ -1590,15 +1590,15 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
         <Field label="Tamanho (0.7–1.6)">
-
- <Field label="Tamanho (0.7–1.6)">
-    <NiceSlider
-      min={0.7} max={1.6} step={0.05}
-      value={opts.kpiSize}
-      onChange={(v) => setOpts(o => ({ ...o, kpiSize: v }))}
-      ariaLabel="Tamanho KPI"
-    />
-  </Field>
+         {/* Tamanho (0.7–1.6) */}
+<Field label="Tamanho (0.7–1.6)">
+  <NiceSlider
+    min={0.7} max={1.6} step={0.05}
+    value={opts.kpiSize}
+    onChange={(v) => setOpts(o => ({ ...o, kpiSize: v }))}
+    ariaLabel="Tamanho KPI"
+  />
+</Field>
 
 {/* Font KPI (0.8–1.6) */}
 <Field label="Font KPI (0.8–1.6)" hint="Só ajusta a letra">
