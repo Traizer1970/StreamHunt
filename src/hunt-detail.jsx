@@ -850,7 +850,7 @@ function buildHuntOverlayUrl(base, huntNumberId, o) {
   qs.set("pad", String(o.pad || 0));
   qs.set("bw", String(o.baseW || 560));
   qs.set("bh", String(o.baseH || 280));
-  return `${base}#/overlay/hunt/${huntNumberId}?${qs.toString()}`;
+  return `${base}#/hunt-widget/hunt/${huntNumberId}?${qs.toString()}`;
 }
 function buildOpeningOverlayUrl(base, huntNumberId, opts) {
   const qs = new URLSearchParams();
@@ -863,7 +863,7 @@ function buildOpeningOverlayUrl(base, huntNumberId, opts) {
   qs.set("bh", String(opts.baseH || 320));
   qs.set("title", opts.showTitle === false ? "0" : "1");
   qs.set("current", opts.showCurrent === false ? "0" : "1");
-  return `${base}#/overlay/opening/${huntNumberId}?${qs.toString()}`;
+  return `${base}#/hunt-widget/opening/${huntNumberId}?${qs.toString()}`;
 }
 
 /* ───────────────────────── Hunt Overlay Preview ───────────────────────── */
@@ -1302,13 +1302,11 @@ async function setActiveHuntForUser(userId, huntNumberId) {
 
 
 /* ───────── URLs exclusivos (sempre o hunt ativo do owner) ───────── */
-function buildHuntOverlayActiveUrl(base, ownerId, o) {
-  const url = buildHuntOverlayUrl(base, "active", o); // usa o alias "active" no path
-  return `${url}&owner=${encodeURIComponent(ownerId)}`;
+function buildHuntOverlayActiveUrl(base, ownerId) {
+  return `${base}#/overlay/hunt/active?owner=${encodeURIComponent(ownerId)}`;
 }
-function buildOpeningOverlayActiveUrl(base, ownerId, o) {
-  const url = buildOpeningOverlayUrl(base, "active", o);
-  return `${url}&owner=${encodeURIComponent(ownerId)}`;
+function buildOpeningOverlayActiveUrl(base, ownerId) {
+  return `${base}#/overlay/opening/active?owner=${encodeURIComponent(ownerId)}`;
 }
 
 
@@ -1985,13 +1983,14 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 function OverlayCard({ type, hunt, slots, opts, setOpts }) {
   const [open, setOpen] = React.useState(true);
   const [openDesigner, setOpenDesigner] = React.useState(false);
-  const { user } = useAuth();  
+  const { user } = useAuth();
 
-const base = React.useMemo(
+  const base = React.useMemo(
     () => `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, ""),
     []
   );
 
+  // link “normal” (só usado como fallback se não houver user)
   const url = React.useMemo(() => {
     if (!hunt?.number_id) return "";
     return type === "hunt"
@@ -1999,22 +1998,22 @@ const base = React.useMemo(
       : buildOpeningOverlayUrl(base, hunt.number_id, opts);
   }, [type, hunt?.number_id, base, opts]);
 
-  // URL EXCLUSIVO (sempre o ativo do owner)
+  // ⬇️ EXCLUSIVO: link fixo por owner (sem query do designer!)
   const exUrl = React.useMemo(() => {
     if (!user?.id) return "";
     return type === "hunt"
-      ? buildHuntOverlayActiveUrl(base, user.id, opts)
-      : buildOpeningOverlayActiveUrl(base, user.id, opts);
-  }, [type, base, opts, user?.id]);
+      ? buildHuntOverlayActiveUrl(base, user.id)
+      : buildOpeningOverlayActiveUrl(base, user.id);
+  }, [type, base, user?.id]);
 
- const copyUrl = async () => {              // mantém “Copy URL” como preferires
+  const copyUrl = async () => {
     const toCopy = exUrl || url;
     if (!toCopy) return;
     try { await navigator.clipboard.writeText(toCopy); }
     catch { alert("Não consegui copiar o URL."); }
   };
 
-  const openOverlay = () => {                // agora abre o EXCLUSIVO
+  const openOverlay = () => {
     const target = exUrl || url;
     if (!target) return;
     window.open(target, "_blank", "noopener,noreferrer");
