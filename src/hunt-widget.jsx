@@ -6,6 +6,8 @@ import { listHuntSlots } from "@/lib/slots";
 
 /* ───────────────── helpers ───────────────── */
 const LOCALE = "pt-PT";
+const RUBIK =
+  "'Rubik', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial";
 
 const toNum = (v) => {
   if (v == null || v === "") return 0;
@@ -38,9 +40,6 @@ const hexToRgba = (hex, a = 1) => {
 const anyToRgba = (c, a = 1) =>
   /^(rgba?|hsla?)\(/i.test(String(c || "")) ? c : hexToRgba(c, a);
 
-const RUBIK =
-  "'Rubik', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial";
-
 /* ───────────────── tiny router via location.hash ───────────────── */
 function parseHash() {
   const raw = (window.location.hash || "#").slice(1); // remove '#'
@@ -66,62 +65,67 @@ function useHashRoute() {
   return route;
 }
 
-/* ───────────────── qs → opções ───────────────── */
+/* ───────────────── qs → opções (só se existirem no URL) ───────────────── */
 function readOptsFromQS(qs) {
-  const getN = (k, f, min, max) => {
+  const getNum = (k, min, max) => {
+    if (!qs.has(k)) return undefined;
     const v = Number(qs.get(k));
-    if (!Number.isFinite(v)) return f;
+    if (!Number.isFinite(v)) return undefined;
     if (min != null && v < min) return min;
     if (max != null && v > max) return max;
     return v;
   };
-  const out = {
-    layout: qs.get("layout") || "carousel",
-    visible: getN("visible", 3, 1, 12),
-    autoScroll: qs.get("scroll") === "1",
-    speedSec: getN("speed", 30, 5, 180),
-    cardH: getN("cardH", 160, 100, 400),
-    showBox: qs.get("box") !== "0",
-    nameStyle: qs.get("name") || "bar",      // bar | float | hidden
-    betStyle: qs.get("bet") || "inline",     // inline | chip | none
-    showIdx: qs.get("showIdx") !== "0",
-    showBet: qs.get("showBet") !== "0",
-    showSuper: qs.get("showSuper") !== "0",
-    vInfo: qs.get("vinfo") === "1",
-    infoPos: qs.get("infoside") || "left",
-    superGlow: qs.get("sg") !== "0",
-    superGlowColor: "#" + (qs.get("sgc") || "e879f9"),
-    superGlowStrength: Number(qs.get("sgs") ?? 0.6),
-    superTagColor: "#" + (qs.get("stc") || "e879f9"),
-    superTextColor: "#" + (qs.get("stx") || "120614"),
-    panelBgStart: "#" + (qs.get("bg1") || "0b1020"),
-    panelBgEnd:   "#" + (qs.get("bg2") || "111827"),
-    pad: getN("pad", 16, 0, 64),
-    baseW: getN("bw", 560, 260, 3840),
-    baseH: getN("bh", 280, 160, 2160),
-    align: qs.get("align") || "center",
-  };
+  const getStr = (k) => (qs.has(k) ? qs.get(k) : undefined);
+  const getFlag = (k) => (qs.has(k) ? qs.get(k) === "1" : undefined);
 
-  // KPIs (Designer) — os nomes correspondem aos usados no buildHuntOverlayUrl
-  out.kpiPos   = qs.get("kpos")   || undefined; // "top" | "bottom" | "side" | "hidden"
-  out.kpiDir   = qs.get("kdir")   || undefined; // "row" | "column"
-  out.kpiAlign = qs.get("kalign") || undefined; // "left" | "center" | "right"
-  out.kpiSide  = qs.get("kside")  || undefined; // "left" | "right"
-  out.kpiGap        = qs.has("kgap")   ? getN("kgap", 8, 0, 48) : undefined;
-  out.kpiSideSpace  = qs.has("kspace") ? getN("kspace", 18, 0, 64) : undefined;
-  out.kpiSize       = qs.has("ksize")  ? getN("ksize", 1.0, 0.6, 1.8) : undefined;
-  out.kpiShape  = qs.get("kshape") || undefined; // "box" | "pill" | "circle"
-  out.kpiRound  = qs.has("kround")  ? getN("kround", 2, 0, 3) : undefined;
-  out.kpiShowLabels = qs.get("klabels") !== "0" ? true : false;
-  out.kpiFont   = qs.has("kfont") ? getN("kfont", 1.0, 0.6, 2.0) : undefined;
-  out.kpiAltIconMs  = qs.has("kicon") ? getN("kicon", 1200, 0, 10000) : undefined;
-  out.kpiAltValueMs = qs.has("kval")  ? getN("kval", 1800, 0, 10000) : undefined;
-  out.kpiAnim  = qs.get("kanim") || undefined;
-  out.kpiColorPreset = qs.get("kcp") || undefined;
-  if (qs.get("kbg")) out.kpiBg = "#" + qs.get("kbg");
-  if (qs.get("kbr")) out.kpiBorder = "#" + qs.get("kbr");
-  if (qs.get("ktx")) out.kpiText = "#" + qs.get("ktx");
+  const out = {};
+  out.layout = getStr("layout");
+  out.visible = getNum("visible", 1, 12);
+  out.autoScroll = getFlag("scroll");
+  out.speedSec = getNum("speed", 5, 180);
+  out.cardH = getNum("cardH", 100, 400);
+  out.showBox = qs.has("box") ? qs.get("box") !== "0" : undefined;
+  out.nameStyle = getStr("name");     // bar | float | hidden
+  out.betStyle = getStr("bet");       // inline | chip | none
+  out.showIdx = qs.has("showIdx") ? qs.get("showIdx") !== "0" : undefined;
+  out.showBet = qs.has("showBet") ? qs.get("showBet") !== "0" : undefined;
+  out.showSuper = qs.has("showSuper") ? qs.get("showSuper") !== "0" : undefined;
+  out.vInfo = getFlag("vinfo");
+  out.infoPos = getStr("infoside");   // left | right
+  out.superGlow = qs.has("sg") ? qs.get("sg") !== "0" : undefined;
+  out.superGlowColor = qs.has("sgc") ? "#" + qs.get("sgc") : undefined;
+  out.superGlowStrength = getNum("sgs", 0, 1);
+  out.superTagColor = qs.has("stc") ? "#" + qs.get("stc") : undefined;
+  out.superTextColor = qs.has("stx") ? "#" + qs.get("stx") : undefined;
+  out.panelBgStart = qs.has("bg1") ? "#" + qs.get("bg1") : undefined;
+  out.panelBgEnd = qs.has("bg2") ? "#" + qs.get("bg2") : undefined;
+  out.pad = getNum("pad", 0, 64);
+  out.baseW = getNum("bw", 260, 3840);
+  out.baseH = getNum("bh", 160, 2160);
+  out.align = getStr("align");
 
+  // KPIs
+  out.kpiPos = getStr("kpos");             // top | bottom | side | hidden
+  out.kpiDir = getStr("kdir");             // row | column
+  out.kpiAlign = getStr("kalign");         // left | center | right
+  out.kpiSide = getStr("kside");           // left | right
+  out.kpiGap = getNum("kgap", 0, 48);
+  out.kpiSideSpace = getNum("kspace", 0, 64);
+  out.kpiSize = getNum("ksize", 0.6, 1.8);
+  out.kpiShape = getStr("kshape");         // box | pill | circle
+  out.kpiRound = getNum("kround", 0, 3);
+  if (qs.has("klabels")) out.kpiShowLabels = qs.get("klabels") !== "0";
+  out.kpiFont = getNum("kfont", 0.6, 2.0);
+  out.kpiAltIconMs = getNum("kicon", 0, 10000);
+  out.kpiAltValueMs = getNum("kval", 0, 10000);
+  out.kpiAnim = getStr("kanim");
+  out.kpiColorPreset = getStr("kcp");
+  if (qs.has("kbg")) out.kpiBg = "#" + qs.get("kbg");
+  if (qs.has("kbr")) out.kpiBorder = "#" + qs.get("kbr");
+  if (qs.has("ktx")) out.kpiText = "#" + qs.get("ktx");
+
+  // remove undefineds
+  Object.keys(out).forEach((k) => out[k] === undefined && delete out[k]);
   return out;
 }
 
@@ -229,27 +233,25 @@ async function fetchOverlayOpts({ owner, type, huntId }) {
   const cols = ["opts", "settings", "config", "data", "json"];
 
   // 1) tenta row específica do hunt
-  let q = supabase
+  const r1 = await supabase
     .from("overlay_settings")
     .select("*")
     .eq("user_id", owner)
     .eq("type", type || "hunt")
     .eq("hunt_number_id", huntId)
     .maybeSingle();
-  const r1 = await q;
   if (!r1.error && r1.data) {
     for (const c of cols) if (r1.data[c]) return r1.data[c] || {};
   }
 
   // 2) fallback “global” (hunt_number_id NULL)
-  let q2 = supabase
+  const r2 = await supabase
     .from("overlay_settings")
     .select("*")
     .eq("user_id", owner)
     .eq("type", type || "hunt")
     .is("hunt_number_id", null)
     .maybeSingle();
-  const r2 = await q2;
   if (!r2.error && r2.data) {
     for (const c of cols) if (r2.data[c]) return r2.data[c] || {};
   }
@@ -270,7 +272,7 @@ export default function HuntWidgetPage() {
 
   const qsOpts = React.useMemo(() => readOptsFromQS(qs), [qs]);
   const mergedOpts = React.useMemo(
-    () => ({ ...DEFAULTS, ...dbOpts, ...qsOpts }),
+    () => ({ ...DEFAULTS, ...dbOpts, ...qsOpts }), // QS só sobrepõe se existir no URL
     [dbOpts, qsOpts]
   );
 
@@ -301,8 +303,8 @@ export default function HuntWidgetPage() {
         if (!alive) return;
         setSlots(Array.isArray(s) ? s : []);
 
-        // 4) opções guardadas na BD
-        const o = await fetchOverlayOpts({ owner, type: "hunt", huntId: id });
+        // 4) opções guardadas na BD (tipo conforme rota)
+        const o = await fetchOverlayOpts({ owner, type: type || "hunt", huntId: id });
         if (!alive) return;
         setDbOpts(o || {});
       } catch (e) {
@@ -549,21 +551,12 @@ function HuntOverlayCanvas({ hunt, slots, opts }) {
 
 function Card({ s, i, width, cardH, opts }) {
   const isSuper = !!(
-    s?.is_super ??
-    s?.super ??
-    s?._raw?.is_super ??
-    s?._raw?.super
+    s?.is_super ?? s?.super ?? s?._raw?.is_super ?? s?._raw?.super
   );
   const glowColor = opts.superGlowColor || "#e879f9";
-  const glowAlpha = Math.max(
-    0,
-    Math.min(1, Number(opts.superGlowStrength ?? 0.6))
-  );
+  const glowAlpha = Math.max(0, Math.min(1, Number(opts.superGlowStrength ?? 0.6)));
   const borderCol = hexToRgba(glowColor, 0.45 + glowAlpha * 0.35);
-  const shadowSoft = `0 0 ${18 + 30 * glowAlpha}px ${anyToRgba(
-    glowColor,
-    0.35 * glowAlpha
-  )}, 0 12px 28px rgba(0,0,0,.35)`;
+  const shadowSoft = `0 0 ${18 + 30 * glowAlpha}px ${anyToRgba(glowColor, 0.35 * glowAlpha)}, 0 12px 28px rgba(0,0,0,.35)`;
   const captionIsBar = opts.nameStyle === "bar";
   const captionIsFloat = opts.nameStyle === "float";
   const showName = opts.nameStyle !== "hidden";
@@ -579,9 +572,7 @@ function Card({ s, i, width, cardH, opts }) {
         height: cardH,
         borderRadius: 12,
         overflow: "hidden",
-        border: `1px solid ${
-          isSuper ? borderCol : "rgba(255,255,255,.10)"
-        }`,
+        border: `1px solid ${isSuper ? borderCol : "rgba(255,255,255,.10)"}`,
         boxShadow: isSuper ? shadowSoft : "0 12px 28px rgba(0,0,0,.35)",
       }}
     >
@@ -616,10 +607,7 @@ function Card({ s, i, width, cardH, opts }) {
               inset: -1,
               borderRadius: 12,
               pointerEvents: "none",
-              boxShadow: `0 0 ${22 + 40 * glowAlpha}px ${anyToRgba(
-                glowColor,
-                0.5 * glowAlpha
-              )}`,
+              boxShadow: `0 0 ${22 + 40 * glowAlpha}px ${anyToRgba(glowColor, 0.5 * glowAlpha)}`,
             }}
           />
           <div
@@ -627,10 +615,7 @@ function Card({ s, i, width, cardH, opts }) {
               position: "absolute",
               inset: 0,
               pointerEvents: "none",
-              background: `radial-gradient(60% 50% at 50% 40%, ${anyToRgba(
-                glowColor,
-                0.28 * glowAlpha
-              )} 0%, transparent 60%)`,
+              background: `radial-gradient(60% 50% at 50% 40%, ${anyToRgba(glowColor, 0.28 * glowAlpha)} 0%, transparent 60%)`,
             }}
           />
         </>
@@ -642,8 +627,7 @@ function Card({ s, i, width, cardH, opts }) {
           position: "absolute",
           inset: "0 0 auto 0",
           height: 80,
-          background:
-            "linear-gradient(to bottom, rgba(0,0,0,.65), transparent)",
+          background: "linear-gradient(to bottom, rgba(0,0,0,.65), transparent)",
         }}
       />
       <div
