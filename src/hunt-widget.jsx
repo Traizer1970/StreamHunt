@@ -77,8 +77,8 @@ function readOptsFromQS(qs) {
     speedSec: getN("speed", 30, 5, 180),
     cardH: getN("cardH", 160, 100, 400),
     showBox: qs.get("box") !== "0",
-    nameStyle: qs.get("name") || "bar",      // bar | float | hidden
-    betStyle: qs.get("bet") || "inline",     // inline | chip | none
+    nameStyle: qs.get("name") || "bar", // bar | float | hidden
+    betStyle: qs.get("bet") || "inline", // inline | chip | none
     showIdx: qs.get("showIdx") !== "0",
     showBet: qs.get("showBet") !== "0",
     showSuper: qs.get("showSuper") !== "0",
@@ -90,7 +90,7 @@ function readOptsFromQS(qs) {
     superTagColor: "#" + (qs.get("stc") || "e879f9"),
     superTextColor: "#" + (qs.get("stx") || "120614"),
     panelBgStart: "#" + (qs.get("bg1") || "0b1020"),
-    panelBgEnd:   "#" + (qs.get("bg2") || "111827"),
+    panelBgEnd: "#" + (qs.get("bg2") || "111827"),
     pad: getN("pad", 16, 0, 64),
     baseW: getN("bw", 560, 260, 3840),
     baseH: getN("bh", 280, 160, 2160),
@@ -156,7 +156,7 @@ export default function HuntWidgetPage() {
         if (!Number.isFinite(id) || id <= 0)
           throw new Error("Parâmetro numberId inválido.");
 
-        // opcional: valida se o hunt existe (não usamos h aqui, mas valida 404)
+        // valida se o hunt existe
         await getHuntByNumberId(id);
 
         const { slots: s } = await listHuntSlots({ numberId: id });
@@ -175,11 +175,17 @@ export default function HuntWidgetPage() {
 
   if (loading) {
     return (
-      <div style={{
-        display: "grid", placeItems: "center", height: "100vh",
-        color: "#e5e7eb", background: "#0b1020",
-        fontFamily: "'Rubik', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial",
-      }}>
+      <div
+        style={{
+          display: "grid",
+          placeItems: "center",
+          height: "100vh",
+          color: "#e5e7eb",
+          background: "#0b1020",
+          fontFamily:
+            "'Rubik', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial",
+        }}
+      >
         A carregar widget…
       </div>
     );
@@ -187,12 +193,19 @@ export default function HuntWidgetPage() {
 
   if (err) {
     return (
-      <div style={{
-        display: "grid", placeItems: "center", height: "100vh",
-        color: "#fca5a5", background: "#0b1020",
-        fontFamily: "'Rubik', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial",
-        padding: 16, textAlign: "center",
-      }}>
+      <div
+        style={{
+          display: "grid",
+          placeItems: "center",
+          height: "100vh",
+          color: "#fca5a5",
+          background: "#0b1020",
+          fontFamily:
+            "'Rubik', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial",
+          padding: 16,
+          textAlign: "center",
+        }}
+      >
         {err}
       </div>
     );
@@ -209,6 +222,9 @@ function HuntOverlayCanvas({ slots, opts }) {
   const speedSec = Math.max(5, Math.min(180, Number(opts.speedSec || 30)));
   const layout = String(opts.layout || "carousel");
   const showBox = opts.showBox !== false;
+
+  const alignMap = { left: "flex-start", center: "center", right: "flex-end" };
+  const justify = alignMap[String(opts.align || "center")] || "center";
 
   const innerW = baseW - (opts.pad || 0) * 2;
   const gap = layout === "grid" ? 8 : 12;
@@ -255,7 +271,7 @@ function HuntOverlayCanvas({ slots, opts }) {
         >
           {slots.slice(0, 16).map((s, i) => (
             <Card
-              key={s.id}
+              key={s.id ?? i}
               s={s}
               i={i}
               width="100%"
@@ -269,6 +285,7 @@ function HuntOverlayCanvas({ slots, opts }) {
           style={{
             display: "flex",
             alignItems: "center",
+            justifyContent: justify, // aplica align da querystring
             height: "100%",
             overflow: "hidden",
           }}
@@ -286,9 +303,9 @@ function HuntOverlayCanvas({ slots, opts }) {
           >
             {[...slots, ...slots].map((s, i) => (
               <Card
-                key={`${s.id}-${i}`}
+                key={`${s.id ?? "x"}-${i}`}
                 s={s}
-                i={i % slots.length}
+                i={i % (slots.length || 1)}
                 width={cardW}
                 cardH={opts.cardH || 160}
                 opts={opts}
@@ -323,6 +340,7 @@ function Card({ s, i, width, cardH, opts }) {
   const showName = opts.nameStyle !== "hidden";
   const badgesVertical = !!opts.vInfo;
   const infoRight = String(opts.infoPos || "left") === "right";
+  const canShowBet = opts.showBet !== false;
 
   return (
     <div
@@ -419,7 +437,9 @@ function Card({ s, i, width, cardH, opts }) {
           display: "flex",
           flexDirection: badgesVertical ? "column" : "row",
           alignItems: badgesVertical
-            ? (infoRight ? "flex-end" : "flex-start")
+            ? infoRight
+              ? "flex-end"
+              : "flex-start"
             : "center",
           gap: 6,
           textAlign: infoRight ? "right" : "left",
@@ -438,7 +458,7 @@ function Card({ s, i, width, cardH, opts }) {
             #{i + 1}
           </div>
         )}
-        {(opts.betStyle === "chip" || !!opts.vInfo) && (
+        {canShowBet && (opts.betStyle === "chip" || !!opts.vInfo) && (
           <div
             style={{
               fontSize: 11,
@@ -476,7 +496,7 @@ function Card({ s, i, width, cardH, opts }) {
       )}
 
       {/* nome (bar/float) */}
-      {captionIsBar && (
+      {showName && captionIsBar && (
         <div style={{ position: "absolute", left: 8, right: 8, bottom: 8 }}>
           <div
             title={s?.name || ""}
@@ -498,7 +518,7 @@ function Card({ s, i, width, cardH, opts }) {
             >
               {s?.name || "—"}
             </div>
-            {opts.betStyle === "inline" && (
+            {canShowBet && opts.betStyle === "inline" && (
               <div
                 style={{
                   marginTop: 2,
@@ -525,7 +545,7 @@ function Card({ s, i, width, cardH, opts }) {
         </div>
       )}
 
-      {captionIsFloat && (
+      {showName && captionIsFloat && (
         <div
           style={{
             position: "absolute",
@@ -538,9 +558,13 @@ function Card({ s, i, width, cardH, opts }) {
           <div style={{ fontWeight: 600, textShadow: "0 2px 6px rgba(0,0,0,.8)" }}>
             {s?.name || "—"}
           </div>
-          {opts.betStyle === "inline" && (
+          {canShowBet && opts.betStyle === "inline" && (
             <div
-              style={{ fontSize: 11, opacity: 0.9, textShadow: "0 2px 6px rgba(0,0,0,.8)" }}
+              style={{
+                fontSize: 11,
+                opacity: 0.9,
+                textShadow: "0 2px 6px rgba(0,0,0,.8)",
+              }}
             >
               {s?.bet_size != null ? fmtPlain(toNum(s.bet_size), 2) : "—"}
             </div>

@@ -1129,22 +1129,21 @@ export default function App() {
   const huntDetailMatch = route.match(/^\/?hunts\/([^\/?#]+)$/);
   const tournamentDetailMatch = route.match(/^\/?tournaments\/([^\/?#]+)$/);
 
-// overlay: hunt, battle OU token fixo
-const isOverlay =
-  route.startsWith("overlay/hunt/") ||
-  route.startsWith("overlay/battle/") ||
-  route.startsWith("w/");
-
+// overlay: battle, hunt, ou token fixo
+ const isOverlay =
+   route.startsWith("overlay/battle/") ||
+   route.startsWith("overlay/hunt/") ||
+   route.startsWith("w/");
  if (isOverlay) {
    return (
      <BareOverlayContainer>
-      {route.startsWith("overlay/hunt/") ? (
-        <HuntWidgetPage />
-      ) : route.startsWith("overlay/battle/") ? (
-        <WidgetOverlay />
-      ) : (
-        <WidgetByToken />
-      )}
+       {route.startsWith("overlay/battle/") ? (
+         <WidgetOverlay />
+       ) : route.startsWith("overlay/hunt/") ? (
+         <HuntWidgetPage />
+       ) : (
+         <WidgetByToken />
+       )}
      </BareOverlayContainer>
    );
  }
