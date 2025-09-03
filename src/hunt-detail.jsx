@@ -1671,18 +1671,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
     ariaLabel="KPI font"
   />
 </Field>
-
       </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-        <Field label="Ícone (ms, círculo)">
-          <Input type="number" value={opts.kpiAltIconMs} onChange={(e)=>setOpts(o=>({...o,kpiAltIconMs:Math.max(0,Number(e.target.value)||0)}))} className="h-9 bg-zinc-900 border-white/10 text-white"/>
-        </Field>
-        <Field label="Valor (ms, círculo)">
-          <Input type="number" value={opts.kpiAltValueMs} onChange={(e)=>setOpts(o=>({...o,kpiAltValueMs:Math.max(0,Number(e.target.value)||0)}))} className="h-9 bg-zinc-900 border-white/10 text-white"/>
-        </Field>
-      </div>
-
       {/* Cores KPI */}
       <div className="mt-2">
   <div className="text-xs opacity-70 mb-1">KPI color preset</div>
