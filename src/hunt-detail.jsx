@@ -1251,42 +1251,55 @@ function KpiPresetSwatches({ value, onChange }) {
 }
 
 /* ───────────────── active-hunt (link exclusivo) ───────────────── */
+/* ───────────────── active-hunt: guardar o último hunt ───────────────── */
 async function setActiveHuntForUser(userId, huntNumberId) {
   if (!userId || !huntNumberId) return;
 
-  // 1) guarda local (fallback)
+  // Fallback local (para o mesmo browser)
   try { localStorage.setItem(`active-hunt:${userId}`, String(huntNumberId)); } catch {}
 
-  // 2) guarda na BD (overlay_settings) numa linha única do tipo "active-hunt"
-  const jsonCols = ["opts", "settings", "config", "data", "json"]; // tal como no useOverlaySettings
-  const base = { user_id: userId, type: "active-hunt", hunt_number_id: null, updated_at: new Date().toISOString() };
+  // Guarda/atualiza uma linha em overlay_settings com type='active-hunt' e hunt_number_id NULL
+  const cols = ["opts", "settings", "config", "data", "json"];
+  const base = {
+    user_id: userId,
+    type: "active-hunt",
+    hunt_number_id: null,
+    updated_at: new Date().toISOString(),
+  };
 
-  // tenta encontrar linha existente (por user+type e hunt_number_id NULL)
-  let q = supabase
+  // Descobre se já existe
+  const probe = await supabase
     .from("overlay_settings")
     .select("id")
     .eq("user_id", userId)
     .eq("type", "active-hunt")
     .is("hunt_number_id", null)
-    .limit(1);
+    .limit(1)
+    .maybeSingle();
 
-  const probe = await q.maybeSingle();
   const rowId = probe?.data?.id ?? null;
 
-  // payload com { latest: nId } na 1ª coluna json que existir
-  for (const col of jsonCols) {
-    const payload = { ...base, [col]: { latest: huntNumberId } };
-
-    if (rowId) {
-      const { error } = await supabase.from("overlay_settings").update(payload).eq("id", rowId);
+  if (rowId) {
+    // UPDATE tentando a 1ª coluna JSON que existir
+    for (const col of cols) {
+      const { error } = await supabase
+        .from("overlay_settings")
+        .update({ ...base, [col]: { latest: huntNumberId } })
+        .eq("id", rowId);
       if (!error) return;
-    } else {
-      const { error, data } = await supabase.from("overlay_settings").insert(payload).select("id").single();
-      if (!error && data?.id) return;
     }
+    return; // se falhar tudo, fica só o fallback localStorage
   }
-  // se todas as colunas falharem… deixa só o fallback do localStorage
+
+  // INSERT novo registo
+  for (const col of cols) {
+    const { error } = await supabase
+      .from("overlay_settings")
+      .insert({ ...base, [col]: { latest: huntNumberId } });
+    if (!error) return;
+  }
 }
+
 
 /* ───────── URLs exclusivos (sempre o hunt ativo do owner) ───────── */
 function buildHuntOverlayActiveUrl(base, ownerId, o) {
