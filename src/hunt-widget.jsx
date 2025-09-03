@@ -46,7 +46,7 @@ function parseHash() {
   const [path, query] = raw.split("?");
   let parts = (path || "").split("/").filter(Boolean);
 
-  // compat
+  // compat: pode vir "#/hunt-widget/hunt/..." ou "#/overlay/hunt/..."
   if (parts[0] === "hunt-widget") parts = parts.slice(1);
   if (parts[0] === "overlay") parts = parts.slice(1);
 
@@ -79,12 +79,12 @@ function readOptsFromQS(qs) {
   const getFlag = (k) => (qs.has(k) ? qs.get(k) === "1" : undefined);
 
   const out = {};
-  // gerais
-  out.layout = getStr("layout"); // "carousel" | "grid" | "opening"
+  out.layout = getStr("layout");
   out.visible = getNum("visible", 1, 12);
   out.autoScroll = getFlag("scroll");
   out.speedSec = getNum("speed", 5, 180);
   out.cardH = getNum("cardH", 100, 400);
+  out.openCardH = getNum("openCardH", 160, 640); // novo: altura cards no Opening
   out.showBox = qs.has("box") ? qs.get("box") !== "0" : undefined;
   out.nameStyle = getStr("name");     // bar | float | hidden
   out.betStyle = getStr("bet");       // inline | chip | none
@@ -104,16 +104,6 @@ function readOptsFromQS(qs) {
   out.baseW = getNum("bw", 260, 3840);
   out.baseH = getNum("bh", 160, 2160);
   out.align = getStr("align");
-
-  // lista Opening (novos)
-  out.showList = getFlag("list");
-  out.listSide = getStr("lside");           // left | right
-  out.listWidth = getNum("lwidth", 160, 420);
-  out.listVisible = getNum("lvisible", 3, 14);
-  out.listAutoScroll = getFlag("lscroll");
-  out.listSpeedSec = getNum("lspeed", 4, 120);
-  out.listBox = getFlag("lbox");
-  out.listShowBestWorst = getFlag("lbest");
 
   // KPIs
   out.kpiPos = getStr("kpos");             // top | bottom | side | hidden
@@ -135,6 +125,7 @@ function readOptsFromQS(qs) {
   if (qs.has("kbr")) out.kpiBorder = "#" + qs.get("kbr");
   if (qs.has("ktx")) out.kpiText = "#" + qs.get("ktx");
 
+  // remove undefineds
   Object.keys(out).forEach((k) => out[k] === undefined && delete out[k]);
   return out;
 }
@@ -165,6 +156,7 @@ const DEFAULTS = {
   autoScroll: true,
   speedSec: 30,
   cardH: 160,
+  openCardH: 320,       // novo: altura base para Opening (cards maiores)
   showBox: true,
   nameStyle: "bar",
   betStyle: "inline",
@@ -184,16 +176,6 @@ const DEFAULTS = {
   baseW: 560,
   baseH: 280,
   align: "center",
-
-  // Opening sidebar (novos)
-  showList: true,
-  listSide: "right",
-  listWidth: 232,
-  listVisible: 9,
-  listAutoScroll: true,
-  listSpeedSec: 18,
-  listBox: true,
-  listShowBestWorst: false,
 
   // KPIs
   kpiPos: "top",
@@ -292,8 +274,8 @@ export default function HuntWidgetPage() {
 
   const qsOpts = React.useMemo(() => readOptsFromQS(qs), [qs]);
   const mergedOpts = React.useMemo(
-    () => ({ ...DEFAULTS, ...dbOpts, ...qsOpts, ...(type === "opening" ? { layout: "opening" } : {}) }),
-    [dbOpts, qsOpts, type]
+    () => ({ ...DEFAULTS, ...dbOpts, ...qsOpts }), // QS só sobrepõe se existir no URL
+    [dbOpts, qsOpts]
   );
 
   React.useEffect(() => {
@@ -313,7 +295,7 @@ export default function HuntWidgetPage() {
         if (!Number.isFinite(id) || id <= 0)
           throw new Error("Parâmetro numberId inválido.");
 
-        // 2) hunt (para Start dos KPIs)
+        // 2) hunt (para Start dos KPIs e current slot)
         const { hunt } = await getHuntByNumberId(id);
         if (!alive) return;
         setHunt(hunt || null);
@@ -363,11 +345,41 @@ export default function HuntWidgetPage() {
     );
   }
 
-  return <HuntOverlayCanvas hunt={hunt} slots={slots} opts={mergedOpts} />;
+  return <HuntOverlayCanvas type={type} hunt={hunt} slots={slots} opts={mergedOpts} />;
+}
+
+/* ───────────────── helpers Opening ───────────────── */
+function getCurrentIndex(hunt, slots) {
+  if (!Array.isArray(slots) || slots.length === 0) return 0;
+
+  // tenta vários campos possíveis para “current”
+  const byId = (id) =>
+    slots.findIndex(
+      (s) =>
+        s?.id === id ||
+        s?.slot_id === id ||
+        s?._raw?.id === id ||
+        s?._raw?.slot_id === id
+    );
+
+  let idx = -1;
+
+  if (Number.isFinite(hunt?.current_slot_index)) idx = Number(hunt.current_slot_index);
+  if (idx < 0 && hunt?.current_slot_number != null) {
+    const n = Number(hunt.current_slot_number);
+    idx = slots.findIndex(
+      (s) => Number(s?.number) === n || Number(s?.order) === n
+    );
+  }
+  if (idx < 0 && hunt?.current_slot_id != null) idx = byId(hunt.current_slot_id);
+  if (idx < 0) idx = slots.findIndex((s) => !!(s?.is_current ?? s?._raw?.is_current));
+
+  if (idx < 0) idx = 0;
+  return (idx + slots.length) % slots.length;
 }
 
 /* ───────────────── Render do overlay ───────────────── */
-function HuntOverlayCanvas({ hunt, slots, opts }) {
+function HuntOverlayCanvas({ type, hunt, slots, opts }) {
   const baseW = Number(opts.baseW || 560);
   const baseH = Number(opts.baseH || 280);
   const visible = Math.max(1, Number(opts.visible || 3));
@@ -375,15 +387,25 @@ function HuntOverlayCanvas({ hunt, slots, opts }) {
   const layout = String(opts.layout || "carousel");
   const showBox = opts.showBox !== false;
 
+  const isOpening = String(type || "hunt") !== "hunt";
+
   const alignMap = { left: "flex-start", center: "center", right: "flex-end" };
   const justify = alignMap[String(opts.align || "center")] || "center";
 
-  const innerW = baseW - (opts.pad || 0) * 2;
-  const gap = layout === "grid" ? 8 : 12;
+  const pad = opts.pad || 0;
+  const innerW = baseW - pad * 2;
+  const gap = isOpening ? 14 : (layout === "grid" ? 8 : 12);
+
+  // tamanho dos cards
+  const openingCardH = Number(opts.openCardH ?? 320); // maior para Opening
+  const cardHFinal = isOpening ? openingCardH : (opts.cardH || 160);
+
   const cardW =
-    layout === "carousel" || layout === "opening"
-      ? Math.max(140, Math.floor((innerW - (visible - 1) * gap - (opts.showList ? (opts.listWidth || 232) : 0)) / visible))
-      : undefined;
+    isOpening
+      ? Math.max(160, Math.floor((innerW - (visible - 1) * gap) / visible))
+      : layout === "carousel"
+        ? Math.max(140, Math.floor((innerW - (visible - 1) * gap) / visible))
+        : undefined;
 
   const bg1 = opts.panelBgStart || "#0b1020";
   const bg2 = opts.panelBgEnd || "#111827";
@@ -481,20 +503,33 @@ function HuntOverlayCanvas({ hunt, slots, opts }) {
     );
   }
 
-  // Layout base com possível lista lateral (Opening)
-  const showList = (layout === "opening") && (opts.showList !== false);
-  const listOnLeft = String(opts.listSide || "right") === "left";
-  const listW = Math.max(160, Math.min(420, Number(opts.listWidth || 232)));
-  const gridCols = showList
-    ? (listOnLeft ? `${listW}px 1fr` : `1fr ${listW}px`)
-    : "1fr";
+  // ---- OPENING: foco centrado (current no meio) ----
+  const focusIdx = isOpening ? getCurrentIndex(hunt, slots) : 0;
+  const ring = React.useMemo(() => {
+    if (!isOpening) return [];
+    const v = Math.max(1, visible);
+    const half = Math.floor(v / 2);
+    const seq = [];
+    for (let k = -half; k <= half; k++) {
+      if (v % 2 === 0 && k === 0) continue; // se for par, não repetir centro
+      const idx = (focusIdx + k + slots.length) % slots.length;
+      seq.push(idx);
+    }
+    // garantir comprimento exacto (v): se for ímpar terá centro incluído
+    if (!seq.includes(focusIdx)) {
+      // inserir centro na posição do meio
+      const mid = Math.floor(seq.length / 2);
+      seq.splice(mid, 0, focusIdx);
+    }
+    return seq.slice(0, Math.min(v, slots.length));
+  }, [isOpening, focusIdx, visible, slots]);
 
   return (
     <div
       style={{
         width: baseW,
         height: baseH,
-        padding: opts.pad || 0,
+        padding: pad,
         margin: "0 auto",
         background: showBox
           ? `linear-gradient(135deg, ${bg1} 0%, ${bg2} 100%)`
@@ -505,235 +540,108 @@ function HuntOverlayCanvas({ hunt, slots, opts }) {
         fontFamily: RUBIK,
         color: "#e5e7eb",
         position: "relative",
-        display: "grid",
-        gridTemplateColumns: gridCols,
-        gap: 10
       }}
     >
       <style>{`
-        @keyframes marqueeX {
+        @keyframes marquee {
           0%   { transform: translateX(0); }
           100% { transform: translateX(-50%); }
         }
-        @keyframes marqueeY {
-          0%   { transform: translateY(0); }
-          100% { transform: translateY(-50%); }
-        }
       `}</style>
 
-      {showList && listOnLeft && (
-        <OpeningList
-          slots={slots}
-          opts={opts}
-          height={baseH - (opts.pad || 0) * 2}
-        />
-      )}
+      {opts.kpiPos === "top" && <KPIsInline />}
+      {opts.kpiPos === "side" && <KPIsSide />}
 
-      <div style={{ position: "relative" }}>
-        {opts.kpiPos === "top" && <KPIsInline />}
-        {opts.kpiPos === "side" && <KPIsSide />}
-
-        {layout === "grid" ? (
+      {/* Lista principal */}
+      {isOpening ? (
+        // Opening: foco ao centro
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap,
+            height: "100%",
+          }}
+        >
+          {ring.map((idx) => {
+            const s = slots[idx];
+            const isCurrent = idx === focusIdx;
+            return (
+              <Card
+                key={`${s?.id ?? idx}-${idx}`}
+                s={s}
+                i={idx}
+                width={cardW}
+                cardH={cardHFinal}
+                opts={opts}
+                isCurrent={isCurrent}
+              />
+            );
+          })}
+        </div>
+      ) : layout === "grid" ? (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(8,minmax(0,1fr))",
+            gap,
+            height: "100%",
+          }}
+        >
+          {slots.slice(0, 16).map((s, i) => (
+            <Card
+              key={s.id}
+              s={s}
+              i={i}
+              width="100%"
+              cardH={opts.cardH || 160}
+              opts={opts}
+            />
+          ))}
+        </div>
+      ) : (
+        // Hunt: carrossel contínuo (marquee)
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: justify,
+            height: "100%",
+            overflow: "hidden",
+          }}
+        >
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(8,minmax(0,1fr))",
+              display: "flex",
               gap,
-              height: "100%",
+              width: "max-content",
+              animation:
+                opts.autoScroll && slots.length > visible
+                  ? `marquee ${speedSec}s linear infinite`
+                  : undefined,
             }}
           >
-            {slots.slice(0, 16).map((s, i) => (
+            {[...slots, ...slots].map((s, i) => (
               <Card
-                key={s.id}
+                key={`${s.id}-${i}`}
                 s={s}
-                i={i}
-                width="100%"
+                i={i % slots.length}
+                width={cardW}
                 cardH={opts.cardH || 160}
                 opts={opts}
               />
             ))}
           </div>
-        ) : (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: justify,
-              height: "100%",
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                gap,
-                width: "max-content",
-                animation:
-                  opts.autoScroll && slots.length > visible
-                    ? `marqueeX ${speedSec}s linear infinite`
-                    : undefined,
-              }}
-            >
-              {[...slots, ...slots].map((s, i) => (
-                <Card
-                  key={`${s.id}-${i}`}
-                  s={s}
-                  i={i % slots.length}
-                  width={cardW}
-                  cardH={opts.cardH || 160}
-                  opts={opts}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {opts.kpiPos === "bottom" && <KPIsInline />}
-      </div>
-
-      {showList && !listOnLeft && (
-        <OpeningList
-          slots={slots}
-          opts={opts}
-          height={baseH - (opts.pad || 0) * 2}
-        />
+        </div>
       )}
+
+      {opts.kpiPos === "bottom" && <KPIsInline />}
     </div>
   );
 }
 
-/* ───────────────── Lista lateral (Opening) ───────────────── */
-function OpeningList({ slots, opts, height }) {
-  const rowH = 56;                 // altura de cada linha (fixa → tudo alinhado)
-  const thumb = 44;                // thumbnail quadrado
-  const visible = Math.max(3, Math.min(14, Number(opts.listVisible || 9)));
-  const boxBg = opts.listBox !== false ? "rgba(0,0,0,.55)" : "transparent";
-  const boxBr = opts.listBox !== false ? "1px solid rgba(255,255,255,.12)" : "1px solid transparent";
-  const listH = Math.min(height, visible * rowH + 12); // padding interno incluído
-  const anim = (opts.listAutoScroll !== false) && slots.length > visible
-    ? `marqueeY ${Math.max(4, Number(opts.listSpeedSec || 18))}s linear infinite`
-    : undefined;
-
-  const renderRows = (repeatKey = "") =>
-    slots.map((s, i) => (
-      <ListRow
-        key={`${repeatKey}${s.id}-${i}`}
-        s={s}
-        idx={i + 1}
-        rowH={rowH}
-        thumb={thumb}
-      />
-    ));
-
-  return (
-    <div
-      style={{
-        height: listH,
-        borderRadius: 12,
-        background: boxBg,
-        border: boxBr,
-        padding: 6,
-        overflow: "hidden",
-      }}
-    >
-      <div
-        style={{
-          display: "grid",
-          gap: 6,
-          animation: anim,
-        }}
-      >
-        {renderRows("a-")}
-        {anim && renderRows("b-")}
-      </div>
-    </div>
-  );
-}
-
-function ListRow({ s, idx, rowH, thumb }) {
-  // destaque do número e do nome
-  return (
-    <div
-      title={s?.name}
-      style={{
-        height: rowH,
-        display: "grid",
-        gridTemplateColumns: "auto auto 1fr",
-        alignItems: "center",
-        gap: 10,
-        padding: "0 6px",
-        borderRadius: 10,
-      }}
-    >
-      {/* # */}
-      <div
-        style={{
-          minWidth: 28,
-          height: 28,
-          borderRadius: 999,
-          display: "grid",
-          placeItems: "center",
-          fontWeight: 800,
-          fontSize: 12,
-          letterSpacing: .2,
-          background: "linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.08))",
-          border: "1px solid rgba(255,255,255,.14)",
-          boxShadow: "0 8px 18px rgba(0,0,0,.35)",
-        }}
-      >
-        #{idx}
-      </div>
-
-      {/* thumb com tamanho fixo */}
-      <div
-        style={{
-          width: thumb,
-          height: thumb,
-          borderRadius: 10,
-          overflow: "hidden",
-          border: "1px solid rgba(255,255,255,.18)",
-          boxShadow: "0 10px 20px rgba(0,0,0,.35)",
-        }}
-      >
-        {s?.thumbnail ? (
-          <img
-            src={s.thumbnail}
-            alt=""
-            style={{ width: "100%", height: "100%", objectFit: "cover" }}
-          />
-        ) : (
-          <div style={{ width: "100%", height: "100%", background: "rgba(255,255,255,.08)" }} />
-        )}
-      </div>
-
-      {/* nome (forte) */}
-      <div
-        style={{
-          minWidth: 0,
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          whiteSpace: "nowrap",
-        }}
-      >
-        <span
-          style={{
-            fontWeight: 800,
-            fontSize: 14,
-            textShadow: "0 2px 6px rgba(0,0,0,.55)",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {s?.name || "—"}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/* ───────────────── Card principal ───────────────── */
-function Card({ s, i, width, cardH, opts }) {
+function Card({ s, i, width, cardH, opts, isCurrent = false }) {
   const isSuper = !!(
     s?.is_super ?? s?.super ?? s?._raw?.is_super ?? s?._raw?.super
   );
@@ -758,6 +666,8 @@ function Card({ s, i, width, cardH, opts }) {
         overflow: "hidden",
         border: `1px solid ${isSuper ? borderCol : "rgba(255,255,255,.10)"}`,
         boxShadow: isSuper ? shadowSoft : "0 12px 28px rgba(0,0,0,.35)",
+        transform: isCurrent ? "scale(1.06)" : "scale(1.0)",
+        transition: "transform 220ms ease, box-shadow 220ms ease",
       }}
     >
       {s?.thumbnail ? (
@@ -771,6 +681,7 @@ function Card({ s, i, width, cardH, opts }) {
             height: "100%",
             objectFit: "cover",
             objectPosition: "center",
+            filter: isCurrent ? "none" : "saturate(0.92)",
           }}
         />
       ) : (
@@ -904,11 +815,10 @@ function Card({ s, i, width, cardH, opts }) {
           >
             <div
               style={{
-                fontWeight: 700,
+                fontWeight: 600,
                 whiteSpace: "nowrap",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
-                fontSize: 14
               }}
             >
               {s?.name || "—"}
@@ -950,7 +860,7 @@ function Card({ s, i, width, cardH, opts }) {
             pointerEvents: "none",
           }}
         >
-          <div style={{ fontWeight: 700, fontSize: 14, textShadow: "0 2px 6px rgba(0,0,0,.8)" }}>
+          <div style={{ fontWeight: 600, textShadow: "0 2px 6px rgba(0,0,0,.8)" }}>
             {s?.name || "—"}
           </div>
           {opts.betStyle === "inline" && (
