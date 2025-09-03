@@ -254,6 +254,30 @@ function ColorField({ label, value, onChange, placeholder = "#RRGGBB or rgba()" 
   );
 }
 
+function SoftInput({
+  className = "",
+  ...props
+}) {
+  return (
+    <div
+      className="group relative rounded-xl border border-white/10 bg-zinc-900/60
+                 hover:border-white/20 focus-within:ring-2 focus-within:ring-sky-400/30
+                 shadow-[inset_0_1px_0_rgba(255,255,255,.06),0_8px_26px_rgba(0,0,0,.35)]
+                 transition"
+    >
+      <Input
+        {...props}
+        className={cn(
+          "h-10 px-3 rounded-xl bg-transparent border-0 text-white",
+          "placeholder:text-white/40 focus-visible:ring-0 focus:outline-none",
+          "disabled:opacity-50",
+          className
+        )}
+      />
+    </div>
+  );
+}
+
 
 function Section({ title, defaultOpen = true, right, children }) {
   const [open, setOpen] = React.useState(defaultOpen);
@@ -1339,32 +1363,26 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
         <Field label="Base width">
-          <Input
-            type="number"
-            value={opts.baseW}
-            onChange={(e) => setOpts(o => ({ ...o, baseW: Number(e.target.value) || 0 }))}
-            className="h-9 bg-zinc-900 border-white/10 text-white"
-          />
-        </Field>
-        <Field label="Base height">
-          <Input
-            type="number"
-            value={opts.baseH}
-            onChange={(e) => setOpts(o => ({ ...o, baseH: Number(e.target.value) || 0 }))}
-            className="h-9 bg-zinc-900 border-white/10 text-white"
-          />
-        </Field>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-        <Field label="Padding">
-          <Input
-            type="number"
-            value={opts.pad}
-            onChange={(e) => setOpts(o => ({ ...o, pad: Number(e.target.value) || 0 }))}
-            className="h-9 bg-zinc-900 border-white/10 text-white"
-          />
-        </Field>
+  <SoftInput
+    type="number"
+    value={opts.baseW}
+    onChange={(e) => setOpts(o => ({ ...o, baseW: Number(e.target.value) || 0 }))}
+  />
+</Field>
+<Field label="Base height">
+  <SoftInput
+    type="number"
+    value={opts.baseH}
+    onChange={(e) => setOpts(o => ({ ...o, baseH: Number(e.target.value) || 0 }))}
+  />
+</Field>
+<Field label="Padding">
+  <SoftInput
+    type="number"
+    value={opts.pad}
+    onChange={(e) => setOpts(o => ({ ...o, pad: Number(e.target.value) || 0 }))}
+  />
+</Field>
         <Field label="Align">
           <Segmented
             value={opts.align}
@@ -1427,24 +1445,41 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         </Field>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-          <Field label="Card height (px)">
-            <Input
-              type="number"
-              value={opts.cardH}
-              onChange={(e) => setOpts(o => ({ ...o, cardH: Number(e.target.value) || 120 }))}
-              className="h-9 bg-zinc-900 border-white/10 text-white"
-            />
-          </Field>
-          {opts.layout === "carousel" && (
-            <Field label="Visíveis">
-              <Input
-                type="number"
-                value={opts.visible}
-                onChange={(e) => setOpts(o => ({ ...o, visible: Math.max(1, Number(e.target.value) || 3) }))}
-                className="h-9 bg-zinc-900 border-white/10 text-white"
-              />
-            </Field>
-          )}
+       <Field label="Card height (px)">
+  <SoftInput
+    type="number"
+    value={opts.cardH}
+    onChange={(e) => setOpts(o => ({ ...o, cardH: Number(e.target.value) || 120 }))}
+  />
+</Field>
+
+{opts.layout === "carousel" && (
+  <>
+    <Field label="Visíveis">
+      <SoftInput
+        type="number"
+        value={opts.visible}
+        onChange={(e) =>
+          setOpts(o => ({ ...o, visible: Math.max(1, Number(e.target.value) || 3) }))
+        }
+      />
+    </Field>
+
+    <Field label="Velocidade (seg/loop)" hint="Menor = mais rápido">
+      <SoftInput
+        type="number"
+        value={opts.scrollDur}
+        onChange={(e) =>
+          setOpts(o => ({
+            ...o,
+            scrollDur: Math.max(5, Math.min(180, Number(e.target.value) || 30)),
+          }))
+        }
+      />
+    </Field>
+  </>
+)}
+
         </div>
 
         {opts.layout === "carousel" && (
@@ -1573,22 +1608,37 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
         <Field label="KPI gap">
-          <Input type="number" value={opts.kpiGap} onChange={(e)=>setOpts(o=>({...o,kpiGap:Number(e.target.value)||0}))} className="h-9 bg-zinc-900 border-white/10 text-white"/>
-        </Field>
-        <Field label="Side spacing" hint={opts.kpiPos !== "side" ? "Só em Posic. Lado" : ""}>
-          <Input type="number" disabled={opts.kpiPos!=="side"} value={opts.kpiSideSpace} onChange={(e)=>setOpts(o=>({...o,kpiSideSpace:Number(e.target.value)||0}))} className="h-9 bg-zinc-900 border-white/10 text-white disabled:opacity-50"/>
-        </Field>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-        <Field label="Tamanho (0.7–1.6)">
-  <NiceSlider
-    min={0.7} max={1.6} step={0.05}
-    value={opts.kpiSize}
-    onChange={(v)=>setOpts(o=>({...o, kpiSize: v}))}
-    ariaLabel="KPI size"
+  <SoftInput
+    type="number"
+    value={opts.kpiGap}
+    onChange={(e)=>setOpts(o=>({...o,kpiGap:Number(e.target.value)||0}))}
   />
 </Field>
+
+<Field label="Side spacing" hint={opts.kpiPos !== "side" ? "Só em Posic. Lado" : ""}>
+  <SoftInput
+    type="number"
+    disabled={opts.kpiPos!=="side"}
+    value={opts.kpiSideSpace}
+    onChange={(e)=>setOpts(o=>({...o,kpiSideSpace:Number(e.target.value)||0}))}
+  />
+</Field>
+
+<Field label="Ícone (ms, círculo)">
+  <SoftInput
+    type="number"
+    value={opts.kpiAltIconMs}
+    onChange={(e)=>setOpts(o=>({...o,kpiAltIconMs:Math.max(0,Number(e.target.value)||0)}))}
+  />
+</Field>
+<Field label="Valor (ms, círculo)">
+  <SoftInput
+    type="number"
+    value={opts.kpiAltValueMs}
+    onChange={(e)=>setOpts(o=>({...o,kpiAltValueMs:Math.max(0,Number(e.target.value)||0)}))}
+  />
+</Field>
+
 
       </div>
 
@@ -1638,38 +1688,35 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
     }
   />
 
-  <div className="grid grid-cols-3 gap-2 mt-2">
-    <div>
-      <div className="text-xs opacity-70 mb-1">BG (override)</div>
-      <Input
-        type="text"
-        placeholder="#RRGGBB or rgba()"
-        value={opts.kpiBg ?? ""}
-        onChange={(e) => setOpts((o) => ({ ...o, kpiBg: e.target.value }))}
-        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-      />
-    </div>
-    <div>
-      <div className="text-xs opacity-70 mb-1">Border (override)</div>
-      <Input
-        type="text"
-        placeholder="#RRGGBB or rgba()"
-        value={opts.kpiBorder ?? ""}
-        onChange={(e) => setOpts((o) => ({ ...o, kpiBorder: e.target.value }))}
-        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-      />
-    </div>
-    <div>
-      <div className="text-xs opacity-70 mb-1">Text (override)</div>
-      <Input
-        type="text"
-        placeholder="#RRGGBB"
-        value={opts.kpiText ?? ""}
-        onChange={(e) => setOpts((o) => ({ ...o, kpiText: e.target.value }))}
-        className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
-      />
-    </div>
+<div className="grid grid-cols-3 gap-2 mt-2">
+  <div>
+    <div className="text-xs opacity-70 mb-1">BG (override)</div>
+    <SoftInput
+      type="text"
+      placeholder="#RRGGBB or rgba()"
+      value={opts.kpiBg ?? ""}
+      onChange={(e) => setOpts((o) => ({ ...o, kpiBg: e.target.value }))}
+    />
   </div>
+  <div>
+    <div className="text-xs opacity-70 mb-1">Border (override)</div>
+    <SoftInput
+      type="text"
+      placeholder="#RRGGBB or rgba()"
+      value={opts.kpiBorder ?? ""}
+      onChange={(e) => setOpts((o) => ({ ...o, kpiBorder: e.target.value }))}
+    />
+  </div>
+  <div>
+    <div className="text-xs opacity-70 mb-1">Text (override)</div>
+    <SoftInput
+      type="text"
+      placeholder="#RRGGBB"
+      value={opts.kpiText ?? ""}
+      onChange={(e) => setOpts((o) => ({ ...o, kpiText: e.target.value }))}
+    />
+  </div>
+</div>
 
   <div className="text-[11px] opacity-60 mt-1">
     Tip: leave overrides empty to use the preset.
