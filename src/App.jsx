@@ -33,7 +33,7 @@ import WidgetByToken from "./widget-by-token.jsx";
 
 // Overlay
 import WidgetOverlay from "./widget-overlay.jsx";
-
+import HuntWidget from "./hunt-widget.jsx";   
 /* =================== CONFIG =================== */
 const TELEGRAM_URL = "https://t.me/gsousa70";
 const DISCORD_URL = import.meta.env.VITE_DISCORD_URL || "https://discord.gg/your-invite";
@@ -1171,7 +1171,9 @@ export default function App() {
         {route === "terms" && <Terms />}
         {route === "tournaments" && <TournamentsPage />}
         {route === "battles" && <BattlesPage />}
-        {route.startsWith("battles/") && <BattleView />}
+        {route === "hunts" && <BattlesPage />}
+        {route.startsWith("battles/") && <HuntWidget />}
+        
 
         {!(
           ["home","widgets","games","premium","auth","dashboard","settings","about","hunts","tournaments","battles","terms"].includes(route) || isDetailRoute

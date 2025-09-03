@@ -1,397 +1,123 @@
-// /src/hunt-widget.jsx
+// src/pages/hunt-widget.jsx
 import React from "react";
+import { useParams, useLocation } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { getHuntByNumberId } from "@/lib/hunts";
 import { listHuntSlots } from "@/lib/slots";
 
-/* ───────── helpers ───────── */
-const RUBIK =
-  `'Rubik', ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial`;
+/* ─ helpers ─ */
+const LOCALE = "pt-PT";
+const numCls = "tabular-nums whitespace-nowrap";
 
-// leitura segura de números
-const n = (v, def = 0) => {
-  const num = Number(v);
-  return Number.isFinite(num) ? num : def;
+const toNum = (v) => {
+  if (v == null || v === "") return 0;
+  if (typeof v === "string") v = v.replace(",", ".");
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
 };
-const any = (v, def = "") => (v == null || v === "" ? def : String(v));
-const yes = (v) => v === "1" || v === "true" || v === "yes";
+const fmtPlain = (n, d = 2) =>
+  Number.isFinite(Number(n))
+    ? new Intl.NumberFormat(LOCALE, { minimumFractionDigits: d, maximumFractionDigits: d }).format(n)
+    : "—";
 
-/** Resolve :numberId que pode ser "active" ou um número, usando owner=? */
-async function resolveHuntNumberId(numberId, owner) {
-  if (numberId !== "active") return numberId;
+const hexToRgba = (hex, a = 1) => {
+  try {
+    let h = String(hex || "").replace("#", "");
+    if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+    const n = parseInt(h, 16);
+    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    return `rgba(${r},${g},${b},${a})`;
+  } catch { return `rgba(232,121,249,${a})`; }
+};
+const anyToRgba = (c, a = 1) => (/^(rgba?|hsla?)\(/i.test(String(c||"")) ? c : hexToRgba(c, a));
 
-  // 1) BD: overlay_settings (type='active-hunt', hunt_number_id NULL)
-  if (owner) {
-    const cols = ["opts", "settings", "config", "data", "json"];
-    const { data } = await supabase
+/* ler query string mesmo em HashRouter */
+function useQS() {
+  const { search } = useLocation();
+  return React.useMemo(() => new URLSearchParams(search), [search]);
+}
+
+/* traduz a QS para opções de layout */
+function readOptsFromQS(qs) {
+  const getN = (k, f, min, max) => {
+    const v = Number(qs.get(k));
+    if (!Number.isFinite(v)) return f;
+    if (min != null && v < min) return min;
+    if (max != null && v > max) return max;
+    return v;
+  };
+  return {
+    layout: qs.get("layout") || "carousel",
+    visible: getN("visible", 3, 1, 12),
+    autoScroll: qs.get("scroll") === "1",
+    speedSec: getN("speed", 30, 5, 180),
+    cardH: getN("cardH", 160, 100, 400),
+    showBox: qs.get("box") !== "0",
+    nameStyle: qs.get("name") || "bar",        // bar | float | hidden
+    betStyle: qs.get("bet") || "inline",       // inline | chip | none
+    showIdx: qs.get("showIdx") !== "0",
+    showBet: qs.get("showBet") !== "0",
+    showSuper: qs.get("showSuper") !== "0",
+    vInfo: qs.get("vinfo") === "1",
+    infoPos: qs.get("infoside") || "left",
+    superGlow: qs.get("sg") !== "0",
+    superGlowColor: "#" + (qs.get("sgc") || "e879f9"),
+    superGlowStrength: Number(qs.get("sgs") ?? 0.6),
+    superTagColor: "#" + (qs.get("stc") || "e879f9"),
+    superTextColor: "#" + (qs.get("stx") || "120614"),
+    panelBgStart: "#" + (qs.get("bg1") || "0b1020"),
+    panelBgEnd:   "#" + (qs.get("bg2") || "111827"),
+    pad: getN("pad", 16, 0, 64),
+    baseW: getN("bw", 560, 260, 3840),
+    baseH: getN("bh", 280, 160, 2160),
+    align: qs.get("align") || "center",
+  };
+}
+
+/* resolve o “active” para um numberId via DB/LS */
+async function resolveActiveNumberId(owner) {
+  if (!owner) return null;
+
+  // 1) BD (overlay_settings.type = 'active-hunt')
+  try {
+    const { data, error } = await supabase
       .from("overlay_settings")
       .select("*")
       .eq("user_id", owner)
       .eq("type", "active-hunt")
       .is("hunt_number_id", null)
       .maybeSingle();
-
-    for (const c of cols) {
-      const latest = data?.[c]?.latest;
-      if (latest) return String(latest);
+    if (!error && data) {
+      const cols = ["opts", "settings", "config", "data", "json"];
+      for (const c of cols) {
+        const latest = data?.[c]?.latest;
+        if (latest) return Number(latest);
+      }
     }
-    // 2) Fallback: mesmo browser
-    try {
-      const ls = localStorage.getItem(`active-hunt:${owner}`);
-      if (ls) return String(ls);
-    } catch {}
-  }
+  } catch {}
+
+  // 2) Fallback: localStorage
+  try {
+    const ls = localStorage.getItem(`active-hunt:${owner}`);
+    if (ls) return Number(ls);
+  } catch {}
+
   return null;
 }
 
-/** Lê params do hash (ex.: #/hunt-widget/hunt/123?foo=bar) */
-function readHash() {
-  const hash = window.location.hash.replace(/^#/, "");
-  const [path, qs = ""] = hash.split("?");
-  const parts = path.split("/").filter(Boolean);
-
-  // Suportar:
-  //  - #/hunt-widget/hunt/:id
-  //  - #/hunt-widget/opening/:id
-  //  - #/overlay/hunt/:id (compat)
-  //  - #/overlay/opening/:id (compat)
-  let type = "hunt";
-  let numberId = null;
-
-  if (parts[0] === "hunt-widget" && parts[1] && parts[2]) {
-    type = parts[1];              // hunt | opening
-    numberId = parts[2];          // id | active
-  } else if (parts[0] === "overlay" && parts[1] && parts[2]) {
-    type = parts[1];              // hunt | opening
-    numberId = parts[2];          // id | active
-  }
-
-  const q = new URLSearchParams(qs);
-  return { type, numberId, q };
-}
-
-/* ───────── componentes visuais ───────── */
-function KPIs({ start, won, count, opts }) {
-  const left = Math.max(0, start - won);
-
-  // helper de formatação
-  const fmt = (s) =>
-    new Intl.NumberFormat("pt-PT", {
-      minimumFractionDigits: s,
-      maximumFractionDigits: s,
-    });
-
-  const bg  = qColor(opts.kbg, "rgba(255,255,255,.10)");
-  const br  = qColor(opts.kbr, "rgba(255,255,255,.15)");
-  const txt = qColor(opts.ktx, "#fff");
-
-  const shape = any(opts.kshape, "box");
-  const size = Math.max(0.7, Math.min(1.6, n(opts.ksize, 1)));
-  const precision = Math.max(0, Math.min(2, n(opts.kround, 2))); // ← renomeado
-
-  const H = shape === "circle"
-    ? Math.round(36 * size)
-    : shape === "pill"
-    ? Math.round(28 * size)
-    : Math.round(32 * size);
-
-  const Box = ({ labelTxt, value, children }) => {
-    if (shape === "circle") {
-      return (
-        <div
-          title={labelTxt}
-          className="rounded-full border grid place-items-center"
-          style={{
-            width: H,
-            height: H,
-            background: bg,
-            borderColor: br,
-            color: txt,
-          }}
-        >
-          <span
-            className="font-bold tabular-nums"
-            style={{ fontSize: Math.max(10, Math.round(H * 0.36 * n(opts.kfont, 1))) }}
-          >
-            {value}
-          </span>
-        </div>
-      );
-    }
-    return (
-      <div
-        className={shape === "pill" ? "rounded-full border px-3 h-8 flex items-center gap-2" : "rounded-lg border px-3 h-9 flex items-center gap-2"}
-        style={{ background: bg, borderColor: br, color: txt }}
-      >
-        {opts.klabels !== "0" && <span className="text-xs opacity-80">{labelTxt}:</span>}
-        <b className="tabular-nums" style={{ fontSize: `${n(opts.kfont, 1)}rem` }}>{value}</b>
-        {children}
-      </div>
-    );
-  };
-
-  const items = [
-    { k: "start",  label: "Start",   value: fmt(precision).format(start) },
-    { k: "be",     label: "B/E",     value: fmt(precision).format(left)  },
-    { k: "bonus",  label: "# Bonus", value: String(count) },
-  ];
-
-  const pos   = any(opts.kpos, "top");
-  const dir   = any(opts.kdir, "row");
-  const align =
-    any(opts.kalign, "center") === "left"  ? "justify-start" :
-    any(opts.kalign, "center") === "right" ? "justify-end"   : "justify-center";
-  const gap = n(opts.kgap, 8);
-
-  const content = (
-    <div className={`flex ${dir === "column" ? "flex-col" : "items-center"} ${align}`} style={{ gap }}>
-      {items.map(it => <Box key={it.k} labelTxt={it.label} value={it.value} />)}
-    </div>
-  );
-
-  if (pos === "hidden") return null;
-  if (pos === "side") {
-    const side = any(opts.kside, "right");
-    const kspace = n(opts.kspace, 18);
-    return (
-      <div className="absolute z-20" style={{
-        top: "50%", transform: "translateY(-50%)",
-        [side]: kspace, display: "flex", flexDirection: "column", gap
-      }}>
-        {items.map(it => <Box key={it.k} labelTxt={it.label} value={it.value} />)}
-      </div>
-    );
-  }
-  return <div className="px-3 py-2">{content}</div>;
-}
-
-
-function qColor(v, fallback) {
-  if (!v) return fallback;
-  const s = String(v).trim();
-  return s.startsWith("#") ? s : s; // já aceitamos hex/rgba pass-through
-}
-
-/* ───────── widget HUNT (cards/carousel) ───────── */
-function HuntWidgetView({ hunt, slots, qs }) {
-  const start = Number(hunt?.start_cost) || slots.reduce((a, s) => a + (Number(s.bet_size) || 0), 0);
-  const won   = slots.reduce((a, s) => a + (Number(s.payout) || 0), 0);
-
-  const layout   = any(qs.get("layout"), "carousel");
-  const visible  = Math.max(1, n(qs.get("visible"), 3));
-  const auto     = yes(qs.get("scroll") || "0");
-  const speedSec = Math.max(5, Math.min(180, n(qs.get("speed"), 30)));
-  const cardH    = Math.max(120, n(qs.get("cardH"), 160));
-  const showBox  = qs.get("box") !== "0";
-  const name     = any(qs.get("name"), "bar");    // bar | float | hidden
-  const betStyle = any(qs.get("bet"), "inline");  // inline | chip | none
-
-  const showIdx    = qs.get("showIdx") !== "0";
-  const showBet    = qs.get("showBet") !== "0";
-  const showSuper  = qs.get("showSuper") !== "0";
-  const vInfo      = yes(qs.get("vinfo") || "0");
-  const infoPos    = any(qs.get("infoside"), "left");
-
-  const baseW   = n(qs.get("bw"), 560);
-  const baseH   = n(qs.get("bh"), 280);
-  const pad     = n(qs.get("pad"), 16);
-  const align   = any(qs.get("align"), "center");
-
-  const bg1 = `#${any(qs.get("bg1"), "0b1020")}`.replace("##","#");
-  const bg2 = `#${any(qs.get("bg2"), "111827")}`.replace("##","#");
-  const border = qColor(qs.get("panelBorder") || "", "rgba(255,255,255,.12)");
-
-  const innerW = baseW;
-  const visibleW = layout === "carousel"
-    ? Math.max(140, Math.floor((innerW - 6 - (visible - 1) * 12) / visible))
-    : undefined;
-
-  return (
-    <div
-      className="rounded-xl overflow-hidden relative"
-      style={{
-        width: baseW,
-        height: baseH,
-        margin: align === "left" ? "0 auto 0 0" : align === "right" ? "0 0 0 auto" : "0 auto",
-        padding: pad,
-        border: showBox ? `1px solid ${border}` : "none",
-        background: showBox ? `linear-gradient(135deg, ${bg1} 0%, ${bg2} 100%)` : "transparent",
-        fontFamily: RUBIK,
-      }}
-    >
-      <style>{`
-        @keyframes marquee { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
-      `}</style>
-
-      <KPIs start={start} won={won} count={slots.length} opts={{
-        kpos: qs.get("kpos"), kdir: qs.get("kdir"), kalign: qs.get("kalign"),
-        kside: qs.get("kside"), kgap: qs.get("kgap"), kspace: qs.get("kspace"),
-        ksize: qs.get("ksize"), kshape: qs.get("kshape"), kround: qs.get("kround"),
-        klabels: qs.get("klabels"), kfont: qs.get("kfont"),
-        kbg: `#${qs.get("kbg")||""}`, kbr: `#${qs.get("kbr")||""}`, ktx: `#${qs.get("ktx")||""}`
-      }} />
-
-      {layout === "grid" ? (
-        <div className="h-full px-3 relative flex items-center">
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(8,minmax(0,1fr))", gap: 8 }} className="flex-1">
-            {slots.slice(0, 16).map((s, i) => (
-              <Card key={s.id} s={s} i={i} infoPos={infoPos} vInfo={vInfo} showSuper={showSuper} cardH={cardH} width="100%" showIdx={showIdx} betStyle={betStyle} showBet={showBet} nameStyle={name}/>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div className="h-full px-3 relative flex items-center">
-          <div className="overflow-hidden flex-1">
-            <div
-              className="flex"
-              style={{
-                gap: 12,
-                width: "max-content",
-                animation: auto && slots.length > visible ? `marquee ${speedSec}s linear infinite` : undefined,
-              }}
-            >
-              {[...slots, ...slots].map((s, i) => (
-                <Card key={`${s.id}-${i}`} s={s} i={i % slots.length}
-                      infoPos={infoPos} vInfo={vInfo} showSuper={showSuper}
-                      cardH={cardH} width={visibleW} showIdx={showIdx}
-                      betStyle={betStyle} showBet={showBet} nameStyle={name}/>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Card({ s, i, width, cardH, showIdx, showBet, betStyle, showSuper, nameStyle, vInfo, infoPos }) {
-  const isSuper = !!(s?.is_super ?? s?.super ?? s?._raw?.is_super ?? s?._raw?.super);
-  const captionIsBar = nameStyle === "bar";
-  const captionIsFloat = nameStyle === "float";
-  const showName = nameStyle !== "hidden";
-
-  return (
-    <div className="relative rounded-xl overflow-hidden border"
-         style={{ height: cardH, width, borderColor: isSuper ? "rgba(232,121,249,.55)" : "rgba(255,255,255,.10)", boxShadow: isSuper ? "0 12px 28px rgba(232,121,249,.35)" : "0 12px 28px rgba(0,0,0,.35)" }}
-         title={s?.name}>
-      {s?.thumbnail
-        ? <img src={s.thumbnail} alt="" className="absolute inset-0 h-full w-full object-cover object-center" />
-        : <div className="absolute inset-0 bg-white/10" />}
-
-      <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/60 to-transparent pointer-events-none" />
-      <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
-
-      {/* badges */}
-      <div
-        className={`absolute top-1.5 z-10 ${infoPos === "right" ? "right-1.5" : "left-1.5"} ${vInfo ? "flex flex-col items-start gap-1" : "flex items-center gap-1"}`}
-        style={infoPos === "right" ? { alignItems: vInfo ? "flex-end" : "center", textAlign: "right" } : {}}
-      >
-        {showIdx && <div className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-black/70">#{i + 1}</div>}
-        {(betStyle === "chip" || vInfo) && showBet && (
-          <div className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-white/85 text-black/90 shadow">
-            {s?.bet_size ?? "—"}
-          </div>
-        )}
-      </div>
-
-      {showSuper && isSuper && (
-        <div className={`absolute top-1.5 z-10 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide ${infoPos === "right" ? "left-1.5" : "right-1.5"}`}
-             style={{ background: "rgba(232,121,249,.95)", color: "#120614" }}>
-          SUPER
-        </div>
-      )}
-
-      {showName && captionIsBar && (
-        <div className="absolute left-2 right-2 bottom-2">
-          <div className="px-2.5 py-1.5 rounded-lg border text-white shadow-[0_10px_30px_rgba(0,0,0,.45)] truncate"
-               style={{ background: "rgba(0,0,0,.45)", borderColor: "rgba(255,255,255,.18)", fontFamily: RUBIK }}>
-            <div className="font-semibold leading-tight truncate">{s?.name || "—"}</div>
-            {betStyle === "inline" && showBet && (
-              <div className="mt-0.5 text-[11px] opacity-85 flex items-center gap-1">
-                <span className="h-[6px] w-[6px] rounded-full bg-white/70" />
-                {s?.bet_size ?? "—"}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {showName && captionIsFloat && (
-        <div className="absolute left-2 bottom-2 right-2 pointer-events-none" style={{ fontFamily: RUBIK }}>
-          <div className="font-semibold text-white drop-shadow-[0_2px_6px_rgba(0,0,0,.8)] truncate">{s?.name || "—"}</div>
-          {betStyle === "inline" && showBet && (
-            <div className="text-[11px] text-white/85 drop-shadow-[0_2px_6px_rgba(0,0,0,.8)]">{s?.bet_size ?? "—"}</div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ───────── widget OPENING ───────── */
-function OpeningWidgetView({ hunt, slots, qs }) {
-  const baseW = n(qs.get("bw"), 560);
-  const baseH = n(qs.get("bh"), 320);
-  const pad   = n(qs.get("pad"), 16);
-  const align = any(qs.get("align"), "center");
-  const showTitle = qs.get("title") !== "0";
-  const showCurrent = qs.get("current") !== "0";
-  const bg = "linear-gradient(135deg, rgba(15,16,33,1) 0%, rgba(24,16,40,1) 100%)";
-
-  const current = slots[0] || null;
-
-  return (
-    <div
-      className="rounded-xl border border-white/10 overflow-hidden relative"
-      style={{
-        width: baseW,
-        height: baseH,
-        margin: align === "left" ? "0 auto 0 0" : align === "right" ? "0 0 0 auto" : "0 auto",
-        padding: pad,
-        background: bg,
-        fontFamily: RUBIK,
-      }}
-    >
-      <div className="px-3 pt-3 pb-2 flex items-center justify-between">
-        {showTitle ? (
-          <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
-            {hunt?.title || "Hunt"} — Opening
-          </div>
-        ) : <div />}
-        {showCurrent ? (
-          <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
-            {current ? current.name : "—"}
-          </div>
-        ) : <div />}
-      </div>
-
-      <div className="px-3" style={{ display: "grid", gridTemplateColumns: "repeat(8,minmax(0,1fr))", gap: 8 }}>
-        {slots.slice(0, 24).map((s, i) => (
-          <div key={s.id} className="relative rounded-lg overflow-hidden border border-white/10" title={s.name}>
-            <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">#{i + 1}</div>
-            {s.thumbnail ? (
-              <img src={s.thumbnail} alt="" className="h-14 w-full object-cover object-bottom" />
-            ) : (<div className="h-14 w-full bg-white/10" />)}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ───────── Página ───────── */
+/* ─ UI principal ─ */
 export default function HuntWidget() {
-  const [{ type, numberId, q }, setRoute] = React.useState(() => readHash());
+  const { numberId } = useParams(); // pode ser "active" ou um número
+  const qs = useQS();
+  const owner = qs.get("owner") || "";
+
+  const [resolvedId, setResolvedId] = React.useState(null);
   const [hunt, setHunt] = React.useState(null);
   const [slots, setSlots] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState("");
 
-  React.useEffect(() => {
-    const onHash = () => setRoute(readHash());
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
-  }, []);
+  const opts = React.useMemo(() => readOptsFromQS(qs), [qs]);
 
   React.useEffect(() => {
     let alive = true;
@@ -400,48 +126,243 @@ export default function HuntWidget() {
         setLoading(true);
         setErr("");
 
-        // suporta alias active
-        const owner = q.get("owner") || "";
-        const resolved = await resolveHuntNumberId(numberId, owner);
-        if (!resolved) {
-          setErr("Nenhum hunt ativo encontrado.");
-          setHunt(null); setSlots([]); return;
+        let id = numberId;
+        if (numberId === "active") {
+          id = await resolveActiveNumberId(owner);
+          if (!id) throw new Error("Não foi possível determinar o hunt ativo para este owner.");
         }
+        id = Number(id);
+        if (!Number.isFinite(id) || id <= 0) throw new Error("Parâmetro numberId inválido.");
 
-        const idNum = Number(resolved);
-        if (!Number.isFinite(idNum)) throw new Error("ID inválido.");
+        if (!alive) return;
+        setResolvedId(id);
 
-        const { hunt: h } = await getHuntByNumberId(idNum);
+        const { hunt: h } = await getHuntByNumberId(id);
         if (!alive) return;
         setHunt(h || null);
 
-        const { slots: s } = await listHuntSlots({ numberId: idNum });
+        const { slots: s } = await listHuntSlots({ numberId: id });
         if (!alive) return;
         setSlots(Array.isArray(s) ? s : []);
       } catch (e) {
-        if (alive) {
-          setErr(e?.message || "Falha a carregar o widget.");
-          setHunt(null); setSlots([]);
-        }
+        if (alive) setErr(e?.message || "Falha a carregar o widget.");
       } finally {
         if (alive) setLoading(false);
       }
     })();
     return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [type, numberId, window.location.hash]);
+  }, [numberId, owner]);
 
-  React.useEffect(() => { document.title = "Hunt Widget"; }, []);
+  if (loading) {
+    return (
+      <div style={{display:"grid",placeItems:"center",height:"100vh",color:"#e5e7eb",background:"#0b1020"}}>
+        <div style={{opacity:.85}}>A carregar widget…</div>
+      </div>
+    );
+  }
 
-  /* tela cheia, sem UI extra */
+  if (err) {
+    return (
+      <div style={{display:"grid",placeItems:"center",height:"100vh",color:"#fca5a5",background:"#0b1020"}}>
+        <div style={{maxWidth:680,textAlign:"center",padding:"16px"}}>{err}</div>
+      </div>
+    );
+  }
+
+  return <HuntOverlayCanvas slots={slots} opts={opts} />;
+}
+
+/* ─ Render do overlay (compacto) ─ */
+function HuntOverlayCanvas({ slots, opts }) {
+  const baseW = Number(opts.baseW || 560);
+  const baseH = Number(opts.baseH || 280);
+  const visible = Math.max(1, Number(opts.visible || 3));
+  const speedSec = Math.max(5, Math.min(180, Number(opts.speedSec || 30)));
+  const layout = String(opts.layout || "carousel");
+  const showBox = opts.showBox !== false;
+
+  const innerW = baseW - (opts.pad || 0) * 2;
+  const gap = layout === "grid" ? 8 : 12;
+  const cardW = layout === "carousel"
+    ? Math.max(140, Math.floor((innerW - (visible - 1) * gap) / visible))
+    : undefined;
+
+  const bg1 = opts.panelBgStart || "#0b1020";
+  const bg2 = opts.panelBgEnd   || "#111827";
+
   return (
-    <div className="min-h-screen bg-black text-white flex items-center justify-center p-3">
-      {loading && <div className="opacity-70 text-sm">A carregar…</div>}
-      {!loading && err && <div className="opacity-80 text-sm">{err}</div>}
-      {!loading && !err && hunt && (
-        type === "opening"
-          ? <OpeningWidgetView hunt={hunt} slots={slots} qs={q} />
-          : <HuntWidgetView    hunt={hunt} slots={slots} qs={q} />
+    <div
+      style={{
+        width: baseW,
+        height: baseH,
+        padding: opts.pad || 0,
+        margin: "0 auto",
+        background: showBox ? `linear-gradient(135deg, ${bg1} 0%, ${bg2} 100%)` : "transparent",
+        border: showBox ? `1px solid rgba(255,255,255,.12)` : "none",
+        borderRadius: 12,
+        overflow: "hidden",
+        fontFamily: `'Rubik', ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial`,
+        color: "#e5e7eb",
+      }}
+    >
+      <style>{`
+        @keyframes marquee {
+          0%   { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+      `}</style>
+
+      {layout === "grid" ? (
+        <div style={{display:"grid", gridTemplateColumns:"repeat(8,minmax(0,1fr))", gap}}>
+          {slots.slice(0, 16).map((s, i) => (
+            <Card key={s.id} s={s} i={i} width="100%" cardH={opts.cardH || 160} opts={opts} />
+          ))}
+        </div>
+      ) : (
+        <div style={{display:"flex", alignItems:"center", height:"100%", overflow:"hidden"}}>
+          <div style={{
+            display:"flex",
+            gap,
+            width:"max-content",
+            animation: opts.autoScroll && slots.length > visible ? `marquee ${speedSec}s linear infinite` : undefined,
+          }}>
+            {[...slots, ...slots].map((s, i) => (
+              <Card key={`${s.id}-${i}`} s={s} i={i % slots.length} width={cardW} cardH={opts.cardH || 160} opts={opts} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Card({ s, i, width, cardH, opts }) {
+  const isSuper = !!(s?.is_super ?? s?.super ?? s?._raw?.is_super ?? s?._raw?.super);
+  const glowColor = opts.superGlowColor || "#e879f9";
+  const glowAlpha = Math.max(0, Math.min(1, Number(opts.superGlowStrength ?? 0.6)));
+  const borderCol = hexToRgba(glowColor, 0.45 + glowAlpha * 0.35);
+  const shadowSoft = `0 0 ${18 + 30 * glowAlpha}px ${anyToRgba(glowColor, 0.35 * glowAlpha)}, 0 12px 28px rgba(0,0,0,.35)`;
+  const captionIsBar = opts.nameStyle === "bar";
+  const captionIsFloat = opts.nameStyle === "float";
+  const showName = opts.nameStyle !== "hidden";
+  const badgesVertical = !!opts.vInfo;
+  const infoRight = String(opts.infoPos || "left") === "right";
+
+  return (
+    <div
+      className="overlay-card"
+      title={s?.name}
+      style={{
+        position:"relative",
+        width,
+        height: cardH,
+        borderRadius: 12,
+        overflow:"hidden",
+        border: `1px solid ${isSuper ? borderCol : "rgba(255,255,255,.10)"}`,
+        boxShadow: isSuper ? shadowSoft : "0 12px 28px rgba(0,0,0,.35)",
+      }}
+    >
+      {s?.thumbnail ? (
+        <img src={s.thumbnail} alt="" style={{position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover", objectPosition:"center"}} />
+      ) : (
+        <div style={{position:"absolute", inset:0, background:"rgba(255,255,255,.08)"}} />
+      )}
+
+      {isSuper && opts.superGlow !== false && (
+        <>
+          <div style={{position:"absolute", inset:-1, borderRadius:12, pointerEvents:"none", boxShadow:`0 0 ${22 + 40 * glowAlpha}px ${anyToRgba(glowColor, 0.5 * glowAlpha)}`}} />
+          <div style={{position:"absolute", inset:0, pointerEvents:"none", background:`radial-gradient(60% 50% at 50% 40%, ${anyToRgba(glowColor, 0.28 * glowAlpha)} 0%, transparent 60%)`}} />
+        </>
+      )}
+
+      {/* gradientes topo/fundo */}
+      <div style={{position:"absolute", inset:"0 0 auto 0", height:80, background:"linear-gradient(to bottom, rgba(0,0,0,.65), transparent)"}} />
+      <div style={{position:"absolute", inset:"auto 0 0 0", height:96, background:"linear-gradient(to top, rgba(0,0,0,.65), transparent)"}} />
+
+      {/* badges # / bet */}
+      <div
+        style={{
+          position:"absolute",
+          zIndex:5,
+          top:6,
+          [infoRight ? "right" : "left"]:6,
+          display:"flex",
+          flexDirection: badgesVertical ? "column" : "row",
+          alignItems: badgesVertical ? (infoRight ? "flex-end" : "flex-start") : "center",
+          gap:6,
+          textAlign: infoRight ? "right" : "left",
+        }}
+      >
+        {opts.showIdx && (
+          <div style={{fontSize:11, fontWeight:700, padding:"2px 6px", borderRadius:6, background:"rgba(0,0,0,.65)"}}>
+            #{i + 1}
+          </div>
+        )}
+        {(opts.betStyle === "chip" || !!opts.vInfo) && (
+          <div style={{fontSize:11, fontWeight:600, padding:"2px 6px", borderRadius:6, background:"rgba(255,255,255,.85)", color:"#111"}}>
+            {fmtPlain(toNum(s.bet_size), 2)}
+          </div>
+        )}
+      </div>
+
+      {/* selo SUPER */}
+      {opts.showSuper && isSuper && (
+        <div
+          style={{
+            position:"absolute",
+            zIndex:5,
+            top:6,
+            [infoRight ? "left" : "right"]:6,
+            padding:"2px 8px",
+            borderRadius:999,
+            fontSize:10,
+            fontWeight:700,
+            letterSpacing:.4,
+            background: anyToRgba(opts.superTagColor || "#e879f9", 0.95),
+            color: opts.superTextColor || "#120614",
+          }}
+        >
+          SUPER
+        </div>
+      )}
+
+      {/* nome (bar/float) */}
+      {showName && captionIsBar && (
+        <div style={{position:"absolute", left:8, right:8, bottom:8}}>
+          <div
+            title={s?.name || ""}
+            style={{
+              padding:"8px 10px",
+              borderRadius:10,
+              border:"1px solid rgba(255,255,255,.18)",
+              background:"rgba(0,0,0,.45)",
+              boxShadow:"0 10px 30px rgba(0,0,0,.45)",
+            }}
+          >
+            <div style={{fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}>
+              {s?.name || "—"}
+            </div>
+            {opts.betStyle === "inline" && (
+              <div style={{marginTop:2, fontSize:11, opacity:.85, display:"flex", alignItems:"center", gap:6}}>
+                <span style={{display:"inline-block", width:6, height:6, borderRadius:999, background:"rgba(255,255,255,.7)"}} />
+                {s?.bet_size != null ? fmtPlain(toNum(s.bet_size), 2) : "—"}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showName && captionIsFloat && (
+        <div style={{position:"absolute", left:8, right:8, bottom:8, pointerEvents:"none"}}>
+          <div style={{fontWeight:600, textShadow:"0 2px 6px rgba(0,0,0,.8)"}}>
+            {s?.name || "—"}
+          </div>
+          {opts.betStyle === "inline" && (
+            <div style={{fontSize:11, opacity:.9, textShadow:"0 2px 6px rgba(0,0,0,.8)"}}>
+              {s?.bet_size != null ? fmtPlain(toNum(s.bet_size), 2) : "—"}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
