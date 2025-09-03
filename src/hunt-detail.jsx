@@ -1486,14 +1486,24 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
   <Toggle label="Auto-scroll" checked={!!opts.autoScroll} onChange={(v)=>setOpts(o=>({...o,autoScroll:!!v}))}/>
 
-            <Field label="Velocidade (seg/loop)" hint="Menor = mais rápido">
-              <Input
-                type="number"
-                value={opts.scrollDur}
-                onChange={(e) => setOpts(o => ({ ...o, scrollDur: Math.max(5, Math.min(180, Number(e.target.value) || 30)) }))}
-                className="h-9 bg-zinc-900 border-white/10 text-white"
-              />
-            </Field>
+            <Field
+  label="Velocidade (seg/loop)"
+  hint={opts.autoScroll ? "Menor = mais rápido" : "Ativa o Auto-scroll para ajustar"}
+>
+  <SoftInput
+    type="number"
+    min={5}
+    max={180}
+    value={opts.scrollDur}
+    disabled={!opts.autoScroll}
+    onChange={(e) =>
+      setOpts(o => ({
+        ...o,
+        scrollDur: Math.max(5, Math.min(180, Number(e.target.value) || 30)),
+      }))
+    }
+  />
+</Field>
           </div>
         )}
       </Section>
