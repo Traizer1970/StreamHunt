@@ -1011,8 +1011,8 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     );
   }
 
-// ---- NiceSlider (global) ----
-function NiceSlider({ min=0, max=100, step=1, value, onChange, ariaLabel }) {
+// ---- NiceSlider (GLOBAL) ----
+function NiceSlider({ min = 0, max = 100, step = 1, value, onChange, ariaLabel }) {
   const pct = Math.max(0, Math.min(100, ((Number(value ?? 0) - min) / (max - min)) * 100));
   return (
     <div className="py-1">
