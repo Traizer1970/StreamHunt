@@ -38,18 +38,21 @@ const hexToRgba = (hex, a = 1) => {
 const anyToRgba = (c, a = 1) =>
   /^(rgba?|hsla?)\(/i.test(String(c || "")) ? c : hexToRgba(c, a);
 
+const RUBIK =
+  "'Rubik', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial";
+
 /* ───────────────── tiny router via location.hash ───────────────── */
 function parseHash() {
   const raw = (window.location.hash || "#").slice(1); // remove '#'
   const [path, query] = raw.split("?");
   let parts = (path || "").split("/").filter(Boolean);
 
-  // pode vir como "#/hunt-widget/hunt/123" (novo) ou "#/overlay/hunt/123" (legacy)
+  // compat: pode vir "#/hunt-widget/hunt/..." ou "#/overlay/hunt/..."
   if (parts[0] === "hunt-widget") parts = parts.slice(1);
   if (parts[0] === "overlay") parts = parts.slice(1);
 
-  const type = parts[0] || "hunt";       // "hunt" | "opening"
-  const numberId = parts[1] || "active"; // "active" ou número
+  const type = parts[0] || "hunt";          // "hunt" | "opening"
+  const numberId = parts[1] || "active";    // "active" ou número
   const qs = new URLSearchParams(query || "");
   return { type, numberId, qs };
 }
@@ -72,7 +75,7 @@ function readOptsFromQS(qs) {
     if (max != null && v > max) return max;
     return v;
   };
-  return {
+  const out = {
     layout: qs.get("layout") || "carousel",
     visible: getN("visible", 3, 1, 12),
     autoScroll: qs.get("scroll") === "1",
@@ -98,7 +101,96 @@ function readOptsFromQS(qs) {
     baseH: getN("bh", 280, 160, 2160),
     align: qs.get("align") || "center",
   };
+
+  // KPIs (Designer) — os nomes correspondem aos usados no buildHuntOverlayUrl
+  out.kpiPos   = qs.get("kpos")   || undefined; // "top" | "bottom" | "side" | "hidden"
+  out.kpiDir   = qs.get("kdir")   || undefined; // "row" | "column"
+  out.kpiAlign = qs.get("kalign") || undefined; // "left" | "center" | "right"
+  out.kpiSide  = qs.get("kside")  || undefined; // "left" | "right"
+  out.kpiGap        = qs.has("kgap")   ? getN("kgap", 8, 0, 48) : undefined;
+  out.kpiSideSpace  = qs.has("kspace") ? getN("kspace", 18, 0, 64) : undefined;
+  out.kpiSize       = qs.has("ksize")  ? getN("ksize", 1.0, 0.6, 1.8) : undefined;
+  out.kpiShape  = qs.get("kshape") || undefined; // "box" | "pill" | "circle"
+  out.kpiRound  = qs.has("kround")  ? getN("kround", 2, 0, 3) : undefined;
+  out.kpiShowLabels = qs.get("klabels") !== "0" ? true : false;
+  out.kpiFont   = qs.has("kfont") ? getN("kfont", 1.0, 0.6, 2.0) : undefined;
+  out.kpiAltIconMs  = qs.has("kicon") ? getN("kicon", 1200, 0, 10000) : undefined;
+  out.kpiAltValueMs = qs.has("kval")  ? getN("kval", 1800, 0, 10000) : undefined;
+  out.kpiAnim  = qs.get("kanim") || undefined;
+  out.kpiColorPreset = qs.get("kcp") || undefined;
+  if (qs.get("kbg")) out.kpiBg = "#" + qs.get("kbg");
+  if (qs.get("kbr")) out.kpiBorder = "#" + qs.get("kbr");
+  if (qs.get("ktx")) out.kpiText = "#" + qs.get("ktx");
+
+  return out;
 }
+
+/* ───────────────── defaults + cores KPI ───────────────── */
+const KPI_COLOR_PRESETS = {
+  glass:   { bg: "rgba(255,255,255,.10)", border: "rgba(255,255,255,.15)", text: "#ffffff" },
+  slate:   { bg: "rgba(17,24,39,.70)",    border: "rgba(255,255,255,.12)", text: "#e5e7eb" },
+  emerald: { bg: "rgba(16,185,129,.16)",  border: "rgba(16,185,129,.40)",  text: "#d1fae5" },
+  amber:   { bg: "rgba(245,158,11,.16)",  border: "rgba(245,158,11,.40)",  text: "#fde68a" },
+  rose:    { bg: "rgba(244,63,94,.17)",   border: "rgba(244,63,94,.40)",   text: "#fecdd3" },
+  violet:  { bg: "rgba(139,92,246,.17)",  border: "rgba(139,92,246,.40)",  text: "#ddd6fe" },
+  azure:   { bg: "rgba(59,130,246,.17)",  border: "rgba(59,130,246,.40)",  text: "#dbeafe" },
+  neon:    { bg: hexToRgba("#22d3ee",.16),border: hexToRgba("#22d3ee",.45),text: "#cffafe" },
+};
+function kpiColors(opts){
+  const p = KPI_COLOR_PRESETS[String(opts.kpiColorPreset||"glass")] || KPI_COLOR_PRESETS.glass;
+  return {
+    bg:     opts.kpiBg     || p.bg,
+    border: opts.kpiBorder || p.border,
+    text:   opts.kpiText   || p.text
+  };
+}
+
+const DEFAULTS = {
+  layout: "carousel",
+  visible: 3,
+  autoScroll: true,
+  speedSec: 30,
+  cardH: 160,
+  showBox: true,
+  nameStyle: "bar",
+  betStyle: "inline",
+  showIdx: true,
+  showBet: true,
+  showSuper: true,
+  vInfo: false,
+  infoPos: "left",
+  superGlow: true,
+  superGlowColor: "#e879f9",
+  superGlowStrength: 0.6,
+  superTagColor: "#e879f9",
+  superTextColor: "#120614",
+  panelBgStart: "#0b1020",
+  panelBgEnd: "#111827",
+  pad: 16,
+  baseW: 560,
+  baseH: 280,
+  align: "center",
+
+  // KPIs
+  kpiPos: "top",
+  kpiDir: "row",
+  kpiAlign: "center",
+  kpiSide: "right",
+  kpiGap: 8,
+  kpiSideSpace: 18,
+  kpiSize: 1.0,
+  kpiShape: "box",
+  kpiRound: 2,
+  kpiShowLabels: true,
+  kpiFont: 1.0,
+  kpiAltIconMs: 1200,
+  kpiAltValueMs: 1800,
+  kpiAnim: "fade",
+  kpiColorPreset: "glass",
+  kpiBg: "",
+  kpiBorder: "",
+  kpiText: "",
+};
 
 /* ───────────────── “active” → numberId ───────────────── */
 async function resolveActiveNumberId(owner) {
@@ -131,16 +223,56 @@ async function resolveActiveNumberId(owner) {
   return null;
 }
 
+/* ───────────────── Lê overlay_settings guardado ───────────────── */
+async function fetchOverlayOpts({ owner, type, huntId }) {
+  if (!owner) return {};
+  const cols = ["opts", "settings", "config", "data", "json"];
+
+  // 1) tenta row específica do hunt
+  let q = supabase
+    .from("overlay_settings")
+    .select("*")
+    .eq("user_id", owner)
+    .eq("type", type || "hunt")
+    .eq("hunt_number_id", huntId)
+    .maybeSingle();
+  const r1 = await q;
+  if (!r1.error && r1.data) {
+    for (const c of cols) if (r1.data[c]) return r1.data[c] || {};
+  }
+
+  // 2) fallback “global” (hunt_number_id NULL)
+  let q2 = supabase
+    .from("overlay_settings")
+    .select("*")
+    .eq("user_id", owner)
+    .eq("type", type || "hunt")
+    .is("hunt_number_id", null)
+    .maybeSingle();
+  const r2 = await q2;
+  if (!r2.error && r2.data) {
+    for (const c of cols) if (r2.data[c]) return r2.data[c] || {};
+  }
+
+  return {};
+}
+
 /* ───────────────── Página ───────────────── */
 export default function HuntWidgetPage() {
   const { type, numberId, qs } = useHashRoute();
   const owner = qs.get("owner") || "";
 
+  const [hunt, setHunt] = React.useState(null);
   const [slots, setSlots] = React.useState([]);
+  const [dbOpts, setDbOpts] = React.useState({});
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState("");
 
-  const opts = React.useMemo(() => readOptsFromQS(qs), [qs]);
+  const qsOpts = React.useMemo(() => readOptsFromQS(qs), [qs]);
+  const mergedOpts = React.useMemo(
+    () => ({ ...DEFAULTS, ...dbOpts, ...qsOpts }),
+    [dbOpts, qsOpts]
+  );
 
   React.useEffect(() => {
     let alive = true;
@@ -149,6 +281,7 @@ export default function HuntWidgetPage() {
         setLoading(true);
         setErr("");
 
+        // 1) resolve id
         let id = numberId;
         if (id === "active") {
           id = await resolveActiveNumberId(owner);
@@ -158,12 +291,20 @@ export default function HuntWidgetPage() {
         if (!Number.isFinite(id) || id <= 0)
           throw new Error("Parâmetro numberId inválido.");
 
-        // valida se o hunt existe (404 friendly)
-        await getHuntByNumberId(id);
+        // 2) hunt (para Start dos KPIs)
+        const { hunt } = await getHuntByNumberId(id);
+        if (!alive) return;
+        setHunt(hunt || null);
 
+        // 3) slots
         const { slots: s } = await listHuntSlots({ numberId: id });
         if (!alive) return;
         setSlots(Array.isArray(s) ? s : []);
+
+        // 4) opções guardadas na BD
+        const o = await fetchOverlayOpts({ owner, type: "hunt", huntId: id });
+        if (!alive) return;
+        setDbOpts(o || {});
       } catch (e) {
         if (alive) setErr(e?.message || "Falha a carregar o widget.");
       } finally {
@@ -180,7 +321,7 @@ export default function HuntWidgetPage() {
       <div style={{
         display: "grid", placeItems: "center", height: "100vh",
         color: "#e5e7eb", background: "#0b1020",
-        fontFamily: "'Rubik', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial",
+        fontFamily: RUBIK,
       }}>
         A carregar widget…
       </div>
@@ -192,7 +333,7 @@ export default function HuntWidgetPage() {
       <div style={{
         display: "grid", placeItems: "center", height: "100vh",
         color: "#fca5a5", background: "#0b1020",
-        fontFamily: "'Rubik', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial",
+        fontFamily: RUBIK,
         padding: 16, textAlign: "center",
       }}>
         {err}
@@ -200,11 +341,11 @@ export default function HuntWidgetPage() {
     );
   }
 
-  return <HuntOverlayCanvas slots={slots} opts={opts} />;
+  return <HuntOverlayCanvas hunt={hunt} slots={slots} opts={mergedOpts} />;
 }
 
 /* ───────────────── Render do overlay ───────────────── */
-function HuntOverlayCanvas({ slots, opts }) {
+function HuntOverlayCanvas({ hunt, slots, opts }) {
   const baseW = Number(opts.baseW || 560);
   const baseH = Number(opts.baseH || 280);
   const visible = Math.max(1, Number(opts.visible || 3));
@@ -225,6 +366,99 @@ function HuntOverlayCanvas({ slots, opts }) {
   const bg1 = opts.panelBgStart || "#0b1020";
   const bg2 = opts.panelBgEnd || "#111827";
 
+  // KPIs — valores
+  const startFromHunt = Number(hunt?.start_cost);
+  const start = Number.isFinite(startFromHunt)
+    ? startFromHunt
+    : slots.reduce((a, s) => a + toNum(s.bet_size), 0);
+  const won = slots.reduce((a, s) => a + toNum(s.payout), 0);
+  const beLeft = Math.max(0, start - won);
+
+  const items = [
+    { key: "start", label: "Start", value: fmtPlain(start, opts.kpiRound ?? 2) },
+    { key: "be",    label: "B/E",   value: fmtPlain(beLeft, opts.kpiRound ?? 2) },
+    { key: "bonus", label: "# Bonus", value: String(slots.length) },
+  ];
+
+  const kColors = kpiColors(opts);
+  const kpiFont = Math.max(0.6, Math.min(2, Number(opts.kpiFont ?? 1)));
+  const kpiSize = Math.max(0.7, Math.min(1.6, Number(opts.kpiSize ?? 1)));
+  const kpiShape = String(opts.kpiShape || "box"); // box | pill | circle
+  const pillH   = Math.round(28 * kpiSize);
+  const boxH    = Math.round(32 * kpiSize);
+  const circleD = Math.round(36 * kpiSize);
+  const kpiH    = kpiShape === "circle" ? circleD : (kpiShape === "box" ? boxH : pillH);
+
+  function KpiBadge({ label, value }) {
+    if (kpiShape === "circle") {
+      const font = Math.max(10, Math.round(circleD * 0.36 * kpiFont));
+      return (
+        <div
+          style={{
+            width: circleD, height: circleD, borderRadius: 999,
+            display: "grid", placeItems: "center",
+            border: `1px solid ${kColors.border}`, background: kColors.bg, color: kColors.text,
+            fontFamily: RUBIK
+          }}
+          title={label}
+        >
+          <b style={{ fontSize: font, lineHeight: 1, fontWeight: 700 }}>{value}</b>
+        </div>
+      );
+    }
+    return (
+      <div
+        style={{
+          height: kpiH,
+          borderRadius: kpiShape === "pill" ? 999 : 10,
+          border: `1px solid ${kColors.border}`,
+          background: kColors.bg,
+          color: kColors.text,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "0 10px",
+          fontFamily: RUBIK,
+        }}
+      >
+        {opts.kpiShowLabels !== false && (
+          <span style={{ opacity: .8, fontSize: 12, lineHeight: 1 }}>{label}:</span>
+        )}
+        <b style={{ fontSize: Math.round(12 * kpiFont), lineHeight: 1, fontWeight: 700 }}>{value}</b>
+      </div>
+    );
+  }
+
+  function KPIsInline() {
+    const j =
+      opts.kpiAlign === "left" ? "flex-start" :
+      opts.kpiAlign === "right" ? "flex-end" : "center";
+    const dir = opts.kpiDir === "column" ? "column" : "row";
+    return (
+      <div style={{ padding: "8px 12px", fontFamily: RUBIK }}>
+        <div style={{ display: "flex", flexDirection: dir, gap: opts.kpiGap ?? 8, justifyContent: j }}>
+          {items.map((it) => <KpiBadge key={it.key} label={it.label} value={it.value} />)}
+        </div>
+      </div>
+    );
+  }
+  function KPIsSide() {
+    const kpiGap = Number(opts.kpiGap ?? 8);
+    const kpiSideSpace = Number(opts.kpiSideSpace ?? 18);
+    return (
+      <div
+        style={{
+          position: "absolute", top: "50%", transform: "translateY(-50%)",
+          left:  opts.kpiSide === "left"  ? kpiSideSpace : undefined,
+          right: opts.kpiSide === "right" ? kpiSideSpace : undefined,
+          display: "flex", flexDirection: "column", gap: kpiGap, zIndex: 5,
+        }}
+      >
+        {items.map((it) => <KpiBadge key={it.key} label={it.label} value={it.value} />)}
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
@@ -238,9 +472,9 @@ function HuntOverlayCanvas({ slots, opts }) {
         border: showBox ? `1px solid rgba(255,255,255,.12)` : "none",
         borderRadius: 12,
         overflow: "hidden",
-        fontFamily:
-          "'Rubik', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial",
+        fontFamily: RUBIK,
         color: "#e5e7eb",
+        position: "relative",
       }}
     >
       <style>{`
@@ -250,12 +484,16 @@ function HuntOverlayCanvas({ slots, opts }) {
         }
       `}</style>
 
+      {opts.kpiPos === "top" && <KPIsInline />}
+      {opts.kpiPos === "side" && <KPIsSide />}
+
       {layout === "grid" ? (
         <div
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(8,minmax(0,1fr))",
             gap,
+            height: "100%",
           }}
         >
           {slots.slice(0, 16).map((s, i) => (
@@ -274,7 +512,7 @@ function HuntOverlayCanvas({ slots, opts }) {
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: justify, // respeita Align (left/center/right)
+            justifyContent: justify,
             height: "100%",
             overflow: "hidden",
           }}
@@ -303,6 +541,8 @@ function HuntOverlayCanvas({ slots, opts }) {
           </div>
         </div>
       )}
+
+      {opts.kpiPos === "bottom" && <KPIsInline />}
     </div>
   );
 }
@@ -315,8 +555,6 @@ function Card({ s, i, width, cardH, opts }) {
     s?._raw?.super
   );
   const glowColor = opts.superGlowColor || "#e879f9";
-  theGlow: {
-  }
   const glowAlpha = Math.max(
     0,
     Math.min(1, Number(opts.superGlowStrength ?? 0.6))
