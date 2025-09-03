@@ -1070,17 +1070,23 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
   const bg1 = opts.panelBgStart || "#0b1020";
   const bg2 = opts.panelBgEnd || "#111827";
 
-  return (
-    <div
-      className="rounded-xl overflow-hidden relative"
-      style={{
-        width: baseW,
-        height: baseH,
-        border: showBox ? `1px solid ${opts.panelBorder || "rgba(255,255,255,.10)"}` : "none",
-        background: showBox ? `linear-gradient(135deg, ${bg1} 0%, ${bg2} 100%)` : "transparent",
-        fontFamily: RUBIK_STACK,
-      }}
-    >
+return (
+  <div
+    className="rounded-xl overflow-hidden relative"
+    style={{
+      width: baseW,
+      height: baseH,
+      border: showBox ? `1px solid ${opts.panelBorder || "rgba(255,255,255,.10)"}` : "none",
+      background: showBox ? `linear-gradient(135deg, ${bg1} 0%, ${bg2} 100%)` : "transparent",
+      fontFamily: RUBIK_STACK,
+    }}
+  >
+    <style>{`
+      @keyframes marquee {
+        0%   { transform: translateX(0); }
+        100% { transform: translateX(-50%); }
+      }
+    `}</style>
       {opts.kpiPos === "top" && <KPIsInline />}
       {opts.kpiPos === "side" && <KPIsSide />}
 
