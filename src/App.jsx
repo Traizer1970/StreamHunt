@@ -33,7 +33,7 @@ import WidgetByToken from "./widget-by-token.jsx";
 
 // Overlay
 import WidgetOverlay from "./widget-overlay.jsx";
-import HuntWidgetPage from "@/pages/hunt-widget.jsx";
+import HuntWidgetPage from "./hunt-widget.jsx";
 
 /* =================== CONFIG =================== */
 const TELEGRAM_URL = "https://t.me/gsousa70";
@@ -1129,15 +1129,15 @@ export default function App() {
   const huntDetailMatch = route.match(/^\/?hunts\/([^\/?#]+)$/);
   const tournamentDetailMatch = route.match(/^\/?tournaments\/([^\/?#]+)$/);
 
-  // overlay: battle OU token fixo
+// overlay: hunt, battle OU token fixo
 const isOverlay =
   route.startsWith("overlay/hunt/") ||
   route.startsWith("overlay/battle/") ||
   route.startsWith("w/");
 
-if (isOverlay) {
-  return (
-    <BareOverlayContainer>
+ if (isOverlay) {
+   return (
+     <BareOverlayContainer>
       {route.startsWith("overlay/hunt/") ? (
         <HuntWidgetPage />
       ) : route.startsWith("overlay/battle/") ? (
@@ -1145,9 +1145,9 @@ if (isOverlay) {
       ) : (
         <WidgetByToken />
       )}
-    </BareOverlayContainer>
-  );
-}
+     </BareOverlayContainer>
+   );
+ }
 
   const isDetailRoute =
     !!huntDetailMatch ||
