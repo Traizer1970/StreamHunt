@@ -50,26 +50,6 @@ import { cn as _cn } from "@/lib/utils";
 
 const cn = (...c) => (_cn ? _cn(...c) : c.filter(Boolean).join(" "));
 
-/* ───────── UI helpers: Soft panel (bordas suaves/gradiente) ───────── */
-const SOFT_SHADOW =
-  "shadow-[inset_0_1px_0_rgba(255,255,255,.06),0_16px_48px_rgba(0,0,0,.45)]";
-
-function panelCn(extra = "") {
-  return cn(
-    "rounded-2xl border border-white/10 bg-white/[0.035] backdrop-blur-sm",
-    SOFT_SHADOW,
-    extra
-  );
-}
-
-function Panel({ className = "", children }) {
-  return (
-    <div className="rounded-2xl p-[1.5px] bg-[linear-gradient(180deg,rgba(255,255,255,.18)_0%,rgba(255,255,255,.06)_100%)]">
-      <div className={panelCn(className)}>{children}</div>
-    </div>
-  );
-}
-
 /* ───────────────────────── Fonte ───────────────────────── */
 const RUBIK_STACK =
   `'Rubik', ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"`;
@@ -274,28 +254,29 @@ function ColorField({ label, value, onChange, placeholder = "#RRGGBB or rgba()" 
   );
 }
 
+
 function Section({ title, defaultOpen = true, right, children }) {
   const [open, setOpen] = React.useState(defaultOpen);
-
   return (
-    <Panel>
+    <div
+      className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-white/[0.02]
+                 shadow-[0_10px_30px_rgba(0,0,0,.35)] overflow-hidden"
+    >
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setOpen(o => !o)}
         className="w-full px-3 py-2 flex items-center justify-between
-                   rounded-t-2xl bg-white/[0.03] hover:bg-white/[0.06] transition"
+                   bg-white/[0.02] hover:bg-white/[0.04] transition"
       >
         <div className="text-sm font-medium">{title}</div>
         <div className="flex items-center gap-2">
           {right}
-          <ChevronDown
-            className={cn("h-4 w-4 transition", open ? "rotate-180" : "")}
-          />
+          <ChevronDown className={cn("h-4 w-4 transition", open ? "rotate-180" : "")} />
         </div>
       </button>
 
       {open && <div className="p-3 space-y-3">{children}</div>}
-    </Panel>
+    </div>
   );
 }
 
@@ -1855,7 +1836,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
   width: 20px; height: 20px; border-radius: 9999px;
   background: var(--thumb);
   border: 2px solid #0ea5e9; /* sky-500 */
-  box-shadow: 0 8px 24px rgba(14,165,233,.40), 0 0 0 3px var(--ring);
+  box-shadow: 0 6px 20px rgba(14,165,233,.35), 0 0 0 3px var(--ring);
   transition: transform .12s ease;
 }
 .nice-slider:active::-webkit-slider-thumb { transform: scale(1.05); }
@@ -1871,7 +1852,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 .nice-slider::-moz-range-thumb {
   width: 20px; height: 20px; border-radius: 9999px;
   background: var(--thumb); border: 2px solid #0ea5e9;
-  box-shadow: 0 8px 24px rgba(14,165,233,.40), 0 0 0 3px var(--ring);
+  box-shadow: 0 6px 20px rgba(14,165,233,.35), 0 0 0 3px var(--ring);
   transition: transform .12s ease;
 }
 .nice-slider:active::-moz-range-thumb { transform: scale(1.05); }
@@ -1921,13 +1902,12 @@ function OverlayCard({ type, hunt, slots, opts, setOpts }) {
   };
 
   return (
-        <Panel>
+    <div className="rounded-xl border border-white/10 bg-white/[0.03]">
       {/* Header colapsável */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full px-3 py-2 text-left flex items-center gap-2 rounded-t-2xl
-                   bg-white/[0.03] hover:bg-white/[0.06] transition"
+        className="w-full px-3 py-2 text-left flex items-center gap-2"
       >
         <div className="h-8 w-8 rounded-lg bg-white/10 flex items-center justify-center">
           <SlidersHorizontal className="h-4 w-4" />
@@ -1978,7 +1958,7 @@ function OverlayCard({ type, hunt, slots, opts, setOpts }) {
           />
         </div>
       )}
-    </Panel>
+    </div>
   );
 }
 
@@ -3135,37 +3115,45 @@ const confirmStartYes = React.useCallback(() => {
       </div>
 
       {/* KPIs topo da página */}
-<div className="grid md:grid-cols-5 gap-2 mb-3">
-  {[
-    ["Bonus Count", String(kpis.bonusCount), ""],
-    [t("startCost"), fmtMoney(kpis.startCost), ""],
-    [t("amountWon"), fmtMoney(kpis.amountWon), ""],
-  ].map(([label, value, color], i) => (
-    <div key={i} className={panelCn("p-3")}>
-      <div className="text-[11px] leading-none mb-1 text-white/70">{label}</div>
-      <div className={cn("font-semibold", numCls, color)}>{value}</div>
-    </div>
-  ))}
-
-  <div className={panelCn("p-3")}>
-    <div className="text-[11px] leading-none mb-1 text-white/70">{t("kpiBE")} (X)</div>
-    <div className={cn("font-semibold", numCls)}>{fmtPlain(beX, 2)}x</div>
-    <div className="text-[11px] mt-0.5 text-white/60">faltam {fmtMoney(leftToGoal)}</div>
+      <div className="grid md:grid-cols-5 gap-2 mb-3">
+        {[
+          ["Bonus Count", String(kpis.bonusCount), ""],
+          [t("startCost"), fmtMoney(kpis.startCost), ""],
+          [t("amountWon"), fmtMoney(kpis.amountWon), ""],
+        ].map(([label, value, color], i) => (
+          <div key={i} className={cn("rounded-xl border p-3", isDark ? "border-white/10 bg-white/5" : "border-zinc-200 bg-white")}>
+            <div className={cn("text-[11px] leading-none mb-1", isDark ? "text-white/60" : "text-zinc-600")}>{label}</div>
+            <div className={cn("font-semibold", numCls, color)}>{value}</div>
+          </div>
+        ))}
+        {/* [ADICIONAR] B/E (usa STOP se definido) */}
+<div className={cn("rounded-xl border p-3", isDark ? "border-white/10 bg-white/5" : "border-zinc-200 bg-white")}>
+  <div className={cn("text-[11px] leading-none mb-1", isDark ? "text-white/60" : "text-zinc-600")}>
+    {t("kpiBE")} (X)
   </div>
-
-  <div className={panelCn("p-3")}>
-    <div className="text-[11px] leading-none mb-1 text-white/70">Stop</div>
-    <Input
-      type="text"
-      inputMode="decimal"
-      placeholder="0"
-      value={String(stopBox.value ?? "")}
-      onChange={(e) => setStopBox((s) => ({ ...s, value: e.target.value }))}
-      className="h-8 rounded-lg bg-zinc-900 border-white/10 text-white"
-    />
+  <div className={cn("font-semibold", numCls)}>{fmtPlain(beX, 2)}x</div>
+  <div className={cn("text-[11px] mt-0.5", isDark ? "text-white/50" : "text-zinc-500")}>
+    faltam {fmtMoney(leftToGoal)}
   </div>
 </div>
 
+{/* [ADICIONAR] STOP (editável, por defeito 0) */}
+<div className={cn("rounded-xl border p-3", isDark ? "border-white/10 bg-white/5" : "border-zinc-200 bg-white")}>
+  <div className={cn("text-[11px] leading-none mb-1", isDark ? "text-white/60" : "text-zinc-600")}>Stop</div>
+  <Input
+    type="text"
+    inputMode="decimal"
+    placeholder="0"
+    value={String(stopBox.value ?? "")}
+    onChange={(e) => setStopBox((s) => ({ ...s, value: e.target.value }))}
+    className={cn(
+      "h-8 rounded-lg",
+      isDark ? "bg-zinc-900 border-white/10 text-white" : "bg-white border-zinc-300 text-zinc-900"
+    )}
+  />
+</div>
+
+      </div>
 
       {/* Ações rápidas */}
       <div className="grid md:grid-cols-4 gap-2 mb-3">
