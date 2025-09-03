@@ -1791,6 +1791,51 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
     )}
   </div>
 </div>
+<style>{`
+/* Slider bonito — funciona no Chromium/WebKit e Firefox */
+.nice-slider {
+  --track: rgba(255,255,255,.14);
+  --track-bg: rgba(255,255,255,.09);
+  --fill: #38bdf8;          /* sky-400 */
+  --thumb: #e5e7eb;         /* zinc-200 */
+  --ring: rgba(56,189,248,.35);
+}
+.nice-slider:focus { outline: none; }
+
+/* WebKit */
+.nice-slider::-webkit-slider-runnable-track {
+  height: 8px; border-radius: 9999px;
+  background:
+    linear-gradient(to right, var(--fill) 0 var(--pct), var(--track-bg) var(--pct) 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+}
+.nice-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  margin-top: -6px;          /* centra no track */
+  width: 20px; height: 20px; border-radius: 9999px;
+  background: var(--thumb);
+  border: 2px solid #0ea5e9; /* sky-500 */
+  box-shadow: 0 6px 20px rgba(14,165,233,.35), 0 0 0 3px var(--ring);
+  transition: transform .12s ease;
+}
+.nice-slider:active::-webkit-slider-thumb { transform: scale(1.05); }
+
+/* Firefox */
+.nice-slider::-moz-range-track {
+  height: 8px; border-radius: 9999px; background: var(--track-bg);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+}
+.nice-slider::-moz-range-progress {
+  height: 8px; border-radius: 9999px; background: var(--fill);
+}
+.nice-slider::-moz-range-thumb {
+  width: 20px; height: 20px; border-radius: 9999px;
+  background: var(--thumb); border: 2px solid #0ea5e9;
+  box-shadow: 0 6px 20px rgba(14,165,233,.35), 0 0 0 3px var(--ring);
+  transition: transform .12s ease;
+}
+.nice-slider:active::-moz-range-thumb { transform: scale(1.05); }
+`}</style>
 
         {/* Preview */}
         <div className="flex-1 p-6 overflow-auto min-w-0">
