@@ -225,33 +225,48 @@ function ColorField({ label, value, onChange, placeholder = "#RRGGBB or rgba()" 
   return (
     <div>
       {label ? <div className="text-xs opacity-70 mb-1">{label}</div> : null}
-      <div className="relative">
+
+      <div
+        className="group relative rounded-xl border border-white/10 bg-zinc-900/60
+                   hover:border-white/20 focus-within:ring-2 focus-within:ring-sky-400/30
+                   shadow-[inset_0_1px_0_rgba(255,255,255,.06),0_8px_26px_rgba(0,0,0,.35)]
+                   transition"
+      >
+        {/* swatch */}
         <div
-          className="absolute left-2 top-1/2 -translate-y-1/2 h-5 w-8 rounded-md border border-white/20"
+          className="absolute left-2 top-1/2 -translate-y-1/2 h-6 w-9 rounded-lg
+                     ring-1 ring-white/15 shadow-sm"
           style={{ background: css || "transparent" }}
           aria-hidden
         />
+
+        {/* input */}
         <Input
           type="text"
           value={value ?? ""}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="h-9 pl-12 rounded-xl bg-zinc-900 border-white/10 text-white placeholder:text-white/40
-                     focus:outline-none focus:ring-2 focus:ring-white/20"
+          className="h-10 pl-14 pr-3 rounded-xl bg-transparent border-0 text-white
+                     placeholder:text-white/40 focus-visible:ring-0 focus:outline-none"
         />
       </div>
     </div>
   );
 }
 
+
 function Section({ title, defaultOpen = true, right, children }) {
   const [open, setOpen] = React.useState(defaultOpen);
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5 max-w-full overflow-x-hidden">
+    <div
+      className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-white/[0.02]
+                 shadow-[0_10px_30px_rgba(0,0,0,.35)] overflow-hidden"
+    >
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="w-full px-3 py-2 flex items-center justify-between"
+        className="w-full px-3 py-2 flex items-center justify-between
+                   bg-white/[0.02] hover:bg-white/[0.04] transition"
       >
         <div className="text-sm font-medium">{title}</div>
         <div className="flex items-center gap-2">
@@ -259,10 +274,12 @@ function Section({ title, defaultOpen = true, right, children }) {
           <ChevronDown className={cn("h-4 w-4 transition", open ? "rotate-180" : "")} />
         </div>
       </button>
+
       {open && <div className="p-3 space-y-3">{children}</div>}
     </div>
   );
 }
+
 
 function LayoutPresetChip({ label, variant, active, onClick }) {
   return (
@@ -437,36 +454,38 @@ function Field({ label, hint, children }) {
 }
 
 function PanelGradientSwatches({ value, onChange }) {
-  const entries = Object.entries(PANEL_PRESETS); // [name,[start,end]]
+  const entries = Object.entries(PANEL_PRESETS);
   return (
     <div className="flex flex-wrap gap-2">
       {entries.map(([name, [start, end]]) => {
         const active = value?.[0] === start && value?.[1] === end;
-        const btn = (
-          <button
-            type="button"
-            onClick={() => onChange([start, end])}
-            aria-label={name}
-            className={cn(
-              "w-10 h-8 rounded-md border",
-              active ? "ring-2 ring-white/70" : "opacity-85 hover:opacity-100"
-            )}
-            style={{
-              background: `linear-gradient(90deg, ${start} 0%, ${end} 100%)`,
-              borderColor: "rgba(255,255,255,.15)",
-            }}
-          />
-        );
         return (
-          <Hint key={name} label={name}>
-            {btn}
-          </Hint>
+          <button
+            key={name}
+            type="button"
+            title={name}
+            onClick={() => onChange([start, end])}
+            className={cn(
+              "p-[2px] rounded-xl bg-gradient-to-b from-white/25 to-white/10",
+              "shadow-[0_6px_20px_rgba(0,0,0,.35)]"
+            )}
+          >
+            <span
+              className={cn(
+                "block h-8 w-12 rounded-[10px] border",
+                active ? "ring-2 ring-white/70" : ""
+              )}
+              style={{
+                background: `linear-gradient(90deg, ${start} 0%, ${end} 100%)`,
+                borderColor: "rgba(255,255,255,.15)",
+              }}
+            />
+          </button>
         );
       })}
     </div>
   );
 }
-
 
 /* ───────────────────────── db helpers ───────────────────────── */
 async function updateSuperFlag(rowId, value) {
@@ -1206,7 +1225,6 @@ function KpiPresetSwatches({ value, onChange }) {
 
 
 function PanelPresetSwatches({ value, onChange }) {
-  // value: [start,end]
   return (
     <div className="flex flex-wrap gap-2">
       {Object.entries(PANEL_PRESETS).map(([name, [start, end]]) => {
@@ -1215,18 +1233,18 @@ function PanelPresetSwatches({ value, onChange }) {
           <button
             key={name}
             type="button"
-            title={name} // nome só no hover
+            title={name}
             onClick={() => onChange([start, end])}
-            className={cn(
-              "w-10 h-8 rounded-md border inline-flex items-center justify-center",
-              active ? "ring-2 ring-white/70" : "opacity-85 hover:opacity-100"
-            )}
-            style={{
-              background: `linear-gradient(90deg, ${start} 0%, ${end} 100%)`,
-              borderColor: "rgba(255,255,255,.15)",
-            }}
+            className="p-[2px] rounded-xl bg-gradient-to-b from-white/25 to-white/10
+                       shadow-[0_6px_20px_rgba(0,0,0,.35)]"
           >
-            <span className="sr-only">{name}</span>
+            <span
+              className={cn("block h-8 w-12 rounded-[10px] border", active ? "ring-2 ring-white/70" : "")}
+              style={{
+                background: `linear-gradient(90deg, ${start} 0%, ${end} 100%)`,
+                borderColor: "rgba(255,255,255,.15)",
+              }}
+            />
           </button>
         );
       })}
@@ -1818,7 +1836,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
   width: 20px; height: 20px; border-radius: 9999px;
   background: var(--thumb);
   border: 2px solid #0ea5e9; /* sky-500 */
-  box-shadow: 0 6px 20px rgba(14,165,233,.35), 0 0 0 3px var(--ring);
+  box-shadow: 0 8px 24px rgba(14,165,233,.40), 0 0 0 3px var(--ring);
   transition: transform .12s ease;
 }
 .nice-slider:active::-webkit-slider-thumb { transform: scale(1.05); }
@@ -1834,7 +1852,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 .nice-slider::-moz-range-thumb {
   width: 20px; height: 20px; border-radius: 9999px;
   background: var(--thumb); border: 2px solid #0ea5e9;
-  box-shadow: 0 6px 20px rgba(14,165,233,.35), 0 0 0 3px var(--ring);
+  box-shadow: 0 8px 24px rgba(14,165,233,.40), 0 0 0 3px var(--ring);
   transition: transform .12s ease;
 }
 .nice-slider:active::-moz-range-thumb { transform: scale(1.05); }
