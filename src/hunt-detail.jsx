@@ -1011,7 +1011,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     );
   }
 
-// ---- NiceSlider (GLOBAL) ----
+// ---- NiceSlider (module-level) ----
 function NiceSlider({ min = 0, max = 100, step = 1, value, onChange, ariaLabel }) {
   const pct = Math.max(0, Math.min(100, ((Number(value ?? 0) - min) / (max - min)) * 100));
   return (
@@ -1030,7 +1030,6 @@ function NiceSlider({ min = 0, max = 100, step = 1, value, onChange, ariaLabel }
     </div>
   );
 }
-
 
   function KpiBadge({ shape, label, value, Icon }) {
     if (shape === "circle") {
