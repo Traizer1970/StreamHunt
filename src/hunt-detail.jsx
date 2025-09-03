@@ -1477,19 +1477,6 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         }
       />
     </Field>
-
-    <Field label="Velocidade (seg/loop)" hint="Menor = mais rápido">
-      <SoftInput
-        type="number"
-        value={opts.scrollDur}
-        onChange={(e) =>
-          setOpts(o => ({
-            ...o,
-            scrollDur: Math.max(5, Math.min(180, Number(e.target.value) || 30)),
-          }))
-        }
-      />
-    </Field>
   </>
 )}
 
