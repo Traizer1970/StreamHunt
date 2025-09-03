@@ -724,14 +724,14 @@ const PANEL_PRESETS = {
   Twilight: ["#0e2038", "#0f2f55"],
 };
 const KPI_COLOR_PRESETS = {
-  glass:   { bg: "rgba(255,255,255,.10)", border: "rgba(255,255,255,.15)", text: "#ffffff" },
-  slate:   { bg: "rgba(17,24,39,.70)",    border: "rgba(255,255,255,.12)", text: "#e5e7eb" },
-  emerald: { bg: "rgba(16,185,129,.16)",  border: "rgba(16,185,129,.40)",  text: "#d1fae5" },
-  amber:   { bg: "rgba(245,158,11,.16)",  border: "rgba(245,158,11,.40)",  text: "#fde68a" },
-  rose:    { bg: "rgba(244,63,94,.17)",   border: "rgba(244,63,94,.40)",   text: "#fecdd3" },
-  violet:  { bg: "rgba(139,92,246,.17)",  border: "rgba(139,92,246,.40)",  text: "#ddd6fe" },
-  azure:   { bg: "rgba(59,130,246,.17)",  border: "rgba(59,130,246,.40)",  text: "#dbeafe" },
-  neon:    { bg: hexToRgba("#22d3ee",.16),border: hexToRgba("#22d3ee",.45),text: "#cffafe" },
+  Glass:   { bg: "rgba(255,255,255,.10)", border: "rgba(255,255,255,.15)", text: "#ffffff" },
+  Slate:   { bg: "rgba(17,24,39,.70)",    border: "rgba(255,255,255,.12)", text: "#e5e7eb" },
+  Emerald: { bg: "rgba(16,185,129,.16)",  border: "rgba(16,185,129,.40)",  text: "#d1fae5" },
+  Amber:   { bg: "rgba(245,158,11,.16)",  border: "rgba(245,158,11,.40)",  text: "#fde68a" },
+  Rose:    { bg: "rgba(244,63,94,.17)",   border: "rgba(244,63,94,.40)",   text: "#fecdd3" },
+  Violet:  { bg: "rgba(139,92,246,.17)",  border: "rgba(139,92,246,.40)",  text: "#ddd6fe" },
+  Azure:   { bg: "rgba(59,130,246,.17)",  border: "rgba(59,130,246,.40)",  text: "#dbeafe" },
+  Neon:    { bg: hexToRgba("#22d3ee",.16),border: hexToRgba("#22d3ee",.45),text: "#cffafe" },
 };
 function getKpiColors(opts){
   const p = KPI_COLOR_PRESETS[String(opts.kpiColorPreset||"glass")] || KPI_COLOR_PRESETS.glass;
