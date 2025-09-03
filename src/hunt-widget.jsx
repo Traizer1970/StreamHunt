@@ -132,6 +132,9 @@ function readOptsFromQS(qs) {
   const metric = getStr("metric"); if (metric) out.metric = metric; // "x" | "payout"
   if (qs.has("shine")) out.shine = qs.get("shine") !== "0";
   if (qs.has("pulse")) out.pulse = qs.get("pulse") !== "0";
+  // thumbs da lista (para garantir MESMA dimensão)
+  out.listThumbW = getNum("ltw", 32, 160);
+  out.listThumbH = getNum("lth", 24, 120);
 
   // remove undefineds
   Object.keys(out).forEach((k) => out[k] === undefined && delete out[k]);
@@ -218,11 +221,15 @@ const OPENING_DEFAULTS = {
   showCurrent: true,
 
   // layout opening
-  visible: 5,            // nº de cartas grandes (3/5/7/9…)
+  visible: 5,            // nº de cartas grandes
   listSide: "left",      // "left" | "right"
-  showBox: true,         // caixa/gradiente de fundo
-  showBestWorst: true,   // mostrar BEST / WORST
-  metric: "x",           // "x" (multiplicador) | "payout"
+  showBox: true,
+  showBestWorst: true,
+  metric: "x",
+
+  // thumbs da lista (uniformes)
+  listThumbW: 64,
+  listThumbH: 44,
 };
 
 /* ───────────────── “active” → numberId ───────────────── */
@@ -502,7 +509,7 @@ function HuntOverlayCanvas({ hunt, slots, opts }) {
         padding: opts.pad || 0,
         margin: "0 auto",
         background: showBox
-          ? `linear-gradient(135deg, ${bg1} 0%, ${bg2} 100%)`
+          ? `linear-gradient(135deg, ${opts.panelBgStart || "#0b1020"} 0%, ${(opts.panelBgEnd || "#111827")} 100%)`
           : "transparent",
         border: showBox ? `1px solid rgba(255,255,255,.12)` : "none",
         borderRadius: 12,
@@ -590,10 +597,13 @@ function OpeningOverlayCanvas({ hunt, slots, opts }) {
   const listSide = String(opts.listSide || "left");
   const showBox  = opts.showBox !== false;
 
+  const thumbW = Number(opts.listThumbW || 64); // <<< TAMANHO FIXO
+  const thumbH = Number(opts.listThumbH || 44); // <<< TAMANHO FIXO
+  const listW  = Math.max(thumbW + 44 + 120, 210); // nº + thumb + nome
+
   const alignMap = { left: "flex-start", center: "center", right: "flex-end" };
   const justify  = alignMap[String(opts.align || "center")] || "center";
 
-  // centro real (para header e destaque)
   const centerIdx = Math.max(0, Math.floor((visible - 1) / 2));
   const hero = slots.slice(0, visible);
   const current = hero[centerIdx];
@@ -667,7 +677,7 @@ function OpeningOverlayCanvas({ hunt, slots, opts }) {
     <div
       className="openingSideList"
       style={{
-        width: 190,
+        width: listW,
         maxHeight: baseH - 60,
         overflow: "auto",
         background: "rgba(17,24,39,.55)",
@@ -680,32 +690,91 @@ function OpeningOverlayCanvas({ hunt, slots, opts }) {
     >
       {slots.map((s, i) => {
         const active = current && s.id === current.id;
+
+        const numChipBase = {
+          display: "inline-block",
+          minWidth: 36,
+          textAlign: "center",
+          padding: "4px 6px",
+          fontSize: 12,
+          lineHeight: 1,
+          fontWeight: 800,
+          borderRadius: 10,
+          border: "1px solid rgba(255,255,255,.18)",
+          background: "rgba(255,255,255,.10)",
+        };
+
         return (
           <div
             key={s.id}
             title={s.name || ""}
             style={{
               display: "grid",
-              gridTemplateColumns: "28px 56px 1fr auto",
+              gridTemplateColumns: `48px ${thumbW}px 1fr auto`,
               alignItems: "center",
-              columnGap: 8,
-              padding: 6,
+              columnGap: 10,
+              padding: 8,
               marginBottom: 6,
-              borderRadius: 10,
+              borderRadius: 12,
               border: active ? `1px solid ${anyToRgba(accent,.65)}` : "1px solid rgba(255,255,255,.08)",
               background: active ? anyToRgba(accent,.12) : "rgba(255,255,255,.04)",
               transition: "transform .15s ease, background .15s ease, border-color .15s ease",
             }}
           >
-            <div style={{ width: 24, textAlign: "right", fontSize: 11, opacity: .7 }}>#{i+1}</div>
-            {s.thumbnail
-              ? <img src={s.thumbnail} alt="" style={{ height: 36, width: 56, borderRadius: 8, objectFit: "cover" }} />
-              : <div style={{ height: 36, width: 56, borderRadius: 8, background: "rgba(255,255,255,.1)" }} />
-            }
-            <div style={{ fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {/* # com destaque MAIOR */}
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <span
+                style={{
+                  ...numChipBase,
+                  background: active ? anyToRgba(accent,.22) : numChipBase.background,
+                  border: active ? `1px solid ${anyToRgba(accent,.7)}` : numChipBase.border,
+                  boxShadow: active ? `0 0 0 2px ${anyToRgba(accent,.15)}` : "none",
+                }}
+              >
+                #{i+1}
+              </span>
+            </div>
+
+            {/* THUMB UNIFORME */}
+            <div
+              style={{
+                width: thumbW,
+                height: thumbH,
+                borderRadius: 10,
+                overflow: "hidden",
+                border: "1px solid rgba(255,255,255,.18)",
+                background: "rgba(255,255,255,.08)",
+              }}
+            >
+              {s.thumbnail
+                ? <img src={s.thumbnail} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                : null}
+            </div>
+
+            {/* NOME COM DESTAQUE MAIOR */}
+            <div
+              style={{
+                fontSize: 13.5,
+                fontWeight: 800,
+                alignSelf: "stretch",
+                display: "flex",
+                alignItems: "center",
+                borderRadius: 10,
+                padding: "6px 10px",
+                background: active
+                  ? `linear-gradient(90deg, ${anyToRgba(accent,.26)}, ${anyToRgba(accent,.08)})`
+                  : "rgba(255,255,255,.06)",
+                boxShadow: active ? "0 6px 18px rgba(0,0,0,.35)" : "none",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
               {s.name}
             </div>
-            <div style={{ fontSize: 11, opacity: .9 }}>{metricValue(s)}</div>
+
+            {/* métrica */}
+            <div style={{ fontSize: 11, opacity: .9, paddingLeft: 6 }}>{metricValue(s)}</div>
           </div>
         );
       })}
@@ -717,7 +786,7 @@ function OpeningOverlayCanvas({ hunt, slots, opts }) {
       position: "absolute",
       top: 60,
       bottom: 16,
-      [side]: 190 + 20, // largura da lista + gap
+      [side]: listW + 20, // largura da lista + gap
       width: 24,
       pointerEvents: "none",
       background: side === "left"
@@ -730,7 +799,7 @@ function OpeningOverlayCanvas({ hunt, slots, opts }) {
 
   const HeroCard = ({s, i}) => {
     const isCenter = i === centerIdx;
-    const scale = isCenter ? 1.0 : i < centerIdx ? 0.92 : 0.92;
+    const scale = isCenter ? 1.0 : 0.92;
     const rotate = isCenter ? 0 : (i < centerIdx ? -2 : 2);
     return (
       <div
@@ -755,12 +824,7 @@ function OpeningOverlayCanvas({ hunt, slots, opts }) {
 
         {/* sheen na carta do meio */}
         {isCenter && opts.shine !== false && (
-          <div style={{
-            position: "absolute",
-            inset: 0,
-            overflow: "hidden",
-            pointerEvents: "none"
-          }}>
+          <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
             <div style={{
               position: "absolute",
               top: 0, bottom: 0, left: "-60%",
