@@ -1,13 +1,11 @@
 // src/pages/hunt-widget.jsx
 import React from "react";
-import { useParams, useLocation } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { getHuntByNumberId } from "@/lib/hunts";
 import { listHuntSlots } from "@/lib/slots";
 
-/* ─ helpers ─ */
+/* ───────────────── helpers ───────────────── */
 const LOCALE = "pt-PT";
-const numCls = "tabular-nums whitespace-nowrap";
 
 const toNum = (v) => {
   if (v == null || v === "") return 0;
@@ -15,9 +13,13 @@ const toNum = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 };
+
 const fmtPlain = (n, d = 2) =>
   Number.isFinite(Number(n))
-    ? new Intl.NumberFormat(LOCALE, { minimumFractionDigits: d, maximumFractionDigits: d }).format(n)
+    ? new Intl.NumberFormat(LOCALE, {
+        minimumFractionDigits: d,
+        maximumFractionDigits: d,
+      }).format(n)
     : "—";
 
 const hexToRgba = (hex, a = 1) => {
@@ -25,19 +27,41 @@ const hexToRgba = (hex, a = 1) => {
     let h = String(hex || "").replace("#", "");
     if (h.length === 3) h = h.split("").map((c) => c + c).join("");
     const n = parseInt(h, 16);
-    const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    const r = (n >> 16) & 255,
+      g = (n >> 8) & 255,
+      b = n & 255;
     return `rgba(${r},${g},${b},${a})`;
-  } catch { return `rgba(232,121,249,${a})`; }
+  } catch {
+    return `rgba(232,121,249,${a})`;
+  }
 };
-const anyToRgba = (c, a = 1) => (/^(rgba?|hsla?)\(/i.test(String(c||"")) ? c : hexToRgba(c, a));
+const anyToRgba = (c, a = 1) =>
+  /^(rgba?|hsla?)\(/i.test(String(c || "")) ? c : hexToRgba(c, a);
 
-/* ler query string mesmo em HashRouter */
-function useQS() {
-  const { search } = useLocation();
-  return React.useMemo(() => new URLSearchParams(search), [search]);
+/* ───────────────── tiny router via location.hash ───────────────── */
+function parseHash() {
+  const raw = (window.location.hash || "#").slice(1); // remove '#'
+  const [path, query] = raw.split("?");
+  const parts = (path || "").split("/").filter(Boolean);
+
+  // aceita "#/hunt/..." e "#/overlay/hunt/..."
+  const baseIdx = parts[0] === "overlay" ? 1 : 0;
+  const type = parts[baseIdx] || "hunt";
+  const numberId = parts[baseIdx + 1] || "active";
+  const qs = new URLSearchParams(query || "");
+  return { type, numberId, qs };
+}
+function useHashRoute() {
+  const [route, setRoute] = React.useState(parseHash());
+  React.useEffect(() => {
+    const onHash = () => setRoute(parseHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  return route;
 }
 
-/* traduz a QS para opções de layout */
+/* ───────────────── qs → opções ───────────────── */
 function readOptsFromQS(qs) {
   const getN = (k, f, min, max) => {
     const v = Number(qs.get(k));
@@ -53,8 +77,8 @@ function readOptsFromQS(qs) {
     speedSec: getN("speed", 30, 5, 180),
     cardH: getN("cardH", 160, 100, 400),
     showBox: qs.get("box") !== "0",
-    nameStyle: qs.get("name") || "bar",        // bar | float | hidden
-    betStyle: qs.get("bet") || "inline",       // inline | chip | none
+    nameStyle: qs.get("name") || "bar",      // bar | float | hidden
+    betStyle: qs.get("bet") || "inline",     // inline | chip | none
     showIdx: qs.get("showIdx") !== "0",
     showBet: qs.get("showBet") !== "0",
     showSuper: qs.get("showSuper") !== "0",
@@ -74,7 +98,7 @@ function readOptsFromQS(qs) {
   };
 }
 
-/* resolve o “active” para um numberId via DB/LS */
+/* ───────────────── “active” → numberId ───────────────── */
 async function resolveActiveNumberId(owner) {
   if (!owner) return null;
 
@@ -96,7 +120,7 @@ async function resolveActiveNumberId(owner) {
     }
   } catch {}
 
-  // 2) Fallback: localStorage
+  // 2) Fallback local
   try {
     const ls = localStorage.getItem(`active-hunt:${owner}`);
     if (ls) return Number(ls);
@@ -105,14 +129,11 @@ async function resolveActiveNumberId(owner) {
   return null;
 }
 
-/* ─ UI principal ─ */
-export default function HuntWidget() {
-  const { numberId } = useParams(); // pode ser "active" ou um número
-  const qs = useQS();
+/* ───────────────── Página ───────────────── */
+export default function HuntWidgetPage() {
+  const { type, numberId, qs } = useHashRoute();
   const owner = qs.get("owner") || "";
 
-  const [resolvedId, setResolvedId] = React.useState(null);
-  const [hunt, setHunt] = React.useState(null);
   const [slots, setSlots] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState("");
@@ -127,19 +148,16 @@ export default function HuntWidget() {
         setErr("");
 
         let id = numberId;
-        if (numberId === "active") {
+        if (id === "active") {
           id = await resolveActiveNumberId(owner);
-          if (!id) throw new Error("Não foi possível determinar o hunt ativo para este owner.");
+          if (!id) throw new Error("Não foi possível determinar o hunt ativo.");
         }
         id = Number(id);
-        if (!Number.isFinite(id) || id <= 0) throw new Error("Parâmetro numberId inválido.");
+        if (!Number.isFinite(id) || id <= 0)
+          throw new Error("Parâmetro numberId inválido.");
 
-        if (!alive) return;
-        setResolvedId(id);
-
-        const { hunt: h } = await getHuntByNumberId(id);
-        if (!alive) return;
-        setHunt(h || null);
+        // opcional: valida se o hunt existe (não usamos h aqui, mas valida 404)
+        await getHuntByNumberId(id);
 
         const { slots: s } = await listHuntSlots({ numberId: id });
         if (!alive) return;
@@ -150,21 +168,32 @@ export default function HuntWidget() {
         if (alive) setLoading(false);
       }
     })();
-    return () => { alive = false; };
-  }, [numberId, owner]);
+    return () => {
+      alive = false;
+    };
+  }, [type, numberId, owner]);
 
   if (loading) {
     return (
-      <div style={{display:"grid",placeItems:"center",height:"100vh",color:"#e5e7eb",background:"#0b1020"}}>
-        <div style={{opacity:.85}}>A carregar widget…</div>
+      <div style={{
+        display: "grid", placeItems: "center", height: "100vh",
+        color: "#e5e7eb", background: "#0b1020",
+        fontFamily: "'Rubik', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial",
+      }}>
+        A carregar widget…
       </div>
     );
   }
 
   if (err) {
     return (
-      <div style={{display:"grid",placeItems:"center",height:"100vh",color:"#fca5a5",background:"#0b1020"}}>
-        <div style={{maxWidth:680,textAlign:"center",padding:"16px"}}>{err}</div>
+      <div style={{
+        display: "grid", placeItems: "center", height: "100vh",
+        color: "#fca5a5", background: "#0b1020",
+        fontFamily: "'Rubik', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial",
+        padding: 16, textAlign: "center",
+      }}>
+        {err}
       </div>
     );
   }
@@ -172,7 +201,7 @@ export default function HuntWidget() {
   return <HuntOverlayCanvas slots={slots} opts={opts} />;
 }
 
-/* ─ Render do overlay (compacto) ─ */
+/* ───────────────── Render do overlay ───────────────── */
 function HuntOverlayCanvas({ slots, opts }) {
   const baseW = Number(opts.baseW || 560);
   const baseH = Number(opts.baseH || 280);
@@ -183,12 +212,13 @@ function HuntOverlayCanvas({ slots, opts }) {
 
   const innerW = baseW - (opts.pad || 0) * 2;
   const gap = layout === "grid" ? 8 : 12;
-  const cardW = layout === "carousel"
-    ? Math.max(140, Math.floor((innerW - (visible - 1) * gap) / visible))
-    : undefined;
+  const cardW =
+    layout === "carousel"
+      ? Math.max(140, Math.floor((innerW - (visible - 1) * gap) / visible))
+      : undefined;
 
   const bg1 = opts.panelBgStart || "#0b1020";
-  const bg2 = opts.panelBgEnd   || "#111827";
+  const bg2 = opts.panelBgEnd || "#111827";
 
   return (
     <div
@@ -197,11 +227,14 @@ function HuntOverlayCanvas({ slots, opts }) {
         height: baseH,
         padding: opts.pad || 0,
         margin: "0 auto",
-        background: showBox ? `linear-gradient(135deg, ${bg1} 0%, ${bg2} 100%)` : "transparent",
+        background: showBox
+          ? `linear-gradient(135deg, ${bg1} 0%, ${bg2} 100%)`
+          : "transparent",
         border: showBox ? `1px solid rgba(255,255,255,.12)` : "none",
         borderRadius: 12,
         overflow: "hidden",
-        fontFamily: `'Rubik', ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial`,
+        fontFamily:
+          "'Rubik', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial",
         color: "#e5e7eb",
       }}
     >
@@ -213,21 +246,53 @@ function HuntOverlayCanvas({ slots, opts }) {
       `}</style>
 
       {layout === "grid" ? (
-        <div style={{display:"grid", gridTemplateColumns:"repeat(8,minmax(0,1fr))", gap}}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(8,minmax(0,1fr))",
+            gap,
+          }}
+        >
           {slots.slice(0, 16).map((s, i) => (
-            <Card key={s.id} s={s} i={i} width="100%" cardH={opts.cardH || 160} opts={opts} />
+            <Card
+              key={s.id}
+              s={s}
+              i={i}
+              width="100%"
+              cardH={opts.cardH || 160}
+              opts={opts}
+            />
           ))}
         </div>
       ) : (
-        <div style={{display:"flex", alignItems:"center", height:"100%", overflow:"hidden"}}>
-          <div style={{
-            display:"flex",
-            gap,
-            width:"max-content",
-            animation: opts.autoScroll && slots.length > visible ? `marquee ${speedSec}s linear infinite` : undefined,
-          }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            height: "100%",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              gap,
+              width: "max-content",
+              animation:
+                opts.autoScroll && slots.length > visible
+                  ? `marquee ${speedSec}s linear infinite`
+                  : undefined,
+            }}
+          >
             {[...slots, ...slots].map((s, i) => (
-              <Card key={`${s.id}-${i}`} s={s} i={i % slots.length} width={cardW} cardH={opts.cardH || 160} opts={opts} />
+              <Card
+                key={`${s.id}-${i}`}
+                s={s}
+                i={i % slots.length}
+                width={cardW}
+                cardH={opts.cardH || 160}
+                opts={opts}
+              />
             ))}
           </div>
         </div>
@@ -237,11 +302,22 @@ function HuntOverlayCanvas({ slots, opts }) {
 }
 
 function Card({ s, i, width, cardH, opts }) {
-  const isSuper = !!(s?.is_super ?? s?.super ?? s?._raw?.is_super ?? s?._raw?.super);
+  const isSuper = !!(
+    s?.is_super ??
+    s?.super ??
+    s?._raw?.is_super ??
+    s?._raw?.super
+  );
   const glowColor = opts.superGlowColor || "#e879f9";
-  const glowAlpha = Math.max(0, Math.min(1, Number(opts.superGlowStrength ?? 0.6)));
+  const glowAlpha = Math.max(
+    0,
+    Math.min(1, Number(opts.superGlowStrength ?? 0.6))
+  );
   const borderCol = hexToRgba(glowColor, 0.45 + glowAlpha * 0.35);
-  const shadowSoft = `0 0 ${18 + 30 * glowAlpha}px ${anyToRgba(glowColor, 0.35 * glowAlpha)}, 0 12px 28px rgba(0,0,0,.35)`;
+  const shadowSoft = `0 0 ${18 + 30 * glowAlpha}px ${anyToRgba(
+    glowColor,
+    0.35 * glowAlpha
+  )}, 0 12px 28px rgba(0,0,0,.35)`;
   const captionIsBar = opts.nameStyle === "bar";
   const captionIsFloat = opts.nameStyle === "float";
   const showName = opts.nameStyle !== "hidden";
@@ -250,56 +326,129 @@ function Card({ s, i, width, cardH, opts }) {
 
   return (
     <div
-      className="overlay-card"
       title={s?.name}
       style={{
-        position:"relative",
+        position: "relative",
         width,
         height: cardH,
         borderRadius: 12,
-        overflow:"hidden",
-        border: `1px solid ${isSuper ? borderCol : "rgba(255,255,255,.10)"}`,
+        overflow: "hidden",
+        border: `1px solid ${
+          isSuper ? borderCol : "rgba(255,255,255,.10)"
+        }`,
         boxShadow: isSuper ? shadowSoft : "0 12px 28px rgba(0,0,0,.35)",
       }}
     >
       {s?.thumbnail ? (
-        <img src={s.thumbnail} alt="" style={{position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover", objectPosition:"center"}} />
+        <img
+          src={s.thumbnail}
+          alt=""
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            objectPosition: "center",
+          }}
+        />
       ) : (
-        <div style={{position:"absolute", inset:0, background:"rgba(255,255,255,.08)"}} />
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "rgba(255,255,255,.08)",
+          }}
+        />
       )}
 
       {isSuper && opts.superGlow !== false && (
         <>
-          <div style={{position:"absolute", inset:-1, borderRadius:12, pointerEvents:"none", boxShadow:`0 0 ${22 + 40 * glowAlpha}px ${anyToRgba(glowColor, 0.5 * glowAlpha)}`}} />
-          <div style={{position:"absolute", inset:0, pointerEvents:"none", background:`radial-gradient(60% 50% at 50% 40%, ${anyToRgba(glowColor, 0.28 * glowAlpha)} 0%, transparent 60%)`}} />
+          <div
+            style={{
+              position: "absolute",
+              inset: -1,
+              borderRadius: 12,
+              pointerEvents: "none",
+              boxShadow: `0 0 ${22 + 40 * glowAlpha}px ${anyToRgba(
+                glowColor,
+                0.5 * glowAlpha
+              )}`,
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              pointerEvents: "none",
+              background: `radial-gradient(60% 50% at 50% 40%, ${anyToRgba(
+                glowColor,
+                0.28 * glowAlpha
+              )} 0%, transparent 60%)`,
+            }}
+          />
         </>
       )}
 
       {/* gradientes topo/fundo */}
-      <div style={{position:"absolute", inset:"0 0 auto 0", height:80, background:"linear-gradient(to bottom, rgba(0,0,0,.65), transparent)"}} />
-      <div style={{position:"absolute", inset:"auto 0 0 0", height:96, background:"linear-gradient(to top, rgba(0,0,0,.65), transparent)"}} />
+      <div
+        style={{
+          position: "absolute",
+          inset: "0 0 auto 0",
+          height: 80,
+          background:
+            "linear-gradient(to bottom, rgba(0,0,0,.65), transparent)",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          inset: "auto 0 0 0",
+          height: 96,
+          background: "linear-gradient(to top, rgba(0,0,0,.65), transparent)",
+        }}
+      />
 
       {/* badges # / bet */}
       <div
         style={{
-          position:"absolute",
-          zIndex:5,
-          top:6,
-          [infoRight ? "right" : "left"]:6,
-          display:"flex",
+          position: "absolute",
+          zIndex: 5,
+          top: 6,
+          [infoRight ? "right" : "left"]: 6,
+          display: "flex",
           flexDirection: badgesVertical ? "column" : "row",
-          alignItems: badgesVertical ? (infoRight ? "flex-end" : "flex-start") : "center",
-          gap:6,
+          alignItems: badgesVertical
+            ? (infoRight ? "flex-end" : "flex-start")
+            : "center",
+          gap: 6,
           textAlign: infoRight ? "right" : "left",
         }}
       >
         {opts.showIdx && (
-          <div style={{fontSize:11, fontWeight:700, padding:"2px 6px", borderRadius:6, background:"rgba(0,0,0,.65)"}}>
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              padding: "2px 6px",
+              borderRadius: 6,
+              background: "rgba(0,0,0,.65)",
+            }}
+          >
             #{i + 1}
           </div>
         )}
         {(opts.betStyle === "chip" || !!opts.vInfo) && (
-          <div style={{fontSize:11, fontWeight:600, padding:"2px 6px", borderRadius:6, background:"rgba(255,255,255,.85)", color:"#111"}}>
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              padding: "2px 6px",
+              borderRadius: 6,
+              background: "rgba(255,255,255,.85)",
+              color: "#111",
+            }}
+          >
             {fmtPlain(toNum(s.bet_size), 2)}
           </div>
         )}
@@ -309,15 +458,15 @@ function Card({ s, i, width, cardH, opts }) {
       {opts.showSuper && isSuper && (
         <div
           style={{
-            position:"absolute",
-            zIndex:5,
-            top:6,
-            [infoRight ? "left" : "right"]:6,
-            padding:"2px 8px",
-            borderRadius:999,
-            fontSize:10,
-            fontWeight:700,
-            letterSpacing:.4,
+            position: "absolute",
+            zIndex: 5,
+            top: 6,
+            [infoRight ? "left" : "right"]: 6,
+            padding: "2px 8px",
+            borderRadius: 999,
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: 0.4,
             background: anyToRgba(opts.superTagColor || "#e879f9", 0.95),
             color: opts.superTextColor || "#120614",
           }}
@@ -327,24 +476,48 @@ function Card({ s, i, width, cardH, opts }) {
       )}
 
       {/* nome (bar/float) */}
-      {showName && captionIsBar && (
-        <div style={{position:"absolute", left:8, right:8, bottom:8}}>
+      {captionIsBar && (
+        <div style={{ position: "absolute", left: 8, right: 8, bottom: 8 }}>
           <div
             title={s?.name || ""}
             style={{
-              padding:"8px 10px",
-              borderRadius:10,
-              border:"1px solid rgba(255,255,255,.18)",
-              background:"rgba(0,0,0,.45)",
-              boxShadow:"0 10px 30px rgba(0,0,0,.45)",
+              padding: "8px 10px",
+              borderRadius: 10,
+              border: "1px solid rgba(255,255,255,.18)",
+              background: "rgba(0,0,0,.45)",
+              boxShadow: "0 10px 30px rgba(0,0,0,.45)",
             }}
           >
-            <div style={{fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}>
+            <div
+              style={{
+                fontWeight: 600,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
               {s?.name || "—"}
             </div>
             {opts.betStyle === "inline" && (
-              <div style={{marginTop:2, fontSize:11, opacity:.85, display:"flex", alignItems:"center", gap:6}}>
-                <span style={{display:"inline-block", width:6, height:6, borderRadius:999, background:"rgba(255,255,255,.7)"}} />
+              <div
+                style={{
+                  marginTop: 2,
+                  fontSize: 11,
+                  opacity: 0.85,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <span
+                  style={{
+                    display: "inline-block",
+                    width: 6,
+                    height: 6,
+                    borderRadius: 999,
+                    background: "rgba(255,255,255,.7)",
+                  }}
+                />
                 {s?.bet_size != null ? fmtPlain(toNum(s.bet_size), 2) : "—"}
               </div>
             )}
@@ -352,13 +525,23 @@ function Card({ s, i, width, cardH, opts }) {
         </div>
       )}
 
-      {showName && captionIsFloat && (
-        <div style={{position:"absolute", left:8, right:8, bottom:8, pointerEvents:"none"}}>
-          <div style={{fontWeight:600, textShadow:"0 2px 6px rgba(0,0,0,.8)"}}>
+      {captionIsFloat && (
+        <div
+          style={{
+            position: "absolute",
+            left: 8,
+            right: 8,
+            bottom: 8,
+            pointerEvents: "none",
+          }}
+        >
+          <div style={{ fontWeight: 600, textShadow: "0 2px 6px rgba(0,0,0,.8)" }}>
             {s?.name || "—"}
           </div>
           {opts.betStyle === "inline" && (
-            <div style={{fontSize:11, opacity:.9, textShadow:"0 2px 6px rgba(0,0,0,.8)"}}>
+            <div
+              style={{ fontSize: 11, opacity: 0.9, textShadow: "0 2px 6px rgba(0,0,0,.8)" }}
+            >
               {s?.bet_size != null ? fmtPlain(toNum(s.bet_size), 2) : "—"}
             </div>
           )}

@@ -33,7 +33,8 @@ import WidgetByToken from "./widget-by-token.jsx";
 
 // Overlay
 import WidgetOverlay from "./widget-overlay.jsx";
-import HuntWidget from "./hunt-widget.jsx";   
+import HuntWidgetPage from "@/pages/hunt-widget.jsx";
+
 /* =================== CONFIG =================== */
 const TELEGRAM_URL = "https://t.me/gsousa70";
 const DISCORD_URL = import.meta.env.VITE_DISCORD_URL || "https://discord.gg/your-invite";
@@ -1129,14 +1130,24 @@ export default function App() {
   const tournamentDetailMatch = route.match(/^\/?tournaments\/([^\/?#]+)$/);
 
   // overlay: battle OU token fixo
-  const isOverlay = route.startsWith("overlay/battle/") || route.startsWith("w/");
-  if (isOverlay) {
-    return (
-      <BareOverlayContainer>
-        {route.startsWith("overlay/battle/") ? <WidgetOverlay /> : <WidgetByToken />}
-      </BareOverlayContainer>
-    );
-  }
+const isOverlay =
+  route.startsWith("overlay/hunt/") ||
+  route.startsWith("overlay/battle/") ||
+  route.startsWith("w/");
+
+if (isOverlay) {
+  return (
+    <BareOverlayContainer>
+      {route.startsWith("overlay/hunt/") ? (
+        <HuntWidgetPage />
+      ) : route.startsWith("overlay/battle/") ? (
+        <WidgetOverlay />
+      ) : (
+        <WidgetByToken />
+      )}
+    </BareOverlayContainer>
+  );
+}
 
   const isDetailRoute =
     !!huntDetailMatch ||
@@ -1172,7 +1183,6 @@ export default function App() {
         {route === "tournaments" && <TournamentsPage />}
         {route === "battles" && <BattlesPage />}
         {route === "hunts" && <BattlesPage />}
-        {route.startsWith("battles/") && <HuntWidget />}
         
 
         {!(
