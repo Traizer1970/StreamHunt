@@ -1192,126 +1192,138 @@ return (
 }
 
 /* ───────────────────────── Opening Preview ───────────────────────── */
+/* ───────────────────────── Opening Preview ───────────────────────── */
 function OpeningOverlayPreview({ hunt, slots, opts }) {
   const baseW = Number(opts.baseW || 560);
   const baseH = Number(opts.baseH || 320);
   const visible = Math.max(1, Number(opts.visible || 5));
   const listSide = String(opts.listSide || "left");
 
-  // BEST / WORST por métrica
-  const scored = slots.map(s => {
-    const bet = toNum(s.bet_size);
-    const payout = toNum(s.payout);
-    const x = bet > 0 ? payout / bet : 0;
-    const score = (opts.metric === "payout") ? payout : x;
-    return { ...s, _score: score };
-  }).filter(s => s._score > 0);
+  // Best/Worst
+  const scored = slots
+    .map((s) => {
+      const bet = toNum(s.bet_size);
+      const payout = toNum(s.payout);
+      const x = bet > 0 ? payout / bet : 0;
+      const score = (opts.metric || "payout") === "payout" ? payout : x;
+      return { ...s, _score: score };
+    })
+    .filter((s) => s._score > 0);
 
-  const best = opts.showBestWorst && scored.length ? scored.reduce((a,b)=>a._score>b._score?a:b) : null;
-  const worst = opts.showBestWorst && scored.length ? scored.reduce((a,b)=>a._score<b._score?a:b) : null;
+  const best = opts.showBestWorst && scored.length
+    ? scored.reduce((a, b) => (a._score > b._score ? a : b))
+    : null;
+  const worst = opts.showBestWorst && scored.length
+    ? scored.reduce((a, b) => (a._score < b._score ? a : b))
+    : null;
 
-  const hero = slots.slice(0, visible);   // as “cards” grandes no centro
-  const side = slots;                      // lista lateral
+  const hero = slots.slice(0, visible);
+  const side = slots;
 
-  const Box = ({children}) => (
+  const showBox = opts.showBox !== false;
+  const Box = ({ children }) => (
     <div
       className="rounded-xl overflow-hidden relative"
       style={{
         width: baseW,
         height: baseH,
-        border: opts.showBox ? "1px solid rgba(255,255,255,.12)" : "none",
-        background: opts.showBox
+        border: showBox ? "1px solid rgba(255,255,255,.12)" : "none",
+        background: showBox
           ? "linear-gradient(135deg, rgba(15,16,33,1) 0%, rgba(24,16,40,1) 100%)"
           : "transparent",
         fontFamily: RUBIK_STACK,
       }}
-    >{children}</div>
+    >
+      <style>{`
+        @keyframes marqueeY {
+          0% { transform: translateY(0); }
+          100% { transform: translateY(-50%); }
+        }
+      `}</style>
+      {children}
+    </div>
   );
 
-  const BestChip = ({label, color="#22c55e"}) => (
-    <span
-      className="absolute -top-2 right-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold shadow"
-      style={{ background: color, color: "#0b0b0b" }}
-    >
-      {label}
-    </span>
+  const Row = ({ s, i }) => (
+    <div className="flex items-center gap-2 h-10">
+      <div className="text-[11px] font-semibold opacity-90 w-6 text-right">#{i + 1}</div>
+      <div className="w-9 h-9 rounded-md overflow-hidden border border-white/10 shrink-0">
+        {s.thumbnail ? (
+          <img src={s.thumbnail} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full bg-white/10" />
+        )}
+      </div>
+      <div className="text-sm truncate flex-1">{s.name || "—"}</div>
+    </div>
+  );
+
+  // altura da lista + animação
+  const rowH = 40;
+  const headerH = 38;
+  const listH = Math.max(4, Math.floor((baseH - headerH - 12) / rowH)) * rowH;
+  const doAuto = (opts.listAutoScroll !== false) && side.length * rowH > listH;
+  const speed = Math.max(4, Number(opts.listSpeedSec ?? 18));
+
+  const ListPane = (
+    <div className="w-52 shrink-0" style={{ height: listH, overflow: "hidden" }}>
+      <div className="px-3 pt-2 pb-1 text-[12px] opacity-80"> {hunt?.title || "Hunt"} — Opening </div>
+      <div
+        style={{
+          animation: doAuto ? `marqueeY ${speed}s linear infinite` : undefined,
+        }}
+      >
+        {/* duplicamos para loop contínuo */}
+        {[...side, ...side].map((s, idx) => (
+          <Row key={`${s.id}-${idx}`} s={s} i={idx % side.length} />
+        ))}
+      </div>
+    </div>
   );
 
   return (
     <Box>
-      {/* header */}
-      <div className="px-3 pt-3 pb-2 flex items-center justify-between">
-        {opts.showTitle !== false ? (
-          <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
-            {hunt?.title || "Hunt"} — Opening
-          </div>
-        ) : <div />}
-
-        {opts.showCurrent !== false ? (
-          <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
-            {hero[0]?.name || "—"}
-          </div>
-        ) : <div />}
+      <div className="absolute inset-x-0 top-2 px-3 flex items-center justify-between">
+        <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
+          {hunt?.title || "Hunt"} — Opening
+        </div>
+        <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
+          {slots[0]?.name || "—"}
+        </div>
       </div>
 
-      {/* corpo */}
-      <div className="px-3 h-[calc(100%-46px)] flex gap-3">
-        {/* lista lateral */}
-        {listSide === "left" && (
-          <div className="w-44 shrink-0 overflow-auto">
-            {side.map((s,i)=>(
-              <div key={s.id} className="flex items-center gap-2 mb-2">
-                <div className="text-[11px] opacity-60 w-6">#{i+1}</div>
-                {s.thumbnail
-                  ? <img src={s.thumbnail} className="h-9 w-14 rounded object-cover" />
-                  : <div className="h-9 w-14 rounded bg-white/10" />}
-                <div className="text-[12px] truncate">{s.name}</div>
-              </div>
-            ))}
-          </div>
-        )}
+      <div className="h-full w-full flex items-end gap-3 px-3 pb-3 pt-10">
+        {listSide === "left" && ListPane}
 
-        {/* heros */}
-        <div className="flex-1 flex items-center justify-center overflow-hidden">
-          <div className="flex gap-12">
-            {hero.map((s,i)=>(
-              <div key={s.id} className="relative rounded-xl overflow-hidden border border-white/12 shadow-[0_12px_28px_rgba(0,0,0,.35)]" style={{width: 160, height: 220}}>
-                {s.thumbnail
-                  ? <img src={s.thumbnail} className="absolute inset-0 w-full h-full object-cover" />
-                  : <div className="absolute inset-0 bg-white/10" />}
-
-                <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">#{i+1}</div>
-
-                {/* BEST/WORST */}
-                {best && s.id===best.id && opts.showBestWorst && (
-                  <BestChip label="BEST" color="#22c55e" />
-                )}
-                {worst && s.id===worst.id && opts.showBestWorst && (
-                  <BestChip label="WORST" color="#ef4444" />
-                )}
-
-                <div className="absolute inset-x-2 bottom-2 rounded-lg px-2 py-1 text-white/95 text-[12px] bg-black/45 border border-white/15 truncate">
-                  {s.name}
+        {/* cartões “hero” */}
+        <div className="flex-1 overflow-hidden">
+          <div className="flex gap-3">
+            {hero.map((s, i) => (
+              <div key={s.id} className="relative w-36 h-56 rounded-xl overflow-hidden border border-white/10">
+                <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">
+                  #{i + 1}
                 </div>
+                {!!best && best.id === s.id && (
+                  <span className="absolute -top-2 right-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold shadow" style={{ background: "#22c55e", color: "#0b0b0b" }}>
+                    BEST
+                  </span>
+                )}
+                {!!worst && worst.id === s.id && (
+                  <span className="absolute -top-2 right-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold shadow" style={{ background: "#ef4444", color: "#0b0b0b" }}>
+                    WORST
+                  </span>
+                )}
+                {s.thumbnail ? (
+                  <img src={s.thumbnail} alt="" className="w-full h-full object-cover object-center" />
+                ) : (
+                  <div className="w-full h-full bg-white/10" />
+                )}
               </div>
             ))}
           </div>
         </div>
 
-        {/* lista lateral (direita) */}
-        {listSide === "right" && (
-          <div className="w-44 shrink-0 overflow-auto">
-            {side.map((s,i)=>(
-              <div key={s.id} className="flex items-center gap-2 mb-2">
-                <div className="text-[11px] opacity-60 w-6">#{i+1}</div>
-                {s.thumbnail
-                  ? <img src={s.thumbnail} className="h-9 w-14 rounded object-cover" />
-                  : <div className="h-9 w-14 rounded bg-white/10" />}
-                <div className="text-[12px] truncate">{s.name}</div>
-              </div>
-            ))}
-          </div>
-        )}
+        {listSide === "right" && ListPane}
       </div>
     </Box>
   );
