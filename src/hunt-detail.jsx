@@ -912,7 +912,6 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     const infoRight = String(opts.infoPos || "left") === "right";
 
     return (
-      
       <div
         className="relative rounded-xl overflow-hidden border"
         style={{ height: cardHeight, width, borderColor: superB ? borderCol : "rgba(255,255,255,.10)", boxShadow: superB ? shadowSoft : "0 12px 28px rgba(0,0,0,.35)" }}
@@ -984,27 +983,6 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
       </div>
     );
   }
-
-function NiceSlider({ min=0, max=100, step=1, value, onChange, ariaLabel }) {
-  const pct = Math.max(0, Math.min(100, ((Number(value ?? 0) - min) / (max - min)) * 100));
-
-  return (
-    <div className="py-1">
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        aria-label={ariaLabel}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="nice-slider w-full h-8 appearance-none bg-transparent"
-        style={{ ['--pct']: `${pct}%` }}
-      />
-    </div>
-  );
-}
-
 
   function KpiBadge({ shape, label, value, Icon }) {
     if (shape === "circle") {
@@ -1091,23 +1069,17 @@ function NiceSlider({ min=0, max=100, step=1, value, onChange, ariaLabel }) {
   const bg1 = opts.panelBgStart || "#0b1020";
   const bg2 = opts.panelBgEnd || "#111827";
 
-return (
-  <div
-    className="rounded-xl overflow-hidden relative"
-    style={{
-      width: baseW,
-      height: baseH,
-      border: showBox ? `1px solid ${opts.panelBorder || "rgba(255,255,255,.10)"}` : "none",
-      background: showBox ? `linear-gradient(135deg, ${bg1} 0%, ${bg2} 100%)` : "transparent",
-      fontFamily: RUBIK_STACK,
-    }}
-  >
-    <style>{`
-      @keyframes marquee {
-        0%   { transform: translateX(0); }
-        100% { transform: translateX(-50%); }
-      }
-    `}</style>
+  return (
+    <div
+      className="rounded-xl overflow-hidden relative"
+      style={{
+        width: baseW,
+        height: baseH,
+        border: showBox ? `1px solid ${opts.panelBorder || "rgba(255,255,255,.10)"}` : "none",
+        background: showBox ? `linear-gradient(135deg, ${bg1} 0%, ${bg2} 100%)` : "transparent",
+        fontFamily: RUBIK_STACK,
+      }}
+    >
       {opts.kpiPos === "top" && <KPIsInline />}
       {opts.kpiPos === "side" && <KPIsSide />}
 
@@ -1564,36 +1536,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
         <Field label="Tamanho (0.7–1.6)">
-         {/* Tamanho (0.7–1.6) */}
-<Field label="Tamanho (0.7–1.6)">
-  <NiceSlider
-    min={0.7} max={1.6} step={0.05}
-    value={opts.kpiSize}
-    onChange={(v) => setOpts(o => ({ ...o, kpiSize: v }))}
-    ariaLabel="Tamanho KPI"
-  />
-</Field>
-
-{/* Font KPI (0.8–1.6) */}
-<Field label="Font KPI (0.8–1.6)" hint="Só ajusta a letra">
-  <NiceSlider
-    min={0.8} max={1.6} step={0.05}
-    value={opts.kpiFont}
-    onChange={(v) => setOpts(o => ({ ...o, kpiFont: v }))}
-    ariaLabel="Fonte KPI"
-  />
-</Field>
-
-{/* (opcional) Força do glow do SUPER */}
-<Field label="Glow strength">
-  <NiceSlider
-    min={0} max={1} step={0.05}
-    value={opts.superGlowStrength ?? 0.6}
-    onChange={(v) => setOpts(o => ({ ...o, superGlowStrength: v }))}
-    ariaLabel="Força do brilho Super"
-  />
-</Field>
-
+          <input type="range" min={0.7} max={1.6} step={0.05} value={opts.kpiSize} onChange={(e)=>setOpts(o=>({...o,kpiSize:Number(e.target.value)}))} className="w-full"/>
         </Field>
         <Field label="Forma">
           <Segmented
@@ -1613,36 +1556,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
           />
         </Field>
         <Field label="Font KPI (0.8–1.6)" hint="Só ajusta a letra">
-          {/* Tamanho (0.7–1.6) */}
-<Field label="Tamanho (0.7–1.6)">
-  <NiceSlider
-    min={0.7} max={1.6} step={0.05}
-    value={opts.kpiSize}
-    onChange={(v) => setOpts(o => ({ ...o, kpiSize: v }))}
-    ariaLabel="Tamanho KPI"
-  />
-</Field>
-
-{/* Font KPI (0.8–1.6) */}
-<Field label="Font KPI (0.8–1.6)" hint="Só ajusta a letra">
-  <NiceSlider
-    min={0.8} max={1.6} step={0.05}
-    value={opts.kpiFont}
-    onChange={(v) => setOpts(o => ({ ...o, kpiFont: v }))}
-    ariaLabel="Fonte KPI"
-  />
-</Field>
-
-{/* (opcional) Força do glow do SUPER */}
-<Field label="Glow strength">
-  <NiceSlider
-    min={0} max={1} step={0.05}
-    value={opts.superGlowStrength ?? 0.6}
-    onChange={(v) => setOpts(o => ({ ...o, superGlowStrength: v }))}
-    ariaLabel="Força do brilho Super"
-  />
-</Field>
-
+          <input type="range" min={0.8} max={1.6} step={0.05} value={opts.kpiFont} onChange={(e)=>setOpts(o=>({...o,kpiFont:Number(e.target.value)}))} className="w-full"/>
         </Field>
       </div>
 
@@ -1849,51 +1763,6 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
     )}
   </div>
 </div>
-<style>{`
-/* Slider bonito — funciona no Chromium/WebKit e Firefox */
-.nice-slider {
-  --track: rgba(255,255,255,.14);
-  --track-bg: rgba(255,255,255,.09);
-  --fill: #38bdf8;          /* sky-400 */
-  --thumb: #e5e7eb;         /* zinc-200 */
-  --ring: rgba(56,189,248,.35);
-}
-.nice-slider:focus { outline: none; }
-
-/* WebKit */
-.nice-slider::-webkit-slider-runnable-track {
-  height: 8px; border-radius: 9999px;
-  background:
-    linear-gradient(to right, var(--fill) 0 var(--pct), var(--track-bg) var(--pct) 100%);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
-}
-.nice-slider::-webkit-slider-thumb {
-  -webkit-appearance: none; appearance: none;
-  margin-top: -6px;          /* centra no track */
-  width: 20px; height: 20px; border-radius: 9999px;
-  background: var(--thumb);
-  border: 2px solid #0ea5e9; /* sky-500 */
-  box-shadow: 0 6px 20px rgba(14,165,233,.35), 0 0 0 3px var(--ring);
-  transition: transform .12s ease;
-}
-.nice-slider:active::-webkit-slider-thumb { transform: scale(1.05); }
-
-/* Firefox */
-.nice-slider::-moz-range-track {
-  height: 8px; border-radius: 9999px; background: var(--track-bg);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
-}
-.nice-slider::-moz-range-progress {
-  height: 8px; border-radius: 9999px; background: var(--fill);
-}
-.nice-slider::-moz-range-thumb {
-  width: 20px; height: 20px; border-radius: 9999px;
-  background: var(--thumb); border: 2px solid #0ea5e9;
-  box-shadow: 0 6px 20px rgba(14,165,233,.35), 0 0 0 3px var(--ring);
-  transition: transform .12s ease;
-}
-.nice-slider:active::-moz-range-thumb { transform: scale(1.05); }
-`}</style>
 
         {/* Preview */}
         <div className="flex-1 p-6 overflow-auto min-w-0">
