@@ -1,140 +1,240 @@
 // src/pages/opening-designer.jsx
 import React from "react";
+import { supabase } from "@/lib/supabase";
 
-/* router mínimo compatível com o resto do app */
+/* ───────────────── helpers ───────────────── */
+const RUBIK = "'Rubik', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial";
+
 function parseHash() {
   const raw = (window.location.hash || "#").slice(1);
   const [path, query] = raw.split("?");
   let parts = (path || "").split("/").filter(Boolean);
+
+  // suportar "#/designer/opening/..." ou "#/opening/designer/..." ou variações
   if (parts[0] === "designer") parts = parts.slice(1);
-  const type = parts[0] || "hunt"; // "opening" esperado aqui
+  const type = parts[0] || "opening";
+  const numberId = parts[1] || "active";
   const qs = new URLSearchParams(query || "");
-  return { type, qs };
+  return { type, numberId, qs };
 }
-function useHashRoute(){
-  const [r,setR] = React.useState(parseHash());
-  React.useEffect(()=>{
-    const onHash=()=>setR(parseHash());
-    window.addEventListener("hashchange",onHash);
-    return ()=>window.removeEventListener("hashchange",onHash);
-  },[]);
-  return r;
+function useHashRoute() {
+  const [route, setRoute] = React.useState(parseHash());
+  React.useEffect(() => {
+    const onHash = () => setRoute(parseHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  return route;
 }
 
-/* ————————————————— Página ————————————————— */
+/* ───────────────── defaults ───────────────── */
+const DEFAULTS = {
+  // apenas opções relevantes ao Opening
+  visible: 9,
+  listSide: "right",         // left | right
+  showBox: true,
+  showBestWorst: false,
+  bestWorstMetric: "payout", // payout | mult | bet
+};
+
+/* ───────────────── storage helpers ───────────────── */
+async function loadOpeningOpts({ owner, huntNumberId }) {
+  if (!owner) return {};
+  const r = await supabase
+    .from("overlay_settings")
+    .select("*")
+    .eq("user_id", owner)
+    .eq("type", "opening")
+    .eq("hunt_number_id", huntNumberId || null)
+    .maybeSingle();
+
+  if (!r.error && r.data) {
+    // tentar nos campos usuais
+    for (const c of ["opts", "settings", "config", "data", "json"]) {
+      if (r.data[c]) return r.data[c] || {};
+    }
+  }
+  return {};
+}
+async function saveOpeningOpts({ owner, huntNumberId, opts }) {
+  if (!owner) return;
+  // upsert simples; se tiveres onConflict diferente, ajusta a coluna
+  await supabase
+    .from("overlay_settings")
+    .upsert({
+      user_id: owner,
+      type: "opening",
+      hunt_number_id: huntNumberId || null,
+      opts,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id,type,hunt_number_id" });
+}
+
+/* ───────────────── UI atoms ───────────────── */
+function Section({ title, children, actions }) {
+  return (
+    <div style={{
+      background: "rgba(17,24,39,.6)",
+      border: "1px solid rgba(255,255,255,.08)",
+      borderRadius: 12,
+      padding: 12,
+      fontFamily: RUBIK,
+      color: "#e5e7eb"
+    }}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+        <b style={{opacity:.9}}>{title}</b>
+        {actions}
+      </div>
+      {children}
+    </div>
+  );
+}
+function Pill({ active, onClick, children }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "6px 10px",
+        borderRadius: 999,
+        border: `1px solid ${active ? "rgba(255,255,255,.28)" : "rgba(255,255,255,.14)"}`,
+        background: active ? "rgba(255,255,255,.10)" : "transparent",
+        color: "#e5e7eb",
+        fontFamily: RUBIK,
+        fontSize: 12,
+        cursor: "pointer"
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+function Toggle({ checked, onChange, label }) {
+  return (
+    <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
+      <input type="checkbox" checked={checked} onChange={(e)=>onChange(e.target.checked)} />
+      <span style={{fontSize:13,opacity:.9}}>{label}</span>
+    </label>
+  );
+}
+
+/* ───────────────── PAGE ───────────────── */
 export default function OpeningDesignerPage(){
-  const { type } = useHashRoute();
+  const { numberId, qs } = useHashRoute();
+  const owner = qs.get("owner") || "";
 
-  // GUARDA: se for Opening, mostra só o painel Layout (Opening)
-  if (type === "opening") {
+  const [opts, setOpts] = React.useState(DEFAULTS);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      setLoading(true);
+      try {
+        const huntNumberId = Number(numberId) || null;
+        const db = await loadOpeningOpts({ owner, huntNumberId });
+        if (!alive) return;
+        setOpts({ ...DEFAULTS, ...db });
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [numberId, owner]);
+
+  const update = (patch) => setOpts((o) => ({ ...o, ...patch }));
+
+  const reset = () => setOpts(DEFAULTS);
+
+  const save = async () => {
+    const huntNumberId = Number(numberId) || null;
+    await saveOpeningOpts({ owner, huntNumberId, opts });
+  };
+
+  if (loading) {
     return (
-      <div style={{ padding: 16, fontFamily: "'Rubik', ui-sans-serif, system-ui" }}>
-        <OpeningLayoutPanel/>
+      <div style={{
+        display:"grid",placeItems:"center",height:"100vh",
+        fontFamily:RUBIK,color:"#e5e7eb",background:"#0b1020"
+      }}>
+        A carregar Designer (Opening)…
       </div>
     );
   }
 
-  // Caso abras o designer para outro tipo, poderias renderizar os restantes
-  // painéis. Aqui deixo só o aviso para não baralhar.
+  // ——— APENAS ESTA SECÇÃO ———
   return (
-    <div style={{ padding: 16, color: "#e5e7eb", background: "#0b1020" }}>
-      Designer genérico (hunt): implementar aqui os outros painéis se precisares.
-    </div>
-  );
-}
-
-/* ————————————————— Painel “Layout (Opening)” ————————————————— */
-function OpeningLayoutPanel(){
-  const row = { display:"grid", gridTemplateColumns:"1fr auto auto auto auto", gap: 8, alignItems:"center" };
-  const box = { background:"rgba(17,24,39,.75)", border:"1px solid rgba(255,255,255,.12)", borderRadius:12, padding:12, color:"#e5e7eb" };
-  const label = { fontSize:12, opacity:.85 };
-
-  return (
-    <div style={box}>
-      <div style={{ fontWeight:700, marginBottom:12 }}>Layout (Opening)</div>
-
-      <div style={{ display:"grid", gap:10 }}>
-        <div style={row}>
-          <span style={label}>Cards visíveis</span>
-          <RadioGroup name="visible" items={[3,5,7,9]} defaultValue={9}/>
-          <span style={{ width:8 }} />
-          <span style={label}>Lista lateral</span>
-          <RadioGroup name="lside" items={["Esquerda","Direita"]} values={["left","right"]} defaultValue={"right"} />
+    <div style={{
+      minHeight:"100vh",
+      background:"#0b1020",
+      padding:16,
+      fontFamily:RUBIK,
+      color:"#e5e7eb",
+      display:"grid",
+      gridTemplateColumns:"minmax(280px,420px)",
+      justifyContent:"center"
+    }}>
+      <Section
+        title="Layout (Opening)"
+        actions={(
+          <div style={{display:"flex",gap:8}}>
+            <Pill onClick={reset}>Reset</Pill>
+            <Pill onClick={save} active>Guardar</Pill>
+          </div>
+        )}
+      >
+        {/* Cards visíveis */}
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:12,opacity:.8,marginBottom:8}}>Cards visíveis</div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {[3,5,7,9,11].map(n => (
+              <Pill key={n} active={Number(opts.visible)===n} onClick={()=>update({visible:n})}>
+                {n}
+              </Pill>
+            ))}
+          </div>
         </div>
 
-        <div style={row}>
-          <span style={label}>Caixa de fundo</span>
-          <Toggle name="lbox" defaultChecked />
-          <span />
-          <span style={label}>Mostrar Best/Worst</span>
-          <Toggle name="lbest" />
+        {/* Lista lateral */}
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:12,opacity:.8,marginBottom:8}}>Lista lateral</div>
+          <div style={{display:"flex",gap:8}}>
+            <Pill active={opts.listSide==="left"} onClick={()=>update({listSide:"left"})}>Esquerda</Pill>
+            <Pill active={opts.listSide==="right"} onClick={()=>update({listSide:"right"})}>Direita</Pill>
+          </div>
         </div>
 
-        <div style={row}>
-          <span style={label}>Lista auto-scroll</span>
-          <Toggle name="lscroll" defaultChecked />
-          <span />
-          <span style={label}>Velocidade</span>
-          <Input name="lspeed" placeholder="segundos" defaultValue={18} width={90}/>
+        {/* Caixa de fundo */}
+        <div style={{marginBottom:14}}>
+          <Toggle
+            checked={opts.showBox!==false}
+            onChange={(v)=>update({showBox: !!v})}
+            label="Caixa de fundo"
+          />
         </div>
 
-        <div style={row}>
-          <span style={label}>Largura da lista</span>
-          <Input name="lwidth" placeholder="px" defaultValue={232} width={90}/>
-          <span />
-          <span style={label}>Linhas visíveis</span>
-          <Input name="lvisible" placeholder="#" defaultValue={9} width={90}/>
+        {/* Best/Worst */}
+        <div style={{display:"grid",gap:10}}>
+          <Toggle
+            checked={!!opts.showBestWorst}
+            onChange={(v)=>update({showBestWorst: !!v})}
+            label="Mostrar Best/Worst"
+          />
+          <div>
+            <div style={{fontSize:12,opacity:.8,marginBottom:8}}>Métrica para Best/Worst</div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {[
+                ["payout","Payout €"],
+                ["mult","Multiplier"],
+                ["bet","Bet €"],
+              ].map(([k, lbl]) => (
+                <Pill key={k} active={opts.bestWorstMetric===k} onClick={()=>update({bestWorstMetric:k})}>
+                  {lbl}
+                </Pill>
+              ))}
+            </div>
+          </div>
         </div>
-
-        <Help />
-      </div>
-    </div>
-  );
-}
-
-/* ————————————————— Controles simples ————————————————— */
-function RadioGroup({ name, items, values, defaultValue }){
-  return (
-    <div style={{ display:"inline-flex", gap:6, background:"rgba(255,255,255,.06)", padding:4, borderRadius:999, border:"1px solid rgba(255,255,255,.12)" }}>
-      {items.map((it,idx)=>{
-        const val = values ? values[idx] : it;
-        const is = String(defaultValue) === String(val);
-        return (
-          <label key={val} style={{ padding:"6px 10px", borderRadius:999, cursor:"pointer", background:is ? "rgba(255,255,255,.15)" : "transparent", fontSize:12 }}>
-            <input type="radio" name={name} value={val} defaultChecked={is} style={{ display:"none" }}/>
-            {it}
-          </label>
-        );
-      })}
-    </div>
-  );
-}
-function Toggle({ name, defaultChecked }){
-  return (
-    <label style={{ display:"inline-flex", alignItems:"center", gap:8, cursor:"pointer" }}>
-      <input type="checkbox" name={name} defaultChecked={defaultChecked} />
-    </label>
-  );
-}
-function Input({ name, placeholder, defaultValue, width=120 }){
-  return (
-    <input
-      name={name}
-      placeholder={placeholder}
-      defaultValue={defaultValue}
-      style={{
-        width, height:32, background:"rgba(255,255,255,.06)",
-        border:"1px solid rgba(255,255,255,.12)", borderRadius:8,
-        padding:"0 10px", color:"#e5e7eb"
-      }}
-    />
-  );
-}
-function Help(){
-  return (
-    <div style={{ marginTop:10, fontSize:12, opacity:.8 }}>
-      As opções acima escrevem/lem o URL (ex.: <code>#/overlay/opening/123?list=1&amp;lside=right...</code>).  
-      O overlay do Opening já interpreta: <b>list</b>, <b>lside</b>, <b>lwidth</b>, <b>lvisible</b>, <b>lscroll</b>, <b>lspeed</b>, <b>lbox</b>, <b>lbest</b>.
+      </Section>
     </div>
   );
 }
