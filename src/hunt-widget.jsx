@@ -44,14 +44,12 @@ function parseHash() {
   const [path, query] = raw.split("?");
   let parts = (path || "").split("/").filter(Boolean);
 
-  // ⚠️ esta página pode ser aberta como "#/hunt-widget/hunt/123"
-  // ou "#/hunt/123" (compat). Remove o prefixo "hunt-widget" se existir.
+  // pode vir como "#/hunt-widget/hunt/123" (novo) ou "#/overlay/hunt/123" (legacy)
   if (parts[0] === "hunt-widget") parts = parts.slice(1);
-  // compat com o formato antigo "#/overlay/hunt/123"
   if (parts[0] === "overlay") parts = parts.slice(1);
 
-  const type = parts[0] || "hunt";          // "hunt" | "opening"
-  const numberId = parts[1] || "active";    // "active" ou número
+  const type = parts[0] || "hunt";       // "hunt" | "opening"
+  const numberId = parts[1] || "active"; // "active" ou número
   const qs = new URLSearchParams(query || "");
   return { type, numberId, qs };
 }
@@ -160,7 +158,7 @@ export default function HuntWidgetPage() {
         if (!Number.isFinite(id) || id <= 0)
           throw new Error("Parâmetro numberId inválido.");
 
-        // opcional: valida se o hunt existe (não usamos h aqui, mas valida 404)
+        // valida se o hunt existe (404 friendly)
         await getHuntByNumberId(id);
 
         const { slots: s } = await listHuntSlots({ numberId: id });
@@ -276,7 +274,7 @@ function HuntOverlayCanvas({ slots, opts }) {
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: justify, // ← respeita Align (left/center/right)
+            justifyContent: justify, // respeita Align (left/center/right)
             height: "100%",
             overflow: "hidden",
           }}
@@ -317,6 +315,8 @@ function Card({ s, i, width, cardH, opts }) {
     s?._raw?.super
   );
   const glowColor = opts.superGlowColor || "#e879f9";
+  theGlow: {
+  }
   const glowAlpha = Math.max(
     0,
     Math.min(1, Number(opts.superGlowStrength ?? 0.6))
