@@ -483,16 +483,13 @@ function PanelGradientSwatches({ value, onChange }) {
     <div className="flex flex-wrap gap-2">
       {entries.map(([name, [start, end]]) => {
         const active = value?.[0] === start && value?.[1] === end;
-        return (
+
+        const chip = (
           <button
-            key={name}
             type="button"
-            title={name}
             onClick={() => onChange([start, end])}
-            className={cn(
-              "p-[2px] rounded-xl bg-gradient-to-b from-white/25 to-white/10",
-              "shadow-[0_6px_20px_rgba(0,0,0,.35)]"
-            )}
+            aria-label={name}
+            className="p-[2px] rounded-xl bg-gradient-to-b from-white/25 to-white/10 shadow-[0_6px_20px_rgba(0,0,0,.35)]"
           >
             <span
               className={cn(
@@ -505,6 +502,12 @@ function PanelGradientSwatches({ value, onChange }) {
               }}
             />
           </button>
+        );
+
+        return (
+          <Hint key={name} label={name}>
+            {chip}
+          </Hint>
         );
       })}
     </div>
@@ -1248,28 +1251,38 @@ function KpiPresetSwatches({ value, onChange }) {
 }
 
 
+// Substitui a tua PanelPresetSwatches por esta versão
 function PanelPresetSwatches({ value, onChange }) {
   return (
     <div className="flex flex-wrap gap-2">
       {Object.entries(PANEL_PRESETS).map(([name, [start, end]]) => {
-        const active = Array.isArray(value) && value[0] === start && value[1] === end;
-        return (
+        const active =
+          Array.isArray(value) && value[0] === start && value[1] === end;
+
+        const chip = (
           <button
-            key={name}
             type="button"
-            title={name}
             onClick={() => onChange([start, end])}
-            className="p-[2px] rounded-xl bg-gradient-to-b from-white/25 to-white/10
-                       shadow-[0_6px_20px_rgba(0,0,0,.35)]"
+            aria-label={name}
+            className="p-[2px] rounded-xl bg-gradient-to-b from-white/25 to-white/10 shadow-[0_6px_20px_rgba(0,0,0,.35)]"
           >
             <span
-              className={cn("block h-8 w-12 rounded-[10px] border", active ? "ring-2 ring-white/70" : "")}
+              className={cn(
+                "block h-8 w-12 rounded-[10px] border",
+                active ? "ring-2 ring-white/70" : ""
+              )}
               style={{
                 background: `linear-gradient(90deg, ${start} 0%, ${end} 100%)`,
                 borderColor: "rgba(255,255,255,.15)",
               }}
             />
           </button>
+        );
+
+        return (
+          <Hint key={name} label={name}>
+            {chip}
+          </Hint>
         );
       })}
     </div>
