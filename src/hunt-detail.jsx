@@ -912,6 +912,7 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     const infoRight = String(opts.infoPos || "left") === "right";
 
     return (
+      
       <div
         className="relative rounded-xl overflow-hidden border"
         style={{ height: cardHeight, width, borderColor: superB ? borderCol : "rgba(255,255,255,.10)", boxShadow: superB ? shadowSoft : "0 12px 28px rgba(0,0,0,.35)" }}
