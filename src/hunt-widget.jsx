@@ -42,16 +42,15 @@ const anyToRgba = (c, a = 1) =>
 
 /* ───────────────── tiny router via location.hash ───────────────── */
 function parseHash() {
-  const raw = (window.location.hash || "#").slice(1); // remove '#'
+  const raw = (window.location.hash || "#").slice(1);
   const [path, query] = raw.split("?");
   let parts = (path || "").split("/").filter(Boolean);
 
-  // compat: pode vir "#/hunt-widget/hunt/..." ou "#/overlay/hunt/..."
   if (parts[0] === "hunt-widget") parts = parts.slice(1);
   if (parts[0] === "overlay") parts = parts.slice(1);
 
-  const type = parts[0] || "hunt";          // "hunt" | "opening"
-  const numberId = parts[1] || "active";    // "active" ou número
+  const type = parts[0] || "hunt";       // "hunt" | "opening"
+  const numberId = parts[1] || "active"; // "active" ou número
   const qs = new URLSearchParams(query || "");
   return { type, numberId, qs };
 }
@@ -65,7 +64,7 @@ function useHashRoute() {
   return route;
 }
 
-/* ───────────────── qs → opções (só se existirem no URL) ───────────────── */
+/* ───────────────── qs → opções ───────────────── */
 function readOptsFromQS(qs) {
   const getNum = (k, min, max) => {
     if (!qs.has(k)) return undefined;
@@ -105,14 +104,14 @@ function readOptsFromQS(qs) {
   out.align = getStr("align");
 
   // KPIs
-  out.kpiPos = getStr("kpos");             // top | bottom | side | hidden
-  out.kpiDir = getStr("kdir");             // row | column
-  out.kpiAlign = getStr("kalign");         // left | center | right
-  out.kpiSide = getStr("kside");           // left | right
+  out.kpiPos = getStr("kpos");
+  out.kpiDir = getStr("kdir");
+  out.kpiAlign = getStr("kalign");
+  out.kpiSide = getStr("kside");
   out.kpiGap = getNum("kgap", 0, 48);
   out.kpiSideSpace = getNum("kspace", 0, 64);
   out.kpiSize = getNum("ksize", 0.6, 1.8);
-  out.kpiShape = getStr("kshape");         // box | pill | circle
+  out.kpiShape = getStr("kshape");
   out.kpiRound = getNum("kround", 0, 3);
   if (qs.has("klabels")) out.kpiShowLabels = qs.get("klabels") !== "0";
   out.kpiFont = getNum("kfont", 0.6, 2.0);
@@ -124,7 +123,7 @@ function readOptsFromQS(qs) {
   if (qs.has("kbr")) out.kpiBorder = "#" + qs.get("kbr");
   if (qs.has("ktx")) out.kpiText = "#" + qs.get("ktx");
 
-  // ── opções específicas do OPENING ──
+  // OPENING extras
   if (qs.has("title")) out.showTitle = qs.get("title") !== "0";
   if (qs.has("current")) out.showCurrent = qs.get("current") !== "0";
   const ls = getStr("listside"); if (ls) out.listSide = ls;       // left | right
@@ -132,11 +131,15 @@ function readOptsFromQS(qs) {
   const metric = getStr("metric"); if (metric) out.metric = metric; // "x" | "payout"
   if (qs.has("shine")) out.shine = qs.get("shine") !== "0";
   if (qs.has("pulse")) out.pulse = qs.get("pulse") !== "0";
-  // thumbs da lista (para garantir MESMA dimensão)
+
+  // lista lateral — tamanhos / autoplay
   out.listThumbW = getNum("ltw", 32, 160);
   out.listThumbH = getNum("lth", 24, 120);
+  out.listRowH   = getNum("lrh", 40, 96);
+  out.listAuto   = getFlag("lauto");
+  out.listSpeed  = getNum("lspd", 4, 120);      // px/s
+  out.listPauseHover = getFlag("lpause");
 
-  // remove undefineds
   Object.keys(out).forEach((k) => out[k] === undefined && delete out[k]);
   return out;
 }
@@ -154,11 +157,7 @@ const KPI_COLOR_PRESETS = {
 };
 function kpiColors(opts){
   const p = KPI_COLOR_PRESETS[String(opts.kpiColorPreset||"glass")] || KPI_COLOR_PRESETS.glass;
-  return {
-    bg:     opts.kpiBg     || p.bg,
-    border: opts.kpiBorder || p.border,
-    text:   opts.kpiText   || p.text
-  };
+  return { bg: opts.kpiBg || p.bg, border: opts.kpiBorder || p.border, text: opts.kpiText || p.text };
 }
 
 const DEFAULTS = {
@@ -227,16 +226,19 @@ const OPENING_DEFAULTS = {
   showBestWorst: true,
   metric: "x",
 
-  // thumbs da lista (uniformes)
+  // lista lateral — tamanhos consistentes + autoplay
   listThumbW: 64,
   listThumbH: 44,
+  listRowH: 56,
+  listAuto: true,
+  listSpeed: 24,          // px/s
+  listPauseHover: true,
 };
 
 /* ───────────────── “active” → numberId ───────────────── */
 async function resolveActiveNumberId(owner) {
   if (!owner) return null;
 
-  // 1) BD (overlay_settings.type = 'active-hunt')
   try {
     const { data, error } = await supabase
       .from("overlay_settings")
@@ -253,13 +255,10 @@ async function resolveActiveNumberId(owner) {
       }
     }
   } catch {}
-
-  // 2) Fallback local
   try {
     const ls = localStorage.getItem(`active-hunt:${owner}`);
     if (ls) return Number(ls);
   } catch {}
-
   return null;
 }
 
@@ -268,7 +267,6 @@ async function fetchOverlayOpts({ owner, type, huntId }) {
   if (!owner) return {};
   const cols = ["opts", "settings", "config", "data", "json"];
 
-  // 1) tenta row específica do hunt
   const r1 = await supabase
     .from("overlay_settings")
     .select("*")
@@ -280,7 +278,6 @@ async function fetchOverlayOpts({ owner, type, huntId }) {
     for (const c of cols) if (r1.data[c]) return r1.data[c] || {};
   }
 
-  // 2) fallback “global” (hunt_number_id NULL)
   const r2 = await supabase
     .from("overlay_settings")
     .select("*")
@@ -309,7 +306,7 @@ export default function HuntWidgetPage() {
   const qsOpts = React.useMemo(() => readOptsFromQS(qs), [qs]);
   const mergedOpts = React.useMemo(() => {
     const base = (type === "opening") ? OPENING_DEFAULTS : DEFAULTS;
-    return { ...base, ...dbOpts, ...qsOpts }; // QS só sobrepõe se existir no URL
+    return { ...base, ...dbOpts, ...qsOpts };
   }, [type, dbOpts, qsOpts]);
 
   React.useEffect(() => {
@@ -329,7 +326,7 @@ export default function HuntWidgetPage() {
         if (!Number.isFinite(id) || id <= 0)
           throw new Error("Parâmetro numberId inválido.");
 
-        // 2) hunt (para Start dos KPIs)
+        // 2) hunt
         const { hunt } = await getHuntByNumberId(id);
         if (!alive) return;
         setHunt(hunt || null);
@@ -339,7 +336,7 @@ export default function HuntWidgetPage() {
         if (!alive) return;
         setSlots(Array.isArray(s) ? s : []);
 
-        // 4) opções guardadas na BD (tipo conforme rota)
+        // 4) opções guardadas
         const o = await fetchOverlayOpts({ owner, type: type || "hunt", huntId: id });
         if (!alive) return;
         setDbOpts(o || {});
@@ -349,17 +346,14 @@ export default function HuntWidgetPage() {
         if (alive) setLoading(false);
       }
     })();
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [type, numberId, owner]);
 
   if (loading) {
     return (
       <div style={{
         display: "grid", placeItems: "center", height: "100vh",
-        color: "#e5e7eb", background: "#0b1020",
-        fontFamily: RUBIK,
+        color: "#e5e7eb", background: "#0b1020", fontFamily: RUBIK,
       }}>
         A carregar widget…
       </div>
@@ -371,8 +365,7 @@ export default function HuntWidgetPage() {
       <div style={{
         display: "grid", placeItems: "center", height: "100vh",
         color: "#fca5a5", background: "#0b1020",
-        fontFamily: RUBIK,
-        padding: 16, textAlign: "center",
+        fontFamily: RUBIK, padding: 16, textAlign: "center",
       }}>
         {err}
       </div>
@@ -425,7 +418,7 @@ function HuntOverlayCanvas({ hunt, slots, opts }) {
   const kColors = kpiColors(opts);
   const kpiFont = Math.max(0.6, Math.min(2, Number(opts.kpiFont ?? 1)));
   const kpiSize = Math.max(0.7, Math.min(1.6, Number(opts.kpiSize ?? 1)));
-  const kpiShape = String(opts.kpiShape || "box"); // box | pill | circle
+  const kpiShape = String(opts.kpiShape || "box");
   const pillH   = Math.round(28 * kpiSize);
   const boxH    = Math.round(32 * kpiSize);
   const circleD = Math.round(36 * kpiSize);
@@ -509,7 +502,7 @@ function HuntOverlayCanvas({ hunt, slots, opts }) {
         padding: opts.pad || 0,
         margin: "0 auto",
         background: showBox
-          ? `linear-gradient(135deg, ${opts.panelBgStart || "#0b1020"} 0%, ${(opts.panelBgEnd || "#111827")} 100%)`
+          ? `linear-gradient(135deg, ${bg1} 0%, ${bg2} 100%)`
           : "transparent",
         border: showBox ? `1px solid rgba(255,255,255,.12)` : "none",
         borderRadius: 12,
@@ -539,31 +532,19 @@ function HuntOverlayCanvas({ hunt, slots, opts }) {
           }}
         >
           {slots.slice(0, 16).map((s, i) => (
-            <Card
-              key={s.id}
-              s={s}
-              i={i}
-              width="100%"
-              cardH={opts.cardH || 160}
-              opts={opts}
-            />
+            <Card key={s.id} s={s} i={i} width="100%" cardH={opts.cardH || 160} opts={opts} />
           ))}
         </div>
       ) : (
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: justify,
-            height: "100%",
-            overflow: "hidden",
+            display: "flex", alignItems: "center", justifyContent: justify,
+            height: "100%", overflow: "hidden",
           }}
         >
           <div
             style={{
-              display: "flex",
-              gap,
-              width: "max-content",
+              display: "flex", gap, width: "max-content",
               animation:
                 opts.autoScroll && slots.length > visible
                   ? `marquee ${speedSec}s linear infinite`
@@ -572,12 +553,9 @@ function HuntOverlayCanvas({ hunt, slots, opts }) {
           >
             {[...slots, ...slots].map((s, i) => (
               <Card
-                key={`${s.id}-${i}`}
-                s={s}
-                i={i % slots.length}
-                width={cardW}
-                cardH={opts.cardH || 160}
-                opts={opts}
+                key={`${s.id}-${i}`} s={s} i={i % slots.length}
+                width={Math.max(140, Math.floor((innerW - (visible - 1) * gap) / visible))}
+                cardH={opts.cardH || 160} opts={opts}
               />
             ))}
           </div>
@@ -589,7 +567,7 @@ function HuntOverlayCanvas({ hunt, slots, opts }) {
   );
 }
 
-/* ───────────────── Render do overlay OPENING (revamp) ───────────────── */
+/* ───────────────── Render do overlay OPENING (lista alinhada + auto-scroll) ───────────────── */
 function OpeningOverlayCanvas({ hunt, slots, opts }) {
   const baseW = Number(opts.baseW || 560);
   const baseH = Number(opts.baseH || 320);
@@ -597,12 +575,10 @@ function OpeningOverlayCanvas({ hunt, slots, opts }) {
   const listSide = String(opts.listSide || "left");
   const showBox  = opts.showBox !== false;
 
-  const thumbW = Number(opts.listThumbW || 64); // <<< TAMANHO FIXO
-  const thumbH = Number(opts.listThumbH || 44); // <<< TAMANHO FIXO
-  const listW  = Math.max(thumbW + 44 + 120, 210); // nº + thumb + nome
-
-  const alignMap = { left: "flex-start", center: "center", right: "flex-end" };
-  const justify  = alignMap[String(opts.align || "center")] || "center";
+  const thumbW = Number(opts.listThumbW || 64);
+  const thumbH = Number(opts.listThumbH || 44);
+  const rowH   = Number(opts.listRowH || 56);
+  const listW  = Math.max(thumbW + 44 + 130, 230); // # + thumb + nome
 
   const centerIdx = Math.max(0, Math.floor((visible - 1) / 2));
   const hero = slots.slice(0, visible);
@@ -625,6 +601,37 @@ function OpeningOverlayCanvas({ hunt, slots, opts }) {
   const bg1 = opts.panelBgStart || "#0b1020";
   const bg2 = opts.panelBgEnd   || "#111827";
   const accent = opts.superTagColor || "#22d3ee";
+
+  // hook simples para marquee vertical infinito (duplica conteúdo e move scrollTop)
+  function useAutoVerticalMarquee(ref, { enabled, speed = 24, pauseOnHover = true }) {
+    const paused = React.useRef(false);
+    React.useEffect(() => {
+      const el = ref.current;
+      if (!el || !enabled) return;
+      let raf = 0;
+      let last = performance.now();
+      const step = (t) => {
+        const dt = (t - last) / 1000;
+        last = t;
+        if (!paused.current) {
+          el.scrollTop += speed * dt;
+          const half = el.scrollHeight / 2;
+          if (el.scrollTop >= half) el.scrollTop -= half;
+        }
+        raf = requestAnimationFrame(step);
+      };
+      raf = requestAnimationFrame(step);
+      const onEnter = () => { if (pauseOnHover) paused.current = true; };
+      const onLeave = () => { if (pauseOnHover) paused.current = false; };
+      el.addEventListener("mouseenter", onEnter);
+      el.addEventListener("mouseleave", onLeave);
+      return () => {
+        cancelAnimationFrame(raf);
+        el.removeEventListener("mouseenter", onEnter);
+        el.removeEventListener("mouseleave", onLeave);
+      };
+    }, [ref, enabled, speed, pauseOnHover]);
+  }
 
   const Wrap = ({children}) => (
     <div
@@ -673,120 +680,125 @@ function OpeningOverlayCanvas({ hunt, slots, opts }) {
     return x > 0 ? `${fmtPlain(x, 2)}×` : "—";
   };
 
-  const SideList = () => (
-    <div
-      className="openingSideList"
-      style={{
-        width: listW,
-        maxHeight: baseH - 60,
-        overflow: "auto",
-        background: "rgba(17,24,39,.55)",
-        border: "1px solid rgba(255,255,255,.12)",
-        borderRadius: 12,
-        padding: 8,
-        backdropFilter: "blur(8px)",
-        boxShadow: "0 10px 30px rgba(0,0,0,.35) inset",
-      }}
-    >
-      {slots.map((s, i) => {
-        const active = current && s.id === current.id;
+  // Lista lateral com linhas de altura fixa + auto-scroll
+  function SideList() {
+    const ref = React.useRef(null);
+    const listH = baseH - 60; // altura útil (fora do header)
+    useAutoVerticalMarquee(ref, {
+      enabled: (opts.listAuto !== false) && slots.length * rowH > listH,
+      speed: Number(opts.listSpeed || 24),
+      pauseOnHover: opts.listPauseHover !== false,
+    });
 
-        const numChipBase = {
-          display: "inline-block",
-          minWidth: 36,
-          textAlign: "center",
-          padding: "4px 6px",
-          fontSize: 12,
-          lineHeight: 1,
-          fontWeight: 800,
-          borderRadius: 10,
-          border: "1px solid rgba(255,255,255,.18)",
-          background: "rgba(255,255,255,.10)",
-        };
+    const rows = [...slots, ...slots]; // duplica para loop infinito
+    return (
+      <div
+        className="openingSideList"
+        ref={ref}
+        style={{
+          width: listW,
+          height: listH,
+          overflow: "hidden",
+          background: "rgba(17,24,39,.55)",
+          border: "1px solid rgba(255,255,255,.12)",
+          borderRadius: 12,
+          padding: 8,
+          backdropFilter: "blur(8px)",
+          boxShadow: "0 10px 30px rgba(0,0,0,.35) inset",
+        }}
+      >
+        <div>
+          {rows.map((s, n) => {
+            const i = n % slots.length;
+            const active = current && s.id === current.id;
 
-        return (
-          <div
-            key={s.id}
-            title={s.name || ""}
-            style={{
-              display: "grid",
-              gridTemplateColumns: `48px ${thumbW}px 1fr auto`,
-              alignItems: "center",
-              columnGap: 10,
-              padding: 8,
-              marginBottom: 6,
-              borderRadius: 12,
-              border: active ? `1px solid ${anyToRgba(accent,.65)}` : "1px solid rgba(255,255,255,.08)",
-              background: active ? anyToRgba(accent,.12) : "rgba(255,255,255,.04)",
-              transition: "transform .15s ease, background .15s ease, border-color .15s ease",
-            }}
-          >
-            {/* # com destaque MAIOR */}
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <span
+            return (
+              <div
+                key={`${s.id}-${n}`}
+                title={s.name || ""}
                 style={{
-                  ...numChipBase,
-                  background: active ? anyToRgba(accent,.22) : numChipBase.background,
-                  border: active ? `1px solid ${anyToRgba(accent,.7)}` : numChipBase.border,
-                  boxShadow: active ? `0 0 0 2px ${anyToRgba(accent,.15)}` : "none",
+                  height: rowH,
+                  display: "grid",
+                  gridTemplateColumns: `42px ${thumbW}px 1fr auto`,
+                  alignItems: "center",
+                  columnGap: 10,
+                  padding: "6px 8px",
+                  marginBottom: 6,
+                  borderRadius: 12,
+                  border: active ? `1px solid ${anyToRgba(accent,.65)}` : "1px solid rgba(255,255,255,.08)",
+                  background: active ? anyToRgba(accent,.12) : "rgba(255,255,255,.04)",
                 }}
               >
-                #{i+1}
-              </span>
-            </div>
+                {/* # circular com destaque */}
+                <div style={{ display: "flex", justifyContent: "center" }}>
+                  <div
+                    style={{
+                      width: 28, height: 28, borderRadius: 999,
+                      display: "grid", placeItems: "center",
+                      fontSize: 12, fontWeight: 900, letterSpacing: .3,
+                      background: active ? anyToRgba(accent,.22) : "rgba(255,255,255,.10)",
+                      border: active ? `1px solid ${anyToRgba(accent,.75)}` : "1px solid rgba(255,255,255,.18)",
+                      boxShadow: active ? `0 0 0 2px ${anyToRgba(accent,.15)}` : "none",
+                    }}
+                  >
+                    #{i + 1}
+                  </div>
+                </div>
 
-            {/* THUMB UNIFORME */}
-            <div
-              style={{
-                width: thumbW,
-                height: thumbH,
-                borderRadius: 10,
-                overflow: "hidden",
-                border: "1px solid rgba(255,255,255,.18)",
-                background: "rgba(255,255,255,.08)",
-              }}
-            >
-              {s.thumbnail
-                ? <img src={s.thumbnail} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                : null}
-            </div>
+                {/* THUMB UNIFORME */}
+                <div
+                  style={{
+                    width: thumbW, height: thumbH,
+                    borderRadius: 10, overflow: "hidden",
+                    border: "1px solid rgba(255,255,255,.18)",
+                    background: "rgba(255,255,255,.08)",
+                  }}
+                >
+                  {s.thumbnail
+                    ? <img src={s.thumbnail} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    : null}
+                </div>
 
-            {/* NOME COM DESTAQUE MAIOR */}
-            <div
-              style={{
-                fontSize: 13.5,
-                fontWeight: 800,
-                alignSelf: "stretch",
-                display: "flex",
-                alignItems: "center",
-                borderRadius: 10,
-                padding: "6px 10px",
-                background: active
-                  ? `linear-gradient(90deg, ${anyToRgba(accent,.26)}, ${anyToRgba(accent,.08)})`
-                  : "rgba(255,255,255,.06)",
-                boxShadow: active ? "0 6px 18px rgba(0,0,0,.35)" : "none",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              {s.name}
-            </div>
+                {/* NOME com pill e peso maior */}
+                <div
+                  style={{
+                    fontSize: 14.5,
+                    fontWeight: 900,
+                    alignSelf: "stretch",
+                    display: "flex",
+                    alignItems: "center",
+                    borderRadius: 10,
+                    padding: "6px 10px",
+                    background: active
+                      ? `linear-gradient(90deg, ${anyToRgba(accent,.26)}, ${anyToRgba(accent,.08)})`
+                      : "rgba(255,255,255,.06)",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    letterSpacing: .2
+                  }}
+                >
+                  {s.name}
+                </div>
 
-            {/* métrica */}
-            <div style={{ fontSize: 11, opacity: .9, paddingLeft: 6 }}>{metricValue(s)}</div>
-          </div>
-        );
-      })}
-    </div>
-  );
+                {/* métrica */}
+                <div style={{ fontSize: 11, opacity: .9, paddingLeft: 6 }}>
+                  {metricValue(s)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   const EdgeFade = ({side}) => (
     <div style={{
       position: "absolute",
       top: 60,
       bottom: 16,
-      [side]: listW + 20, // largura da lista + gap
+      [side]: listW + 20,
       width: 24,
       pointerEvents: "none",
       background: side === "left"
@@ -890,11 +902,9 @@ function OpeningOverlayCanvas({ hunt, slots, opts }) {
       <div style={{ display: "flex", gap: 12, padding: "0 12px", height: `calc(100% - 46px)` }}>
         {listSide === "left" && <SideList />}
 
-        <div style={{ position: "relative", flex: 1, display: "flex", alignItems: "center", justifyContent: justify, overflow: "hidden" }}>
-          {/* fades laterais para dar depth */}
+        <div style={{ position: "relative", flex: 1, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
           <EdgeFade side="left" />
           <EdgeFade side="right" />
-
           <div style={{ display: "flex", gap: 24 }}>
             {hero.map((s, i) => <HeroCard key={s.id} s={s} i={i} />)}
           </div>
@@ -912,6 +922,7 @@ function Card({ s, i, width, cardH, opts }) {
     s?.is_super ?? s?.super ?? s?._raw?.is_super ?? s?._raw?.super
   );
   const glowColor = opts.superGlowColor || "#e879f9";
+  theGlowAlpha: 0;
   const glowAlpha = Math.max(0, Math.min(1, Number(opts.superGlowStrength ?? 0.6)));
   const borderCol = hexToRgba(glowColor, 0.45 + glowAlpha * 0.35);
   const shadowSoft = `0 0 ${18 + 30 * glowAlpha}px ${anyToRgba(glowColor, 0.35 * glowAlpha)}, 0 12px 28px rgba(0,0,0,.35)`;
@@ -948,13 +959,7 @@ function Card({ s, i, width, cardH, opts }) {
           }}
         />
       ) : (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background: "rgba(255,255,255,.08)",
-          }}
-        />
+        <div style={{ position: "absolute", inset: 0, background: "rgba(255,255,255,.08)" }} />
       )}
 
       {isSuper && opts.superGlow !== false && (
@@ -980,22 +985,8 @@ function Card({ s, i, width, cardH, opts }) {
       )}
 
       {/* gradientes topo/fundo */}
-      <div
-        style={{
-          position: "absolute",
-          inset: "0 0 auto 0",
-          height: 80,
-          background: "linear-gradient(to bottom, rgba(0,0,0,.65), transparent)",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          inset: "auto 0 0 0",
-          height: 96,
-          background: "linear-gradient(to top, rgba(0,0,0,.65), transparent)",
-        }}
-      />
+      <div style={{ position: "absolute", inset: "0 0 auto 0", height: 80, background: "linear-gradient(to bottom, rgba(0,0,0,.65), transparent)" }} />
+      <div style={{ position: "absolute", inset: "auto 0 0 0", height: 96, background: "linear-gradient(to top, rgba(0,0,0,.65), transparent)" }} />
 
       {/* badges # / bet */}
       <div
@@ -1076,36 +1067,12 @@ function Card({ s, i, width, cardH, opts }) {
               boxShadow: "0 10px 30px rgba(0,0,0,.45)",
             }}
           >
-            <div
-              style={{
-                fontWeight: 600,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
+            <div style={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {s?.name || "—"}
             </div>
             {opts.betStyle === "inline" && (
-              <div
-                style={{
-                  marginTop: 2,
-                  fontSize: 11,
-                  opacity: 0.85,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <span
-                  style={{
-                    display: "inline-block",
-                    width: 6,
-                    height: 6,
-                    borderRadius: 999,
-                    background: "rgba(255,255,255,.7)",
-                  }}
-                />
+              <div style={{ marginTop: 2, fontSize: 11, opacity: 0.85, display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: 999, background: "rgba(255,255,255,.7)" }} />
                 {s?.bet_size != null ? fmtPlain(toNum(s.bet_size), 2) : "—"}
               </div>
             )}
@@ -1114,22 +1081,12 @@ function Card({ s, i, width, cardH, opts }) {
       )}
 
       {showName && captionIsFloat && (
-        <div
-          style={{
-            position: "absolute",
-            left: 8,
-            right: 8,
-            bottom: 8,
-            pointerEvents: "none",
-          }}
-        >
+        <div style={{ position: "absolute", left: 8, right: 8, bottom: 8, pointerEvents: "none" }}>
           <div style={{ fontWeight: 600, textShadow: "0 2px 6px rgba(0,0,0,.8)" }}>
             {s?.name || "—"}
           </div>
           {opts.betStyle === "inline" && (
-            <div
-              style={{ fontSize: 11, opacity: 0.9, textShadow: "0 2px 6px rgba(0,0,0,.8)" }}
-            >
+            <div style={{ fontSize: 11, opacity: 0.9, textShadow: "0 2px 6px rgba(0,0,0,.8)" }}>
               {s?.bet_size != null ? fmtPlain(toNum(s.bet_size), 2) : "—"}
             </div>
           )}
