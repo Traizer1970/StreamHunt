@@ -1517,8 +1517,8 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 <div className="border-r border-white/10 bg-zinc-950/70 overflow-auto w-full md:w-[360px] lg:w-[420px] xl:w-[480px] text-white min-w-0">
   <div className="p-4 space-y-4">
     {/* CANVAS */}
-    <Section
-      title="Canvas / OBS"
+    {type === "hunt" && (
+  <Section title="Canvas / OBS"
       right={
         <Button
           variant="outline"
@@ -1579,7 +1579,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 
       <div className="text-[11px] opacity-60">Dica: em OBS usa o mesmo Width/Height do browser source para evitar cortes.</div>
     </Section>
-
+)}
     {/* Presets rápidos (só hunt) */}
    {type === "hunt" && (
   <Section title="Layout presets">
@@ -1720,8 +1720,8 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
     )}
 
     {/* KPIs */}
-    <Section
-      title="KPIs (Start • B/E • #Bonus)"
+    {type === "hunt" && (
+  <Section title="KPIs (Start • B/E • #Bonus)"
       right={
         <Button
           variant="outline"
@@ -1879,10 +1879,10 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 </div>
 
     </Section>
-
+)}
     {/* CORES & EFEITOS */}
-<Section
-   title="Colors & Effects"
+{type === "hunt" && (
+  <Section title="Colors & Effects"
    right={
      <Button
        variant="outline"
@@ -2002,7 +2002,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
     </>
   )}
 </Section>
-
+)}
 
     {/* OPENING header toggles (quando não é hunt) */}
 {type !== "hunt" && (
