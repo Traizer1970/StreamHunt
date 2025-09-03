@@ -46,6 +46,7 @@ function parseHash() {
   const [path, query] = raw.split("?");
   let parts = (path || "").split("/").filter(Boolean);
 
+  // compat
   if (parts[0] === "hunt-widget") parts = parts.slice(1);
   if (parts[0] === "overlay") parts = parts.slice(1);
 
@@ -126,7 +127,7 @@ function readOptsFromQS(qs) {
   // OPENING extras
   if (qs.has("title")) out.showTitle = qs.get("title") !== "0";
   if (qs.has("current")) out.showCurrent = qs.get("current") !== "0";
-  const ls = getStr("listside"); if (ls) out.listSide = ls;       // left | right
+  const ls = getStr("listside"); if (ls) out.listSide = ls;     // left | right
   if (qs.has("bestworst")) out.showBestWorst = qs.get("bestworst") !== "0";
   const metric = getStr("metric"); if (metric) out.metric = metric; // "x" | "payout"
   if (qs.has("shine")) out.shine = qs.get("shine") !== "0";
@@ -220,8 +221,8 @@ const OPENING_DEFAULTS = {
   showCurrent: true,
 
   // layout opening
-  visible: 5,            // nº de cartas grandes
-  listSide: "left",      // "left" | "right"
+  visible: 5,
+  listSide: "left",
   showBox: true,
   showBestWorst: true,
   metric: "x",
@@ -308,6 +309,24 @@ export default function HuntWidgetPage() {
     const base = (type === "opening") ? OPENING_DEFAULTS : DEFAULTS;
     return { ...base, ...dbOpts, ...qsOpts };
   }, [type, dbOpts, qsOpts]);
+
+  // 👉 Quando em "opening", esconder todas as boxes do Designer excepto a última.
+  React.useEffect(() => {
+    if (type !== "opening") return;
+    const id = "only-opening-designer-box";
+    if (document.getElementById(id)) return;
+    const style = document.createElement("style");
+    style.id = id;
+    style.textContent = `
+      /* Mostra apenas a ÚLTIMA box no sidebar (Layout Opening) quando preview = opening */
+      aside > *:not(:last-child) { display: none !important; }
+      /* variantes comuns de containers */
+      .designer aside > *:not(:last-child) { display: none !important; }
+      [class*="sidebar"] > *:not(:last-child) { display: none !important; }
+    `;
+    document.head.appendChild(style);
+    return () => { style.remove(); };
+  }, [type]);
 
   React.useEffect(() => {
     let alive = true;
@@ -522,12 +541,12 @@ function HuntOverlayCanvas({ hunt, slots, opts }) {
       {opts.kpiPos === "top" && <KPIsInline />}
       {opts.kpiPos === "side" && <KPIsSide />}
 
-      {layout === "grid" ? (
+      {String(opts.layout || "carousel") === "grid" ? (
         <div
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(8,minmax(0,1fr))",
-            gap,
+            gap: 12,
             height: "100%",
           }}
         >
@@ -538,23 +557,23 @@ function HuntOverlayCanvas({ hunt, slots, opts }) {
       ) : (
         <div
           style={{
-            display: "flex", alignItems: "center", justifyContent: justify,
+            display: "flex", alignItems: "center", justifyContent: "center",
             height: "100%", overflow: "hidden",
           }}
         >
           <div
             style={{
-              display: "flex", gap, width: "max-content",
+              display: "flex", gap: 12, width: "max-content",
               animation:
-                opts.autoScroll && slots.length > visible
-                  ? `marquee ${speedSec}s linear infinite`
+                opts.autoScroll && slots.length > 3
+                  ? `marquee ${Math.max(5, Math.min(180, Number(opts.speedSec || 30)))}s linear infinite`
                   : undefined,
             }}
           >
             {[...slots, ...slots].map((s, i) => (
               <Card
                 key={`${s.id}-${i}`} s={s} i={i % slots.length}
-                width={Math.max(140, Math.floor((innerW - (visible - 1) * gap) / visible))}
+                width={Math.max(140, Math.floor((baseW - (opts.pad||0)*2 - (3 - 1) * 12) / 3))}
                 cardH={opts.cardH || 160} opts={opts}
               />
             ))}
@@ -567,7 +586,7 @@ function HuntOverlayCanvas({ hunt, slots, opts }) {
   );
 }
 
-/* ───────────────── Render do overlay OPENING (lista alinhada + auto-scroll) ───────────────── */
+/* ───────────────── Render do overlay OPENING ───────────────── */
 function OpeningOverlayCanvas({ hunt, slots, opts }) {
   const baseW = Number(opts.baseW || 560);
   const baseH = Number(opts.baseH || 320);
@@ -602,7 +621,7 @@ function OpeningOverlayCanvas({ hunt, slots, opts }) {
   const bg2 = opts.panelBgEnd   || "#111827";
   const accent = opts.superTagColor || "#22d3ee";
 
-  // hook simples para marquee vertical infinito (duplica conteúdo e move scrollTop)
+  // auto-marquee vertical
   function useAutoVerticalMarquee(ref, { enabled, speed = 24, pauseOnHover = true }) {
     const paused = React.useRef(false);
     React.useEffect(() => {
@@ -680,10 +699,10 @@ function OpeningOverlayCanvas({ hunt, slots, opts }) {
     return x > 0 ? `${fmtPlain(x, 2)}×` : "—";
   };
 
-  // Lista lateral com linhas de altura fixa + auto-scroll
+  // Lista lateral com linhas fixas + auto-scroll
   function SideList() {
     const ref = React.useRef(null);
-    const listH = baseH - 60; // altura útil (fora do header)
+    const listH = baseH - 60;
     useAutoVerticalMarquee(ref, {
       enabled: (opts.listAuto !== false) && slots.length * rowH > listH,
       speed: Number(opts.listSpeed || 24),
@@ -729,7 +748,7 @@ function OpeningOverlayCanvas({ hunt, slots, opts }) {
                   background: active ? anyToRgba(accent,.12) : "rgba(255,255,255,.04)",
                 }}
               >
-                {/* # circular com destaque */}
+                {/* # circular */}
                 <div style={{ display: "flex", justifyContent: "center" }}>
                   <div
                     style={{
@@ -745,7 +764,7 @@ function OpeningOverlayCanvas({ hunt, slots, opts }) {
                   </div>
                 </div>
 
-                {/* THUMB UNIFORME */}
+                {/* thumb uniforme */}
                 <div
                   style={{
                     width: thumbW, height: thumbH,
@@ -759,7 +778,7 @@ function OpeningOverlayCanvas({ hunt, slots, opts }) {
                     : null}
                 </div>
 
-                {/* NOME com pill e peso maior */}
+                {/* nome em pill */}
                 <div
                   style={{
                     fontSize: 14.5,
@@ -810,9 +829,10 @@ function OpeningOverlayCanvas({ hunt, slots, opts }) {
   );
 
   const HeroCard = ({s, i}) => {
-    const isCenter = i === centerIdx;
+    const centerIdxLocal = centerIdx;
+    const isCenter = i === centerIdxLocal;
     const scale = isCenter ? 1.0 : 0.92;
-    const rotate = isCenter ? 0 : (i < centerIdx ? -2 : 2);
+    const rotate = isCenter ? 0 : (i < centerIdxLocal ? -2 : 2);
     return (
       <div
         title={s.name}
@@ -922,7 +942,6 @@ function Card({ s, i, width, cardH, opts }) {
     s?.is_super ?? s?.super ?? s?._raw?.is_super ?? s?._raw?.super
   );
   const glowColor = opts.superGlowColor || "#e879f9";
-  theGlowAlpha: 0;
   const glowAlpha = Math.max(0, Math.min(1, Number(opts.superGlowStrength ?? 0.6)));
   const borderCol = hexToRgba(glowColor, 0.45 + glowAlpha * 0.35);
   const shadowSoft = `0 0 ${18 + 30 * glowAlpha}px ${anyToRgba(glowColor, 0.35 * glowAlpha)}, 0 12px 28px rgba(0,0,0,.35)`;
