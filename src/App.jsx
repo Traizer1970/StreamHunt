@@ -1192,7 +1192,6 @@ if (isOverlay) {
         {route === "terms" && <Terms />}
         {route === "tournaments" && <TournamentsPage />}
         {route === "battles" && <BattlesPage />}
-        {route === "hunts" && <BattlesPage />}
         
 
         {!(
