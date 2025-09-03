@@ -809,6 +809,7 @@ const DEFAULT_OPENING_OVERLAY = {
   metric: "x",             // "x" (multiplicador) | "payout"
   listAutoScroll: true,
   listSpeedSec: 18,
+  showTopChips: true,
 };
 
 /* ───────────────────────── URLs ───────────────────────── */
@@ -859,27 +860,24 @@ function buildHuntOverlayUrl(base, huntNumberId, o) {
   qs.set("bh", String(o.baseH || 280));
   return `${base}#/hunt-widget/hunt/${huntNumberId}?${qs.toString()}`;
 }
-function buildOpeningOverlayUrl(base, huntNumberId, opts) {
+// hunt-detail.jsx
+function buildOpeningOverlayUrl(base, numberId, opts = {}) {
   const qs = new URLSearchParams();
-  qs.set("design", "opening");
-  if (opts.shine) qs.set("shine", "1");
-  if (opts.pulse) qs.set("pulse", "1");
-  qs.set("align", String(opts.align || "center"));
-  qs.set("pad", String(opts.pad || 0));
-  qs.set("bw", String(opts.baseW || 560));
-  qs.set("bh", String(opts.baseH || 320));
-  qs.set("title", opts.showTitle === false ? "0" : "1");
-  qs.set("current", opts.showCurrent === false ? "0" : "1");
+  if (opts.listSide)      qs.set("infoside", opts.listSide === "right" ? "right" : "left");
+  if (opts.visible)       qs.set("visible", String(opts.visible));
+  if (opts.showBox !== undefined)      qs.set("box", opts.showBox ? "1" : "0");
+  if (opts.showBestWorst !== undefined)qs.set("bestworst", opts.showBestWorst ? "1" : "0");
+  if (opts.bestWorstMetric)            qs.set("metric", String(opts.bestWorstMetric));
+  // novos controlos da lista à esquerda
+  if (opts.autoScroll !== undefined)   qs.set("scroll", opts.autoScroll ? "1" : "0");
+  if (opts.speedSec)                   qs.set("speed", String(opts.speedSec));
+  // (opcionais) ocultar chips do topo
+  if (opts.showTitle !== undefined)    qs.set("title",  opts.showTitle   ? "1" : "0");
+  if (opts.showCurrent !== undefined)  qs.set("current",opts.showCurrent ? "1" : "0");
 
-  // NOVO
-  qs.set("visible", String(opts.visible || 5));
-  qs.set("listside", String(opts.listSide || "left"));
-  qs.set("box", opts.showBox ? "1" : "0");
-  qs.set("bestworst", opts.showBestWorst ? "1" : "0");
-  qs.set("metric", String(opts.metric || "x"));
-
-  return `${base}#/hunt-widget/opening/${huntNumberId}?${qs.toString()}`;
+  return `${base}#/overlay/opening/${encodeURIComponent(numberId)}?${qs.toString()}`;
 }
+
 
 /* ───────────────────────── Hunt Overlay Preview ───────────────────────── */
 function HuntOverlayPreview({ hunt, slots, opts }) {
@@ -2047,45 +2045,17 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
     </div>
 
     <div className="flex flex-wrap gap-2">
-      <Toggle
-        label="Caixa de fundo"
-        checked={!!opts.showBox}
-        onChange={(v)=>setOpts(o=>({...o, showBox: !!v}))}
-      />
-      <Toggle
-        label="Mostrar Best/Worst"
-        checked={!!opts.showBestWorst}
-        onChange={(v)=>setOpts(o=>({...o, showBestWorst: !!v}))}
-      />
-
-      {/* 👇 NOVO: rolar automaticamente a lista da esquerda */}
-      <Toggle
-        label="Rolar nomes (lista esquerda)"
-        checked={opts.listAutoScroll !== false}
-        onChange={(v)=>setOpts(o=>({...o, listAutoScroll: !!v}))}
-      />
+      <Toggle label="Caixa de fundo"
+              checked={!!opts.showBox}
+              onChange={(v)=>setOpts(o=>({...o, showBox: !!v}))}/>
+      <Toggle label="Mostrar Best/Worst"
+              checked={!!opts.showBestWorst}
+              onChange={(v)=>setOpts(o=>({...o, showBestWorst: !!v}))}/>
+      {/* NOVO: mostrar/ocultar os chips do topo */}
+      <Toggle label="Mostrar cabeçalho (chips)"
+              checked={opts.showTopChips !== false}
+              onChange={(v)=>setOpts(o=>({...o, showTopChips: !!v}))}/>
     </div>
-
-    {/* 👇 NOVO: velocidade da rolagem */}
-    <Field label="Velocidade da rolagem (seg/loop)">
-      <div className="flex items-center gap-3">
-        <input
-          type="range"
-          min={4}
-          max={120}
-          step={1}
-          value={Number(opts.listSpeedSec ?? 18)}
-          onChange={(e)=>{
-            const v = Math.max(4, Math.min(120, Number(e.target.value) || 18));
-            setOpts(o=>({...o, listSpeedSec: v}));
-          }}
-          className="flex-1"
-        />
-        <span className="tabular-nums w-10 text-right">
-          {Number(opts.listSpeedSec ?? 18)}
-        </span>
-      </div>
-    </Field>
 
     <Field label="Métrica para Best/Worst">
       <Segmented
@@ -2099,6 +2069,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
     </Field>
   </Section>
 )}
+
 
   </div>
 </div>
