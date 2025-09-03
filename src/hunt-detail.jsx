@@ -381,26 +381,6 @@ function Segmented({ value, onChange, options, className = "" }) {
     </div>
   );
 }
-// exemplo: <Input className="h-9 pretty-input ..." ... />
-<style>{`
-.pretty-input {
-  background: rgba(24,24,27,.65);
-  border: 1px solid rgba(255,255,255,.10);
-  color: white;
-  border-radius: 12px;
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.06),
-    0 8px 24px rgba(0,0,0,.35);
-}
-.pretty-input:focus {
-  outline: none;
-  box-shadow:
-    0 0 0 2px rgba(56,189,248,.30),
-    inset 0 1px 0 rgba(255,255,255,.08),
-    0 8px 24px rgba(0,0,0,.35);
-  border-color: rgba(56,189,248,.35);
-}
-`}</style>
 
 // switches estilizados para aquelas opções booleanas
 // substitui o Toggle atual por este
