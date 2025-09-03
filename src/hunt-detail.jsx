@@ -1011,6 +1011,27 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     );
   }
 
+// ---- NiceSlider (global) ----
+function NiceSlider({ min=0, max=100, step=1, value, onChange, ariaLabel }) {
+  const pct = Math.max(0, Math.min(100, ((Number(value ?? 0) - min) / (max - min)) * 100));
+  return (
+    <div className="py-1">
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        aria-label={ariaLabel}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="nice-slider w-full h-8 appearance-none bg-transparent"
+        style={{ ["--pct"]: `${pct}%` }}
+      />
+    </div>
+  );
+}
+
+
   function KpiBadge({ shape, label, value, Icon }) {
     if (shape === "circle") {
       const circleD = Math.round(36 * (opts.kpiSize ?? 1));
@@ -1567,89 +1588,101 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         </Field>
       </div>
 
-{/* ───── KPIs (Start • B/E • #Bonus) — trecho corrigido ───── */}
-<div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-  <Field label="Tamanho (0.7–1.6)">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+        <Field label="Tamanho (0.7–1.6)">
+
+ <Field label="Tamanho (0.7–1.6)">
     <NiceSlider
-      min={0.7}
-      max={1.6}
-      step={0.05}
+      min={0.7} max={1.6} step={0.05}
       value={opts.kpiSize}
-      onChange={(v) => setOpts((o) => ({ ...o, kpiSize: v }))}
+      onChange={(v) => setOpts(o => ({ ...o, kpiSize: v }))}
       ariaLabel="Tamanho KPI"
     />
   </Field>
 
-  <Field label="Forma">
-    <Segmented
-      value={opts.kpiShape}
-      onChange={(v) => setOpts((o) => ({ ...o, kpiShape: v }))}
-      options={[
-        { value: "box", label: "Box" },
-        { value: "pill", label: "Pill" },
-        { value: "circle", label: "Circle" },
-      ]}
-    />
-  </Field>
-</div>
+{/* Font KPI (0.8–1.6) */}
+<Field label="Font KPI (0.8–1.6)" hint="Só ajusta a letra">
+  <NiceSlider
+    min={0.8} max={1.6} step={0.05}
+    value={opts.kpiFont}
+    onChange={(v) => setOpts(o => ({ ...o, kpiFont: v }))}
+    ariaLabel="Fonte KPI"
+  />
+</Field>
 
-<div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-  <Field label="Arredondar valores">
-    <Segmented
-      value={String(opts.kpiRound)}
-      onChange={(v) => setOpts((o) => ({ ...o, kpiRound: Number(v) }))}
-      options={[
-        { value: "0", label: "0" },
-        { value: "1", label: "0.0" },
-        { value: "2", label: "0.00" },
-      ]}
-    />
-  </Field>
+{/* (opcional) Força do glow do SUPER */}
+<Field label="Glow strength">
+  <NiceSlider
+    min={0} max={1} step={0.05}
+    value={opts.superGlowStrength ?? 0.6}
+    onChange={(v) => setOpts(o => ({ ...o, superGlowStrength: v }))}
+    ariaLabel="Força do brilho Super"
+  />
+</Field>
 
-  <Field label="Font KPI (0.8–1.6)" hint="Só ajusta a letra">
-    <NiceSlider
-      min={0.8}
-      max={1.6}
-      step={0.05}
-      value={opts.kpiFont}
-      onChange={(v) => setOpts((o) => ({ ...o, kpiFont: v }))}
-      ariaLabel="Fonte KPI"
-    />
-  </Field>
-</div>
+        </Field>
+        <Field label="Forma">
+          <Segmented
+            value={opts.kpiShape}
+            onChange={(v) => setOpts(o => ({ ...o, kpiShape: v }))}
+            options={[{value:"box",label:"Box"},{value:"pill",label:"Pill"},{value:"circle",label:"Circle"}]}
+          />
+        </Field>
+      </div>
 
-<div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
-  <Field label="Ícone (ms, círculo)">
-    <Input
-      type="number"
-      value={opts.kpiAltIconMs}
-      onChange={(e) =>
-        setOpts((o) => ({
-          ...o,
-          kpiAltIconMs: Math.max(0, Number(e.target.value) || 0),
-        }))
-      }
-      className="h-9 bg-zinc-900 border-white/10 text-white"
-    />
-  </Field>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+        <Field label="Arredondar valores">
+          <Segmented
+            value={String(opts.kpiRound)}
+            onChange={(v) => setOpts(o => ({ ...o, kpiRound: Number(v) }))}
+            options={[{value:"0",label:"0"},{value:"1",label:"0.0"},{value:"2",label:"0.00"}]}
+          />
+        </Field>
+        <Field label="Font KPI (0.8–1.6)" hint="Só ajusta a letra">
+          {/* Tamanho (0.7–1.6) */}
+<Field label="Tamanho (0.7–1.6)">
+  <NiceSlider
+    min={0.7} max={1.6} step={0.05}
+    value={opts.kpiSize}
+    onChange={(v) => setOpts(o => ({ ...o, kpiSize: v }))}
+    ariaLabel="Tamanho KPI"
+  />
+</Field>
 
-  <Field label="Valor (ms, círculo)">
-    <Input
-      type="number"
-      value={opts.kpiAltValueMs}
-      onChange={(e) =>
-        setOpts((o) => ({
-          ...o,
-          kpiAltValueMs: Math.max(0, Number(e.target.value) || 0),
-        }))
-      }
-      className="h-9 bg-zinc-900 border-white/10 text-white"
-    />
-  </Field>
-</div>
+{/* Font KPI (0.8–1.6) */}
+<Field label="Font KPI (0.8–1.6)" hint="Só ajusta a letra">
+  <NiceSlider
+    min={0.8} max={1.6} step={0.05}
+    value={opts.kpiFont}
+    onChange={(v) => setOpts(o => ({ ...o, kpiFont: v }))}
+    ariaLabel="Fonte KPI"
+  />
+</Field>
 
-{/* Cores KPI */}
-<div className="mt-2">
+{/* (opcional) Força do glow do SUPER */}
+<Field label="Glow strength">
+  <NiceSlider
+    min={0} max={1} step={0.05}
+    value={opts.superGlowStrength ?? 0.6}
+    onChange={(v) => setOpts(o => ({ ...o, superGlowStrength: v }))}
+    ariaLabel="Força do brilho Super"
+  />
+</Field>
+
+        </Field>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
+        <Field label="Ícone (ms, círculo)">
+          <Input type="number" value={opts.kpiAltIconMs} onChange={(e)=>setOpts(o=>({...o,kpiAltIconMs:Math.max(0,Number(e.target.value)||0)}))} className="h-9 bg-zinc-900 border-white/10 text-white"/>
+        </Field>
+        <Field label="Valor (ms, círculo)">
+          <Input type="number" value={opts.kpiAltValueMs} onChange={(e)=>setOpts(o=>({...o,kpiAltValueMs:Math.max(0,Number(e.target.value)||0)}))} className="h-9 bg-zinc-900 border-white/10 text-white"/>
+        </Field>
+      </div>
+
+      {/* Cores KPI */}
+      <div className="mt-2">
   <div className="text-xs opacity-70 mb-1">KPI color preset</div>
 
   <KpiPresetSwatches
@@ -1677,7 +1710,6 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
       />
     </div>
-
     <div>
       <div className="text-xs opacity-70 mb-1">Border (override)</div>
       <Input
@@ -1688,7 +1720,6 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         className="h-9 rounded-xl bg-zinc-900 border-white/10 text-white"
       />
     </div>
-
     <div>
       <div className="text-xs opacity-70 mb-1">Text (override)</div>
       <Input
@@ -1706,41 +1737,42 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
   </div>
 </div>
 
-</Section>
+    </Section>
 
-{/* CORES & EFEITOS */}
+    {/* CORES & EFEITOS */}
 <Section
-  title="Colors & Effects"
-  right={
-    <Button
-      variant="outline"
-      className="h-8 px-2"
-      onClick={() =>
-        setOpts((o) => ({
-          ...o,
-          panelBgStart: "#0b1020",
-          panelBgEnd: "#111827",
-          panelBorder: "rgba(255,255,255,.12)",
-          textColor: "#e5e7eb",
-          subtextColor: "#9ca3af",
-          accentColor: "#fb7185",
-          chipBg: "rgba(255,255,255,.08)",
-        }))
-      }
-    >
-      Reset
-    </Button>
-  }
->
+   title="Colors & Effects"
+   right={
+     <Button
+       variant="outline"
+       className="h-8 px-2"
+       onClick={() =>
+         setOpts(o => ({
+           ...o,
+           panelBgStart: "#0b1020",
+           panelBgEnd: "#111827",
+           panelBorder: "rgba(255,255,255,.12)",
+           textColor: "#e5e7eb",
+           subtextColor: "#9ca3af",
+           accentColor: "#fb7185",
+           chipBg: "rgba(255,255,255,.08)",
+         }))
+       }
+     >
+       Reset
+     </Button>
+   }
+ >
   {/* Swatches de gradiente (nome só no hover) */}
   <Field label="Panel gradient">
-    <PanelPresetSwatches
-      value={[opts.panelBgStart, opts.panelBgEnd]}
-      onChange={([start, end]) =>
-        setOpts((o) => ({ ...o, panelBgStart: start, panelBgEnd: end }))
-      }
-    />
-  </Field>
+  <PanelPresetSwatches
+    value={[opts.panelBgStart, opts.panelBgEnd]}
+    onChange={([start, end]) =>
+      setOpts(o => ({ ...o, panelBgStart: start, panelBgEnd: end }))
+    }
+  />
+</Field>
+
 
   {/* Background start/end — inputs com swatch */}
   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
@@ -1763,7 +1795,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
   <ColorField
     label="Panel/Line border"
     value={opts.panelBorder ?? ""}
-    onChange={(v) => setOpts((o) => ({ ...o, panelBorder: v }))}
+    onChange={(v) => setOpts(o => ({ ...o, panelBorder: v }))}
     placeholder="rgba(255,255,255,.12) or #hex"
   />
 
@@ -1771,12 +1803,12 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
     <ColorField
       label="Text"
       value={opts.textColor ?? ""}
-      onChange={(v) => setOpts((o) => ({ ...o, textColor: v }))}
+      onChange={(v) => setOpts(o => ({ ...o, textColor: v }))}
     />
     <ColorField
       label="Subtext"
       value={opts.subtextColor ?? ""}
-      onChange={(v) => setOpts((o) => ({ ...o, subtextColor: v }))}
+      onChange={(v) => setOpts(o => ({ ...o, subtextColor: v }))}
     />
   </div>
 
@@ -1784,17 +1816,17 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
     <ColorField
       label="Accent"
       value={opts.accentColor ?? ""}
-      onChange={(v) => setOpts((o) => ({ ...o, accentColor: v }))}
+      onChange={(v) => setOpts(o => ({ ...o, accentColor: v }))}
     />
     <ColorField
       label="Chip bg"
       value={opts.chipBg ?? ""}
-      onChange={(v) => setOpts((o) => ({ ...o, chipBg: v }))}
+      onChange={(v) => setOpts(o => ({ ...o, chipBg: v }))}
       placeholder="rgba(...) or #hex"
     />
   </div>
 
-  {/* Super bonus */}
+  {/* Super (mantém, agora com ColorField estilizado) */}
   {type === "hunt" && (
     <>
       <div className="text-xs opacity-70 mt-2">Super bonus</div>
@@ -1802,7 +1834,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         <ColorField
           label="Glow color"
           value={opts.superGlowColor ?? ""}
-          onChange={(v) => setOpts((o) => ({ ...o, superGlowColor: v }))}
+          onChange={(v) => setOpts(o => ({ ...o, superGlowColor: v }))}
         />
         <Field label="Glow strength">
           <input
@@ -1811,12 +1843,7 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
             max={1}
             step={0.05}
             value={opts.superGlowStrength ?? 0.6}
-            onChange={(e) =>
-              setOpts((o) => ({
-                ...o,
-                superGlowStrength: Number(e.target.value),
-              }))
-            }
+            onChange={(e) => setOpts(o => ({ ...o, superGlowStrength: Number(e.target.value) }))}
             className="w-full mt-2"
           />
         </Field>
@@ -1825,34 +1852,27 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         <ColorField
           label="Super tag bg"
           value={opts.superTagColor ?? ""}
-          onChange={(v) => setOpts((o) => ({ ...o, superTagColor: v }))}
+          onChange={(v) => setOpts(o => ({ ...o, superTagColor: v }))}
         />
         <ColorField
           label="Super tag text"
           value={opts.superTextColor ?? ""}
-          onChange={(v) => setOpts((o) => ({ ...o, superTextColor: v }))}
+          onChange={(v) => setOpts(o => ({ ...o, superTextColor: v }))}
         />
       </div>
     </>
   )}
 </Section>
 
-{/* OPENING header toggles (quando não é hunt) */}
-{type !== "hunt" && (
-  <Section title="Header (Opening)">
-    <Toggle
-      label={t("showHuntTitle")}
-      checked={opts.showTitle !== false}
-      onChange={(v) => setOpts((o) => ({ ...o, showTitle: !!v }))}
-    />
-    <Toggle
-      label={t("showCurrentSlot")}
-      checked={opts.showCurrent !== false}
-      onChange={(v) => setOpts((o) => ({ ...o, showCurrent: !!v }))}
-    />
-  </Section>
-)}
 
+    {/* OPENING header toggles (quando não é hunt) */}
+    {type !== "hunt" && (
+      <Section title="Header (Opening)">
+ <Toggle label={t("showHuntTitle")} checked={opts.showTitle !== false} onChange={(v)=>setOpts(o=>({...o,showTitle:!!v}))}/>
+ <Toggle label={t("showCurrentSlot")} checked={opts.showCurrent !== false} onChange={(v)=>setOpts(o=>({...o,showCurrent:!!v}))}/>
+
+      </Section>
+    )}
   </div>
 </div>
 <style>{`
