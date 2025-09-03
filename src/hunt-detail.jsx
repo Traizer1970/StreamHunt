@@ -1011,26 +1011,6 @@ function HuntOverlayPreview({ hunt, slots, opts }) {
     );
   }
 
-// ---- NiceSlider (module-level) ----
-function NiceSlider({ min = 0, max = 100, step = 1, value, onChange, ariaLabel }) {
-  const pct = Math.max(0, Math.min(100, ((Number(value ?? 0) - min) / (max - min)) * 100));
-  return (
-    <div className="py-1">
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        aria-label={ariaLabel}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="nice-slider w-full h-8 appearance-none bg-transparent"
-        style={{ ["--pct"]: `${pct}%` }}
-      />
-    </div>
-  );
-}
-
   function KpiBadge({ shape, label, value, Icon }) {
     if (shape === "circle") {
       const circleD = Math.round(36 * (opts.kpiSize ?? 1));
