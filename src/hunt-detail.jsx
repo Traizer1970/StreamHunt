@@ -2732,20 +2732,20 @@ const onTileClick = (e, s, iAbs) => {
 
           {/* KPIs */}
           <div className="grid md:grid-cols-6 gap-2 mb-3">
-  {[
-    ["P/L", fmtMoney(totals.pl), totals.pl < 0 ? "text-red-300" : "text-emerald-300"],
-    [t("amountWon"), fmtMoney(totals.amountWon)],
-    [t("startCost"), fmtMoney(totals.startCost)],
-    ["Avg. Required X", fmtPlain(totals.avgRequiredX, 2)],
-    ["Current Avg. X", fmtPlain(totals.currentAvgX, 2)],
-    ["Cumulative X", fmtPlain(totals.cumulativeX, 2) + "x"],
-  ].map(([label, value, color], i) => (
-    <div key={i} className={panelCn("p-3")}>
-      <div className="text-[11px] leading-none mb-1 text-white/70">{label}</div>
-      <div className={cn("font-semibold", "tabular-nums whitespace-nowrap", color)}>{value}</div>
-    </div>
-  ))}
-</div>
+            {[
+              ["P/L", fmtMoney(totals.pl), totals.pl < 0 ? "text-red-300" : "text-emerald-300"],
+              [t("amountWon"), fmtMoney(totals.amountWon)],
+              [t("startCost"), fmtMoney(totals.startCost)],
+              ["Avg. Required X", fmtPlain(totals.avgRequiredX, 2)],
+              ["Current Avg. X", fmtPlain(totals.currentAvgX, 2)],
+              ["Cumulative X", fmtPlain(totals.cumulativeX, 2) + "x"],
+            ].map(([label, value, color], i) => (
+              <div key={i} className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+                <div className="text-[11px] leading-none mb-1 text-white/70">{label}</div>
+                <div className={cn("font-semibold", "tabular-nums whitespace-nowrap", color)}>{value}</div>
+              </div>
+            ))}
+          </div>
 
           {/* Slot ativa */}
           {row && (
