@@ -42,12 +42,16 @@ const anyToRgba = (c, a = 1) =>
 function parseHash() {
   const raw = (window.location.hash || "#").slice(1); // remove '#'
   const [path, query] = raw.split("?");
-  const parts = (path || "").split("/").filter(Boolean);
+  let parts = (path || "").split("/").filter(Boolean);
 
-  // aceita "#/hunt/..." e "#/overlay/hunt/..."
-  const baseIdx = parts[0] === "overlay" ? 1 : 0;
-  const type = parts[baseIdx] || "hunt";
-  const numberId = parts[baseIdx + 1] || "active";
+  // ⚠️ esta página pode ser aberta como "#/hunt-widget/hunt/123"
+  // ou "#/hunt/123" (compat). Remove o prefixo "hunt-widget" se existir.
+  if (parts[0] === "hunt-widget") parts = parts.slice(1);
+  // compat com o formato antigo "#/overlay/hunt/123"
+  if (parts[0] === "overlay") parts = parts.slice(1);
+
+  const type = parts[0] || "hunt";          // "hunt" | "opening"
+  const numberId = parts[1] || "active";    // "active" ou número
   const qs = new URLSearchParams(query || "");
   return { type, numberId, qs };
 }
@@ -77,8 +81,8 @@ function readOptsFromQS(qs) {
     speedSec: getN("speed", 30, 5, 180),
     cardH: getN("cardH", 160, 100, 400),
     showBox: qs.get("box") !== "0",
-    nameStyle: qs.get("name") || "bar", // bar | float | hidden
-    betStyle: qs.get("bet") || "inline", // inline | chip | none
+    nameStyle: qs.get("name") || "bar",      // bar | float | hidden
+    betStyle: qs.get("bet") || "inline",     // inline | chip | none
     showIdx: qs.get("showIdx") !== "0",
     showBet: qs.get("showBet") !== "0",
     showSuper: qs.get("showSuper") !== "0",
@@ -90,7 +94,7 @@ function readOptsFromQS(qs) {
     superTagColor: "#" + (qs.get("stc") || "e879f9"),
     superTextColor: "#" + (qs.get("stx") || "120614"),
     panelBgStart: "#" + (qs.get("bg1") || "0b1020"),
-    panelBgEnd: "#" + (qs.get("bg2") || "111827"),
+    panelBgEnd:   "#" + (qs.get("bg2") || "111827"),
     pad: getN("pad", 16, 0, 64),
     baseW: getN("bw", 560, 260, 3840),
     baseH: getN("bh", 280, 160, 2160),
@@ -156,7 +160,7 @@ export default function HuntWidgetPage() {
         if (!Number.isFinite(id) || id <= 0)
           throw new Error("Parâmetro numberId inválido.");
 
-        // valida se o hunt existe
+        // opcional: valida se o hunt existe (não usamos h aqui, mas valida 404)
         await getHuntByNumberId(id);
 
         const { slots: s } = await listHuntSlots({ numberId: id });
@@ -175,17 +179,11 @@ export default function HuntWidgetPage() {
 
   if (loading) {
     return (
-      <div
-        style={{
-          display: "grid",
-          placeItems: "center",
-          height: "100vh",
-          color: "#e5e7eb",
-          background: "#0b1020",
-          fontFamily:
-            "'Rubik', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial",
-        }}
-      >
+      <div style={{
+        display: "grid", placeItems: "center", height: "100vh",
+        color: "#e5e7eb", background: "#0b1020",
+        fontFamily: "'Rubik', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial",
+      }}>
         A carregar widget…
       </div>
     );
@@ -193,19 +191,12 @@ export default function HuntWidgetPage() {
 
   if (err) {
     return (
-      <div
-        style={{
-          display: "grid",
-          placeItems: "center",
-          height: "100vh",
-          color: "#fca5a5",
-          background: "#0b1020",
-          fontFamily:
-            "'Rubik', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial",
-          padding: 16,
-          textAlign: "center",
-        }}
-      >
+      <div style={{
+        display: "grid", placeItems: "center", height: "100vh",
+        color: "#fca5a5", background: "#0b1020",
+        fontFamily: "'Rubik', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial",
+        padding: 16, textAlign: "center",
+      }}>
         {err}
       </div>
     );
@@ -271,7 +262,7 @@ function HuntOverlayCanvas({ slots, opts }) {
         >
           {slots.slice(0, 16).map((s, i) => (
             <Card
-              key={s.id ?? i}
+              key={s.id}
               s={s}
               i={i}
               width="100%"
@@ -285,7 +276,7 @@ function HuntOverlayCanvas({ slots, opts }) {
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: justify, // aplica align da querystring
+            justifyContent: justify, // ← respeita Align (left/center/right)
             height: "100%",
             overflow: "hidden",
           }}
@@ -303,9 +294,9 @@ function HuntOverlayCanvas({ slots, opts }) {
           >
             {[...slots, ...slots].map((s, i) => (
               <Card
-                key={`${s.id ?? "x"}-${i}`}
+                key={`${s.id}-${i}`}
                 s={s}
-                i={i % (slots.length || 1)}
+                i={i % slots.length}
                 width={cardW}
                 cardH={opts.cardH || 160}
                 opts={opts}
@@ -340,7 +331,6 @@ function Card({ s, i, width, cardH, opts }) {
   const showName = opts.nameStyle !== "hidden";
   const badgesVertical = !!opts.vInfo;
   const infoRight = String(opts.infoPos || "left") === "right";
-  const canShowBet = opts.showBet !== false;
 
   return (
     <div
@@ -437,9 +427,7 @@ function Card({ s, i, width, cardH, opts }) {
           display: "flex",
           flexDirection: badgesVertical ? "column" : "row",
           alignItems: badgesVertical
-            ? infoRight
-              ? "flex-end"
-              : "flex-start"
+            ? (infoRight ? "flex-end" : "flex-start")
             : "center",
           gap: 6,
           textAlign: infoRight ? "right" : "left",
@@ -458,7 +446,7 @@ function Card({ s, i, width, cardH, opts }) {
             #{i + 1}
           </div>
         )}
-        {canShowBet && (opts.betStyle === "chip" || !!opts.vInfo) && (
+        {(opts.betStyle === "chip" || !!opts.vInfo) && (
           <div
             style={{
               fontSize: 11,
@@ -518,7 +506,7 @@ function Card({ s, i, width, cardH, opts }) {
             >
               {s?.name || "—"}
             </div>
-            {canShowBet && opts.betStyle === "inline" && (
+            {opts.betStyle === "inline" && (
               <div
                 style={{
                   marginTop: 2,
@@ -558,13 +546,9 @@ function Card({ s, i, width, cardH, opts }) {
           <div style={{ fontWeight: 600, textShadow: "0 2px 6px rgba(0,0,0,.8)" }}>
             {s?.name || "—"}
           </div>
-          {canShowBet && opts.betStyle === "inline" && (
+          {opts.betStyle === "inline" && (
             <div
-              style={{
-                fontSize: 11,
-                opacity: 0.9,
-                textShadow: "0 2px 6px rgba(0,0,0,.8)",
-              }}
+              style={{ fontSize: 11, opacity: 0.9, textShadow: "0 2px 6px rgba(0,0,0,.8)" }}
             >
               {s?.bet_size != null ? fmtPlain(toNum(s.bet_size), 2) : "—"}
             </div>
