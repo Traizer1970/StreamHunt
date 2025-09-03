@@ -1564,7 +1564,36 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
         <Field label="Tamanho (0.7–1.6)">
-          <input type="range" min={0.7} max={1.6} step={0.05} value={opts.kpiSize} onChange={(e)=>setOpts(o=>({...o,kpiSize:Number(e.target.value)}))} className="w-full"/>
+         {/* Tamanho (0.7–1.6) */}
+<Field label="Tamanho (0.7–1.6)">
+  <NiceSlider
+    min={0.7} max={1.6} step={0.05}
+    value={opts.kpiSize}
+    onChange={(v) => setOpts(o => ({ ...o, kpiSize: v }))}
+    ariaLabel="Tamanho KPI"
+  />
+</Field>
+
+{/* Font KPI (0.8–1.6) */}
+<Field label="Font KPI (0.8–1.6)" hint="Só ajusta a letra">
+  <NiceSlider
+    min={0.8} max={1.6} step={0.05}
+    value={opts.kpiFont}
+    onChange={(v) => setOpts(o => ({ ...o, kpiFont: v }))}
+    ariaLabel="Fonte KPI"
+  />
+</Field>
+
+{/* (opcional) Força do glow do SUPER */}
+<Field label="Glow strength">
+  <NiceSlider
+    min={0} max={1} step={0.05}
+    value={opts.superGlowStrength ?? 0.6}
+    onChange={(v) => setOpts(o => ({ ...o, superGlowStrength: v }))}
+    ariaLabel="Força do brilho Super"
+  />
+</Field>
+
         </Field>
         <Field label="Forma">
           <Segmented
