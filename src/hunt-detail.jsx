@@ -1250,6 +1250,53 @@ function KpiPresetSwatches({ value, onChange }) {
   );
 }
 
+/* ───────────────── active-hunt (link exclusivo) ───────────────── */
+// pseudo-código dentro do overlay loader
+const { numberId } = params; // "active" ou um número
+const owner = new URLSearchParams(location.hash.split("?")[1] || "").get("owner");
+
+let huntNumberId = numberId;
+
+if (numberId === "active") {
+  // 1) se veio owner, tenta BD
+  if (owner) {
+    const cols = ["opts","settings","config","data","json"];
+    const { data } = await supabase
+      .from("overlay_settings")
+      .select("*")
+      .eq("user_id", owner)
+      .eq("type", "active-hunt")
+      .is("hunt_number_id", null)
+      .maybeSingle();
+
+    let latest = null;
+    for (const c of cols) if (data?.[c]?.latest) { latest = data[c].latest; break; }
+    if (latest) huntNumberId = latest;
+  }
+
+  // 2) fallback: mesmo browser (localStorage)
+  if (huntNumberId === "active" && owner) {
+    try {
+      const ls = localStorage.getItem(`active-hunt:${owner}`);
+      if (ls) huntNumberId = ls;
+    } catch {}
+  }
+}
+
+// a partir daqui usa huntNumberId (número) para carregar o hunt/slots
+
+
+/* ───────── URLs exclusivos (sempre o hunt ativo do owner) ───────── */
+function buildHuntOverlayActiveUrl(base, ownerId, o) {
+  const url = buildHuntOverlayUrl(base, "active", o); // usa o alias "active" no path
+  return `${url}&owner=${encodeURIComponent(ownerId)}`;
+}
+function buildOpeningOverlayActiveUrl(base, ownerId, o) {
+  const url = buildOpeningOverlayUrl(base, "active", o);
+  return `${url}&owner=${encodeURIComponent(ownerId)}`;
+}
+
+
 
 // Substitui a tua PanelPresetSwatches por esta versão
 function PanelPresetSwatches({ value, onChange }) {
@@ -1923,10 +1970,10 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 function OverlayCard({ type, hunt, slots, opts, setOpts }) {
   const [open, setOpen] = React.useState(true);
   const [openDesigner, setOpenDesigner] = React.useState(false);
+  const { user } = useAuth();  
 
-  const base = React.useMemo(
-    () =>
-      `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, ""),
+const base = React.useMemo(
+    () => `${window.location.origin}${window.location.pathname}`.replace(/\/+$/, ""),
     []
   );
 
@@ -1937,15 +1984,25 @@ function OverlayCard({ type, hunt, slots, opts, setOpts }) {
       : buildOpeningOverlayUrl(base, hunt.number_id, opts);
   }, [type, hunt?.number_id, base, opts]);
 
-  const copyUrl = async () => {
-    if (!url) return;
-    try { await navigator.clipboard.writeText(url); }
+  // URL EXCLUSIVO (sempre o ativo do owner)
+  const exUrl = React.useMemo(() => {
+    if (!user?.id) return "";
+    return type === "hunt"
+      ? buildHuntOverlayActiveUrl(base, user.id, opts)
+      : buildOpeningOverlayActiveUrl(base, user.id, opts);
+  }, [type, base, opts, user?.id]);
+
+ const copyUrl = async () => {              // mantém “Copy URL” como preferires
+    const toCopy = exUrl || url;
+    if (!toCopy) return;
+    try { await navigator.clipboard.writeText(toCopy); }
     catch { alert("Não consegui copiar o URL."); }
   };
 
-  const openOverlay = () => {
-    if (!url) return;
-    window.open(url, "_blank", "noopener,noreferrer");
+  const openOverlay = () => {                // agora abre o EXCLUSIVO
+    const target = exUrl || url;
+    if (!target) return;
+    window.open(target, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -2928,7 +2985,8 @@ const onTileClick = (e, s, iAbs) => {
 export default function HuntDetail({ numberId }) {
   const { isDark } = useTheme();
   const { t } = useLang();
-
+  const { user } = useAuth(); 
+  
   const [nId, setNId] = React.useState(() => {
     const m = (typeof location !== "undefined" && location.hash) || "";
     const mm = m.match(/#\/hunts\/(\d+)/i);
@@ -2944,6 +3002,9 @@ export default function HuntDetail({ numberId }) {
     return () => window.removeEventListener("hashchange", onHash);
   }, [numberId]);
 
+    React.useEffect(() => {
+    if (user?.id && nId) setActiveHuntForUser(user.id, nId);
+  }, [user?.id, nId]);
 
   const [redeemFlowOpen, setRedeemFlowOpen] = React.useState(false);
   const [redeemOpen, setRedeemOpen] = React.useState(false);
