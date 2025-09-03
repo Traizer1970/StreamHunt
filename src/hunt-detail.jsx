@@ -1564,15 +1564,14 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
         <Field label="Tamanho (0.7–1.6)">
-          <input type="range" min={0.7} max={1.6} step={0.05} value={opts.kpiSize} onChange={(e)=>setOpts(o=>({...o,kpiSize:Number(e.target.value)}))} className="w-full"/>
-        </Field>
-        <Field label="Forma">
-          <Segmented
-            value={opts.kpiShape}
-            onChange={(v) => setOpts(o => ({ ...o, kpiShape: v }))}
-            options={[{value:"box",label:"Box"},{value:"pill",label:"Pill"},{value:"circle",label:"Circle"}]}
-          />
-        </Field>
+  <NiceSlider
+    min={0.7} max={1.6} step={0.05}
+    value={opts.kpiSize}
+    onChange={(v)=>setOpts(o=>({...o, kpiSize: v}))}
+    ariaLabel="KPI size"
+  />
+</Field>
+
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
@@ -1583,9 +1582,15 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
             options={[{value:"0",label:"0"},{value:"1",label:"0.0"},{value:"2",label:"0.00"}]}
           />
         </Field>
-        <Field label="Font KPI (0.8–1.6)" hint="Só ajusta a letra">
-          <input type="range" min={0.8} max={1.6} step={0.05} value={opts.kpiFont} onChange={(e)=>setOpts(o=>({...o,kpiFont:Number(e.target.value)}))} className="w-full"/>
-        </Field>
+       <Field label="Font KPI (0.8–1.6)" hint="Só ajusta a letra">
+  <NiceSlider
+    min={0.8} max={1.6} step={0.05}
+    value={opts.kpiFont}
+    onChange={(v)=>setOpts(o=>({...o, kpiFont: v}))}
+    ariaLabel="KPI font"
+  />
+</Field>
+
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
@@ -1752,17 +1757,15 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
           value={opts.superGlowColor ?? ""}
           onChange={(v) => setOpts(o => ({ ...o, superGlowColor: v }))}
         />
-        <Field label="Glow strength">
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.05}
-            value={opts.superGlowStrength ?? 0.6}
-            onChange={(e) => setOpts(o => ({ ...o, superGlowStrength: Number(e.target.value) }))}
-            className="w-full mt-2"
-          />
-        </Field>
+<Field label="Glow strength">
+  <NiceSlider
+    min={0} max={1} step={0.05}
+    value={opts.superGlowStrength ?? 0.6}
+    onChange={(v) => setOpts(o => ({ ...o, superGlowStrength: v }))}
+    ariaLabel="Super glow strength"
+  />
+</Field>
+
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 min-w-0">
         <ColorField
