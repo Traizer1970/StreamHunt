@@ -348,12 +348,9 @@ function Segmented({ value, onChange, options, className = "" }) {
   return (
     <div
       className={cn(
-        "inline-flex flex-wrap gap-1 rounded-xl border border-white/10",
-        "bg-zinc-900/70 backdrop-blur supports-[backdrop-filter]:bg-zinc-900/50",
-        "p-1 shadow-[inset_0_1px_0_rgba(255,255,255,.06)]",
+        "inline-flex flex-wrap gap-1 rounded-lg border border-white/10 bg-zinc-900 p-0.5",
         className
       )}
-      role="tablist"
     >
       {options.map((o) => {
         const val = o.value ?? o;
@@ -363,15 +360,12 @@ function Segmented({ value, onChange, options, className = "" }) {
           <button
             key={val}
             type="button"
-            role="tab"
-            aria-selected={active}
             onClick={() => onChange(val)}
             className={cn(
-              "px-3 h-9 rounded-lg text-sm transition select-none",
-              "border border-transparent",
-              active
-                ? "bg-sky-500/15 text-sky-100 ring-1 ring-sky-400/40 border-sky-400/30 shadow"
-                : "text-white/80 hover:text-white hover:bg-white/5"
+             "px-3 h-9 rounded-md text-sm transition",
+             active
+               ? "bg-sky-500/15 text-sky-100 ring-1 ring-sky-400/30"
+               : "text-white/70 hover:text-white"
             )}
           >
             {label}
