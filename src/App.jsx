@@ -1130,6 +1130,10 @@ export default function App() {
   const huntDetailMatch = route.match(/^\/?hunts\/([^\/?#]+)$/);
   const tournamentDetailMatch = route.match(/^\/?tournaments\/([^\/?#]+)$/);
 
+  if (route.startsWith("hunt-widget")) {
+  return <HuntWidgetPage />;   // abre #/hunt-widget/...
+}
+
 // overlay: battle, hunt, ou token fixo
 const isOverlay =
   route.startsWith("overlay/battle/") ||
