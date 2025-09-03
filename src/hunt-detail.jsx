@@ -1251,40 +1251,42 @@ function KpiPresetSwatches({ value, onChange }) {
 }
 
 /* ───────────────── active-hunt (link exclusivo) ───────────────── */
-// pseudo-código dentro do overlay loader
-const { numberId } = params; // "active" ou um número
-const owner = new URLSearchParams(location.hash.split("?")[1] || "").get("owner");
+async function setActiveHuntForUser(userId, huntNumberId) {
+  if (!userId || !huntNumberId) return;
 
-let huntNumberId = numberId;
+  // 1) guarda local (fallback)
+  try { localStorage.setItem(`active-hunt:${userId}`, String(huntNumberId)); } catch {}
 
-if (numberId === "active") {
-  // 1) se veio owner, tenta BD
-  if (owner) {
-    const cols = ["opts","settings","config","data","json"];
-    const { data } = await supabase
-      .from("overlay_settings")
-      .select("*")
-      .eq("user_id", owner)
-      .eq("type", "active-hunt")
-      .is("hunt_number_id", null)
-      .maybeSingle();
+  // 2) guarda na BD (overlay_settings) numa linha única do tipo "active-hunt"
+  const jsonCols = ["opts", "settings", "config", "data", "json"]; // tal como no useOverlaySettings
+  const base = { user_id: userId, type: "active-hunt", hunt_number_id: null, updated_at: new Date().toISOString() };
 
-    let latest = null;
-    for (const c of cols) if (data?.[c]?.latest) { latest = data[c].latest; break; }
-    if (latest) huntNumberId = latest;
+  // tenta encontrar linha existente (por user+type e hunt_number_id NULL)
+  let q = supabase
+    .from("overlay_settings")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("type", "active-hunt")
+    .is("hunt_number_id", null)
+    .limit(1);
+
+  const probe = await q.maybeSingle();
+  const rowId = probe?.data?.id ?? null;
+
+  // payload com { latest: nId } na 1ª coluna json que existir
+  for (const col of jsonCols) {
+    const payload = { ...base, [col]: { latest: huntNumberId } };
+
+    if (rowId) {
+      const { error } = await supabase.from("overlay_settings").update(payload).eq("id", rowId);
+      if (!error) return;
+    } else {
+      const { error, data } = await supabase.from("overlay_settings").insert(payload).select("id").single();
+      if (!error && data?.id) return;
+    }
   }
-
-  // 2) fallback: mesmo browser (localStorage)
-  if (huntNumberId === "active" && owner) {
-    try {
-      const ls = localStorage.getItem(`active-hunt:${owner}`);
-      if (ls) huntNumberId = ls;
-    } catch {}
-  }
+  // se todas as colunas falharem… deixa só o fallback do localStorage
 }
-
-// a partir daqui usa huntNumberId (número) para carregar o hunt/slots
-
 
 /* ───────── URLs exclusivos (sempre o hunt ativo do owner) ───────── */
 function buildHuntOverlayActiveUrl(base, ownerId, o) {
