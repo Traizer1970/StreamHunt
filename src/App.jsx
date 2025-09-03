@@ -1130,20 +1130,29 @@ export default function App() {
   const huntDetailMatch = route.match(/^\/?hunts\/([^\/?#]+)$/);
   const tournamentDetailMatch = route.match(/^\/?tournaments\/([^\/?#]+)$/);
 
-  if (route.startsWith("hunt-widget")) {
-  return <HuntWidgetPage />;   // abre #/hunt-widget/...
-}
+ if (route.startsWith("hunt-widget")) {
+   return (
+     <BareOverlayContainer>
+       <HuntWidgetPage />
+     </BareOverlayContainer>
+   );
+ }
 
 // overlay: battle, hunt, ou token fixo
-const isOverlay =
-  route.startsWith("overlay/battle/") ||
-  route.startsWith("w/h/") ||
-  route.startsWith("w/");
+ const isOverlay =
+   route.startsWith("overlay/battle/") ||
+   route.startsWith("overlay/hunt/") ||       // ✅ NOVO
+   route.startsWith("overlay/opening/") ||    // ✅ NOVO (se fores usar opening)
+   route.startsWith("w/h/") ||
+   route.startsWith("w/");
 
 if (isOverlay) {
   return (
     <BareOverlayContainer>
       {route.startsWith("overlay/battle/") && <WidgetOverlay />}
+      {(route.startsWith("overlay/hunt/") || route.startsWith("overlay/opening/")) && (
+        <HuntWidgetPage />
+      )}
       {route.startsWith("w/h/") && <HuntWidgetByToken />}
       {route.startsWith("w/") && !route.startsWith("w/h/") && <WidgetByToken />} {/* battle por token (o teu atual) */}
     </BareOverlayContainer>
