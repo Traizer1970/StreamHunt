@@ -1203,36 +1203,70 @@ return (
 
 /* ───────────────────────── Opening Preview ───────────────────────── */
 function OpeningOverlayPreview({ hunt, slots, opts }) {
-  const baseW    = Number(opts.baseW || 560);
-  const baseH    = Number(opts.baseH || 320);
+  const baseW = Number(opts.baseW || 560);
+  const baseH = Number(opts.baseH || 320);
 
-  // ← LARGURA DA LISTA (aceita vários aliases)
-  const listW    = Number(
-    opts.listW ?? opts.listWidth ?? 208
-  );
-
-  // ← LADO DA LISTA
+  // LISTA (lateral)
   const listSide = String(opts.listSide || "left");
+  const listW = Number(opts.listW ?? opts.listWidth ?? 208);
+  const rowH = Math.max(28, Number(opts.listRowH ?? opts.rowH ?? opts.listItemH ?? 40));
+  const forcedRows = Math.max(0, Number(opts.listRows ?? opts.listLines ?? opts.listVisibleRows ?? 0));
+  const headH = 0;
+  const autoListH = Math.max(4, Math.floor((baseH - headH - 12) / rowH)) * rowH;
+  const listH = forcedRows > 0 ? forcedRows * rowH : autoListH;
+  const doAuto = (opts.listAutoScroll !== false) && slots.length * rowH > listH;
+  const speed = Math.max(4, Number(opts.listSpeedSec ?? opts.listSpeed ?? 18));
 
-  // ← POSIÇÃO VERTICAL DOS CARDS (Top/Center/Bottom) + OFFSET MANUAL
-  const vAlign   = String(
-    opts.cardsVAlign ?? opts.cardsPos ?? "bottom"
-  ); // "top" | "center" | "bottom"
-  const offsetY  = Number(
-    opts.cardsOffset ?? opts.cardsOffsetY ?? opts.cardsYOffset ?? 0
-  );
+  // POSIÇÃO/ALINHAMENTO VERTICAL DOS CARDS
+  const vAlign = String(opts.cardsVAlign ?? opts.cardsPos ?? "bottom"); // top | center | bottom
+  const offsetY = Number(opts.cardsOffset ?? opts.cardsOffsetY ?? opts.cardsYOffset ?? 0);
+  const vClass = vAlign === "top" ? "items-start" : vAlign === "center" ? "items-center" : "items-end";
 
-  const showBox  = opts.showBox !== false;
-
-  // índice “current” = 1ª sem payout (senão 0)
+  // ÍNDICE CURRENT (1ª sem payout; senão 0)
   let cur = slots.findIndex(s => s.payout == null);
   if (cur < 0) cur = 0;
-
   const prev = (cur - 1 + slots.length) % slots.length;
   const next = (cur + 1) % slots.length;
   const trio = [prev, cur, next].map(i => slots[i]).filter(Boolean);
 
-  // Best/Worst para selos
+  // DIMENSÕES DOS CARDS (agora controladas por altura)
+  const showBox = opts.showBox !== false;
+  const ratio = 1.55;                                     // H/W típico das tuas thumbs
+  const sideHWanted = Math.max(120, Number(opts.cardH ?? opts.openCardH ?? opts.cardsHeight ?? 220));
+  let sideH = sideHWanted;
+  let sideW = Math.round(sideH / ratio);
+
+  const currentScale = Math.max(1.0, Number(opts.currentScale ?? 1.16));
+  let curW = Math.round(sideW * currentScale);
+  let curH = Math.round(sideH * currentScale);
+
+  // caber nos limites disponíveis (3 cards + gaps)
+  const padX = 24;                  // px-3 + px-3
+  const gap = 18;
+  const listSpace = (listSide === "left" || listSide === "right") ? listW : 0;
+  const heroAvailW = Math.max(120, baseW - listSpace - padX);
+  const totalW = sideW + gap + curW + gap + sideW;
+
+  if (totalW > heroAvailW) {
+    const k = heroAvailW / totalW;  // escala tudo proporcionalmente
+    sideW = Math.floor(sideW * k);
+    sideH = Math.floor(sideH * k);
+    curW  = Math.floor(curW  * k);
+    curH  = Math.floor(curH  * k);
+  }
+
+  // Tags BEST/WORST/CURRENT no canto sup. direito (auto-size)
+  const tagFont = Math.max(9, Math.min(12, Math.floor(sideW * 0.065)));
+  const Tag = ({ children }) => (
+    <span
+      className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded-full font-semibold tracking-wide shadow"
+      style={{ fontSize: tagFont, lineHeight: 1 }}
+    >
+      {children}
+    </span>
+  );
+
+  // Best/Worst
   const scored = slots
     .map(s => {
       const bet = toNum(s.bet_size), pay = toNum(s.payout);
@@ -1243,32 +1277,6 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
   const best  = (opts.showBestWorst && scored.length) ? scored.reduce((a,b)=>a._score>b._score?a:b) : null;
   const worst = (opts.showBestWorst && scored.length) ? scored.reduce((a,b)=>a._score<b._score?a:b) : null;
 
-  // medidas dos cards (3 cartões + gaps), respeitando a lista
-  const padX = 24;                      // px-3 + px-3
-  const gap  = 18;
-  const listSpace   = (listSide === "left" || listSide === "right") ? listW : 0;
-  const heroAvailW  = Math.max(120, baseW - listSpace - padX);
-  const cardW       = Math.floor((heroAvailW - 2 * gap) / 3);
-  const cardH       = Math.round(cardW * 1.55);
-
-  // current maior, mas sem estourar a largura útil
-  const currentScale   = Math.max(1.0, Number(opts.currentScale ?? 1.16));
-  const wantedCurrentW = Math.floor(cardW * currentScale);
-  const maxCurrentW    = heroAvailW - 2 * (cardW + gap);
-  const curW           = Math.min(wantedCurrentW, Math.max(cardW, maxCurrentW));
-  const curH           = Math.round(curW * (cardH / cardW));
-
-  // selo responsivo no canto sup. direito
-  const tagFont = Math.max(9, Math.min(12, Math.floor(cardW * 0.065)));
-  const Tag = ({ children }) => (
-    <span
-      className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded-full font-semibold tracking-wide shadow"
-      style={{ fontSize: tagFont, lineHeight: 1 }}
-    >
-      {children}
-    </span>
-  );
-
   const Box = ({ children }) => (
     <div
       className="rounded-xl overflow-hidden relative"
@@ -1276,9 +1284,7 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
         width: baseW,
         height: baseH,
         border: showBox ? "1px solid rgba(255,255,255,.12)" : "none",
-        background: showBox
-          ? "linear-gradient(135deg, rgba(15,16,33,1) 0%, rgba(24,16,40,1) 100%)"
-          : "transparent",
+        background: showBox ? "linear-gradient(135deg, rgba(15,16,33,1) 0%, rgba(24,16,40,1) 100%)" : "transparent",
         fontFamily: RUBIK_STACK,
       }}
     >
@@ -1287,7 +1293,7 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
   );
 
   const Row = ({ s, i }) => (
-    <div className="flex items-center gap-2 h-10">
+    <div className="flex items-center gap-2" style={{ height: rowH }}>
       <div className="text-[11px] font-semibold opacity-90 w-6 text-right">#{i + 1}</div>
       <div className="w-9 h-9 rounded-md overflow-hidden border border-white/10 shrink-0">
         {s.thumbnail ? (
@@ -1300,17 +1306,6 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
     </div>
   );
 
-  // ← LINHAS VISÍVEIS NA LISTA (0 = auto) + animação
-  const rowH  = 40;
-  const headH = 0;
-  const forcedRows = Math.max(0, Number(
-    opts.listRows ?? opts.listLines ?? opts.listVisibleRows ?? 0
-  ));
-  const autoH = Math.max(4, Math.floor((baseH - headH - 12) / rowH)) * rowH;
-  const listH = forcedRows > 0 ? forcedRows * rowH : autoH;
-
-  const doAuto = (opts.listAutoScroll !== false) && slots.length * rowH > listH;
-  const speed  = Math.max(4, Number(opts.listSpeedSec ?? opts.listSpeed ?? 18));
   const ListPane = (
     <div className="shrink-0" style={{ width: listW, height: listH, overflow: "hidden" }}>
       <div style={{ animation: doAuto ? `marqueeY ${speed}s linear infinite` : undefined }}>
@@ -1329,17 +1324,17 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
       : "0 10px 28px rgba(0,0,0,.40)";
     return (
       <div
-        className="relative overflow-hidden"
+        className="relative overflow-visible"
         style={{ width: w, height: h, borderRadius: r, border: `1px solid ${borderCol}`, boxShadow: glow }}
         title={s?.name}
       >
         {s?.thumbnail
-          ? <img src={s.thumbnail} alt="" className="absolute inset-0 w-full h-full object-cover object-center" />
-          : <div className="absolute inset-0 bg-white/10" />
+          ? <img src={s.thumbnail} alt="" className="absolute inset-0 w-full h-full object-cover object-center rounded-[inherit]" />
+          : <div className="absolute inset-0 bg-white/10 rounded-[inherit]" />
         }
 
-        <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/55 to-transparent pointer-events-none" />
-        <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/65 to-transparent pointer-events-none" />
+        <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/55 to-transparent pointer-events-none rounded-t-[inherit]" />
+        <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/65 to-transparent pointer-events-none rounded-b-[inherit]" />
 
         <div className="absolute left-2 top-2 z-20 text-[11px] font-bold px-1.5 py-0.5 rounded bg-black/70">
           #{idx + 1}
@@ -1358,10 +1353,6 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
     );
   }
 
-  const vClass =
-    vAlign === "top" ? "items-start" :
-    vAlign === "center" ? "items-center" : "items-end";
-
   return (
     <Box>
       <style>{`
@@ -1371,12 +1362,11 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
       <div className={`h-full w-full flex ${vClass} gap-4 px-3`} style={{ paddingBottom: 12, overflow: "hidden" }}>
         {listSide === "left" && ListPane}
 
-        {/* 3 cards – com overflow visível para o glow do current e OFFSET vertical aplicado */}
         <div className="flex-1 overflow-visible" style={{ transform: offsetY ? `translateY(${offsetY}px)` : undefined }}>
           <div className="flex gap-4 w-fit mx-auto">
-            {trio[0] && <Card s={trio[0]} idx={prev} w={cardW} h={cardH} isCurrent={false} />}
+            {trio[0] && <Card s={trio[0]} idx={prev} w={sideW} h={sideH} isCurrent={false} />}
             {trio[1] && <Card s={trio[1]} idx={cur}  w={curW}  h={curH}  isCurrent />}
-            {trio[2] && <Card s={trio[2]} idx={next} w={cardW} h={cardH} isCurrent={false} />}
+            {trio[2] && <Card s={trio[2]} idx={next} w={sideW} h={sideH} isCurrent={false} />}
           </div>
         </div>
 
