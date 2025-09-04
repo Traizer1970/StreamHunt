@@ -1197,11 +1197,11 @@ return (
 
 /* ───────────────────────── Opening Preview ───────────────────────── */
 function OpeningOverlayPreview({ hunt, slots, opts }) {
-  const baseW = Number(opts.baseW || 560);
-  const baseH = Number(opts.baseH || 320);
+  const baseW   = Number(opts.baseW || 560);
+  const baseH   = Number(opts.baseH || 320);
   const listSide = String(opts.listSide || "left");
 
-  // Best/Worst
+  /* ── Best/Worst ────────────────────────────────────────────── */
   const scored = slots
     .map((s) => {
       const bet = toNum(s.bet_size);
@@ -1212,41 +1212,38 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
     })
     .filter((s) => s._score > 0);
 
-  const best =
-    opts.showBestWorst && scored.length
-      ? scored.reduce((a, b) => (a._score > b._score ? a : b))
-      : null;
-  const worst =
-    opts.showBestWorst && scored.length
-      ? scored.reduce((a, b) => (a._score < b._score ? a : b))
-      : null;
+  const best  = opts.showBestWorst && scored.length ? scored.reduce((a,b)=>a._score>b._score?a:b) : null;
+  const worst = opts.showBestWorst && scored.length ? scored.reduce((a,b)=>a._score<b._score?a:b) : null;
 
-  // current (primeira sem payout), com wrap prev/next
-  const len = slots.length;
-  const firstUnopened = slots.findIndex((s) => s.payout == null);
-  const cur = len ? (firstUnopened >= 0 ? firstUnopened : 0) : 0;
-  const prev = (cur - 1 + len) % Math.max(1, len);
-  const next = (cur + 1) % Math.max(1, len);
+  /* ── Current + vizinhança (prev/next com wrap) ─────────────── */
+  const N   = Math.max(1, slots.length);
+  const cur = (() => {
+    const i = slots.findIndex((s) => s.payout == null);
+    return i >= 0 ? i : 0;
+  })();
+  const prev = (cur - 1 + N) % N;
+  const next = (cur + 1) % N;
 
-  const heroIdxs =
-    len <= 1 ? [cur] : len === 2 ? [prev, cur] : [prev, cur, next];
-  const hero = heroIdxs.map((i) => slots[i]);
+  const heroIdxs = N === 1 ? [cur] : N === 2 ? [prev, cur] : [prev, cur, next];
+  const hero     = heroIdxs.map((i) => slots[i]);
 
   const currentBadge =
     (typeof document !== "undefined" &&
-      (document.documentElement.lang || "").toLowerCase().startsWith("pt")) ||
-    false
+      (document.documentElement.lang || "")
+        .toLowerCase()
+        .startsWith("pt"))
       ? "ATUAL"
       : "CURRENT";
 
+  /* ── Caixa (background) ────────────────────────────────────── */
   const showBox = opts.showBox !== false;
-
   const Box = ({ children }) => (
     <div
-      className="rounded-xl overflow-hidden relative"
+      className="rounded-xl relative"
       style={{
         width: baseW,
         height: baseH,
+        overflow: "hidden",
         border: showBox ? "1px solid rgba(255,255,255,.12)" : "none",
         background: showBox
           ? "linear-gradient(135deg, rgba(15,16,33,1) 0%, rgba(24,16,40,1) 100%)"
@@ -1264,11 +1261,10 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
     </div>
   );
 
+  /* ── Listagem da esquerda (auto-scroll vertical) ───────────── */
   const Row = ({ s, i }) => (
     <div className="flex items-center gap-2 h-10">
-      <div className="text-[11px] font-semibold opacity-90 w-6 text-right">
-        #{i + 1}
-      </div>
+      <div className="text-[11px] font-semibold opacity-90 w-6 text-right">#{i + 1}</div>
       <div className="w-9 h-9 rounded-md overflow-hidden border border-white/10 shrink-0">
         {s.thumbnail ? (
           <img src={s.thumbnail} alt="" className="w-full h-full object-cover" />
@@ -1280,18 +1276,33 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
     </div>
   );
 
-  // lista lateral (auto scroll vertical)
+  const padX = 12, padY = 12;
+  const listW = 208; // largura fixa do painel da lista
+  const gap   = 12;
+
+  const contentH = Math.max(120, baseH - padY * 2);
+  const showList = listSide === "left" || listSide === "right";
+  const areaW    = baseW - (showList ? listW : 0) - padX * 2;
+
+  // dimensões dos cartões: mantém proporção alta (w:h ≈ 0.64) e garante que N não corta
+  const heroCount   = hero.length;
+  const aspect      = 0.64; // w = h * 0.64 (sem cortar os banners verticais)
+  const maxWByArea  = Math.floor((areaW - gap * (heroCount - 1)) / heroCount);
+  const hFromArea   = Math.round(maxWByArea / aspect);
+  const cardH       = Math.min(contentH, hFromArea);      // nunca maior que a área útil
+  const cardW       = Math.max(110, Math.round(cardH * aspect));
+
+  // lista -> altura disponível + animação
   const rowH = 40;
-  const headerH = 0; // sem cabeçalho
-  const listH = Math.max(4, Math.floor((baseH - headerH - 12) / rowH)) * rowH;
-  const doAuto = opts.listAutoScroll !== false && len * rowH > listH;
-  const speed = Math.max(4, Number(opts.listSpeedSec ?? 18));
+  const listH = Math.max(4, Math.floor(contentH / rowH)) * rowH;
+  const doAuto = (opts.listAutoScroll !== false) && slots.length * rowH > listH;
+  const speed  = Math.max(4, Number(opts.listSpeedSec ?? 18));
 
   const ListPane = (
     <div className="w-52 shrink-0" style={{ height: listH, overflow: "hidden" }}>
       <div style={{ animation: doAuto ? `marqueeY ${speed}s linear infinite` : undefined }}>
         {[...slots, ...slots].map((s, idx) => (
-          <Row key={`${s.id}-${idx}`} s={s} i={idx % len} />
+          <Row key={`${s.id}-${idx}`} s={s} i={idx % N} />
         ))}
       </div>
     </div>
@@ -1299,27 +1310,56 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
 
   return (
     <Box>
-      <div className="h-full w-full flex items-end gap-3 px-3 pb-3 pt-3">
+      <div className="absolute inset-0 px-3"
+           style={{ paddingTop: padY, paddingBottom: padY, display: "flex", alignItems: "flex-end", gap }}>
         {listSide === "left" && ListPane}
 
-        {/* cartões “hero”: prev • current • next (current centrado) */}
+        {/* Prev • Current • Next (current centrado e destacado) */}
         <div className="flex-1 overflow-hidden">
-          <div className="flex gap-3 justify-center items-end">
+          <div className="flex items-end justify-center" style={{ gap }}>
             {hero.map((s, i) => {
               const iAbs = heroIdxs[i];
-              const isCenter = i === Math.floor(hero.length / 2);
+              const isCurrent = i === Math.floor(hero.length / 2);
               return (
                 <div
                   key={s?.id ?? `h${i}`}
-                  className="relative w-40 h-64 rounded-xl overflow-hidden border border-white/10"
+                  className="relative rounded-xl"
+                  style={{
+                    width: cardW,
+                    height: cardH,
+                    // destaque do atual sem escalar (evita cortes)
+                    boxShadow: isCurrent
+                      ? "0 0 0 2px rgba(56,189,248,.9), 0 14px 36px rgba(56,189,248,.25), 0 18px 36px rgba(0,0,0,.55)"
+                      : "0 12px 28px rgba(0,0,0,.35)",
+                    border: "1px solid rgba(255,255,255,.10)",
+                    overflow: "visible", // permite que as tags respirem dentro dos limites
+                  }}
                 >
-                  <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">
+                  {/* imagem com clip para cantos, tags ficam no wrapper (sem cortar) */}
+                  <div className="absolute inset-0 rounded-xl overflow-hidden">
+                    {s?.thumbnail ? (
+                      <img
+                        src={s.thumbnail}
+                        alt=""
+                        className="w-full h-full object-cover object-center"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-white/10" />
+                    )}
+                  </div>
+
+                  {/* canto superior gradiente para legibilidade das etiquetas */}
+                  <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/55 to-transparent pointer-events-none rounded-t-xl" />
+
+                  {/* index */}
+                  <div className="absolute left-1.5 top-1.5 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">
                     #{iAbs + 1}
                   </div>
 
+                  {/* BEST / WORST — dentro da área, sem valores negativos de top */}
                   {!!best && best.id === s.id && (
                     <span
-                      className="absolute -top-2 right-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold shadow"
+                      className="absolute right-1.5 top-1.5 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold shadow"
                       style={{ background: "#22c55e", color: "#0b0b0b" }}
                     >
                       BEST
@@ -1327,30 +1367,21 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
                   )}
                   {!!worst && worst.id === s.id && (
                     <span
-                      className="absolute -top-2 right-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold shadow"
+                      className="absolute right-1.5 top-1.5 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold shadow"
                       style={{ background: "#ef4444", color: "#0b0b0b" }}
                     >
                       WORST
                     </span>
                   )}
 
-                  {isCenter && (
+                  {/* CURRENT — só no cartão central; não corta porque fica dentro */}
+                  {isCurrent && (
                     <span
-                      className="absolute -top-2 left-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold shadow"
+                      className="absolute left-1.5 top-1.5 z-10 translate-y-6 px-2 py-0.5 rounded-full text-[10px] font-bold shadow"
                       style={{ background: "#38bdf8", color: "#0b0b0b" }}
                     >
                       {currentBadge}
                     </span>
-                  )}
-
-                  {s?.thumbnail ? (
-                    <img
-                      src={s.thumbnail}
-                      alt=""
-                      className="w-full h-full object-cover object-center"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-white/10" />
                   )}
                 </div>
               );
