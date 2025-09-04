@@ -1202,7 +1202,6 @@ return (
 }
 
 /* ───────────────────────── Opening Preview ───────────────────────── */
-/* ───────────────────────── Opening Preview ───────────────────────── */
 function OpeningOverlayPreview({ hunt, slots, opts }) {
   // Canvas
   const baseW = Number(opts.baseW || 560);
@@ -1215,8 +1214,8 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
   const showBestWorst = !!opts.showBestWorst;
   const metric        = String(opts.metric || "x"); // "x" | "payout"
 
-  // Lista (sem “box” por defeito)
-  const listPanel       = !!opts.listPanel; // ← define true se quiseres o painel opaco
+  // Lista (sem painel por defeito)
+  const listPanel       = !!opts.listPanel;
   const listWidthPx     = Math.max(80, Number(opts.listWidthPx ?? 208));
   const listRowH        = Math.max(28, Number(opts.listRowH ?? 40));
   const listRowsVisible = Math.max(0, Number(opts.listRowsVisible ?? 0)); // 0 = auto
@@ -1228,7 +1227,7 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
   const vOffset      = Number(opts.vOffset || 0);
   const gapPx        = Math.max(6, Number(opts.cardsGapPx ?? 12));
   const heroHBase    = Math.max(100, Number(opts.heroHeight ?? 224));
-  const cardRatio    = Number(opts.cardRatio || (144 / 224)); // w/h do teu layout
+  const cardRatio    = Number(opts.cardRatio || (144 / 224)); // w/h base dos posters
   const currentScale = Math.max(1, Number(opts.currentScale || 1.10));
   const safePadRight = 18;
 
@@ -1250,7 +1249,7 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
   const hero = slots.slice(0, visible);
   const side = slots;
 
-  // “No-crop” no conjunto (encaixa tudo sem cortar o container)
+  // Encaixe sem crop
   const cardWBase  = Math.round(heroHBase * cardRatio);
   const sideBlock  = side?.length ? (listWidthPx + 12) : 0;
   const innerPadX  = 12;
@@ -1351,7 +1350,7 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
       >
         {listSide === "left" && ListPane}
 
-        {/* Cards com imagem a 100% (sem bordas/gradientes internos) */}
+        {/* Cards com imagem a 100% (sem bordas pretas) */}
         <div className="relative flex-1" style={{ overflow: "visible", paddingRight: safePadRight }}>
           <div
             className="w-full"
@@ -1365,28 +1364,42 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
           >
             <div className="flex" style={{ gap: gapPx, width: "max-content" }}>
               {hero.map((s, i) => {
-                const isCurrent = i === Math.floor(visible / 2); // usa o teu índice real se tiveres
+                const isCurrent = i === Math.floor(visible / 2); // ajusta se tiveres índice real
                 const isBest    = !!best && best.id === s.id;
                 const isWorst   = !!worst && worst.id === s.id;
 
                 const h = isCurrent ? Math.round(heroH * currentScaleFit) : heroH;
                 const w = Math.round(h * cardRatio);
 
+                // borda ciana diretamente no container da imagem (sem frincha)
+                const borderPx = isCurrent ? 3 : 0;
+                const radius   = 14;
+
                 return (
-                  <div key={s.id} className="relative" style={{ width: w, height: h }}>
-                    {/* Full bleed image */}
-                    <div className="absolute inset-0 rounded-xl overflow-hidden">
+                  <div key={s.id} className="relative overflow-visible" style={{ width: w, height: h }}>
+                    {/* container da imagem (full-bleed) */}
+                    <div
+                      className="absolute inset-0 overflow-hidden"
+                      style={{
+                        borderRadius: radius,
+                        border: borderPx ? `${borderPx}px solid #38bdf8` : "none",
+                        // glow suave por fora da imagem
+                        filter: isCurrent ? "drop-shadow(0 0 14px rgba(56,189,248,.40))" : "none",
+                        background: "transparent",
+                      }}
+                    >
                       {s.thumbnail ? (
                         <img
                           src={s.thumbnail}
                           alt=""
                           className="w-full h-full object-cover object-center"
+                          style={{ display: "block" }}
                         />
                       ) : (
                         <div className="w-full h-full bg-white/10" />
                       )}
 
-                      {/* Índice + badges — topo/direita, sem cortar */}
+                      {/* Índice + badges — topo/direita */}
                       <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">
                         #{i + 1}
                       </div>
@@ -1406,17 +1419,6 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
                         )}
                       </div>
                     </div>
-
-                    {/* Realce do CURRENT por fora, sem recorte */}
-                    {isCurrent && (
-                      <div
-                        className="pointer-events-none absolute -inset-1 rounded-2xl"
-                        style={{
-                          boxShadow:
-                            "0 0 0 2px rgba(56,189,248,.9), 0 0 24px 4px rgba(56,189,248,.35)",
-                        }}
-                      />
-                    )}
                   </div>
                 );
               })}
