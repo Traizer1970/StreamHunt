@@ -1208,27 +1208,28 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
   const baseW = Number(opts.baseW || 560);
   const baseH = Number(opts.baseH || 320);
 
-  // Controlo de layout (mantém o look antigo)
+  // Layout
   const visible       = Math.max(1, Number(opts.visible || 5));
   const listSide      = String(opts.listSide || "left");
   const showBox       = opts.showBox !== false;
   const showBestWorst = !!opts.showBestWorst;
   const metric        = String(opts.metric || "x"); // "x" | "payout"
 
-  // Lista (configurável)
+  // Lista (sem “box” por defeito)
+  const listPanel       = !!opts.listPanel; // ← define true se quiseres o painel opaco
   const listWidthPx     = Math.max(80, Number(opts.listWidthPx ?? 208));
   const listRowH        = Math.max(28, Number(opts.listRowH ?? 40));
   const listRowsVisible = Math.max(0, Number(opts.listRowsVisible ?? 0)); // 0 = auto
   const listAutoScroll  = opts.listAutoScroll !== false;
   const listSpeedSec    = Math.max(4, Number(opts.listSpeedSec ?? 18));
 
-  // Cards (mantém proporções e estilos anteriores)
+  // Cards
   const cardsPos     = String(opts.cardsPos || "center"); // "top"|"center"|"bottom"
   const vOffset      = Number(opts.vOffset || 0);
   const gapPx        = Math.max(6, Number(opts.cardsGapPx ?? 12));
-  const heroHBase    = Math.max(100, Number(opts.heroHeight ?? 224)); // antes era h-56
-  const cardRatio    = Number(opts.cardRatio || (144 / 224)); // w-36 / h-56 do teu layout
-  const currentScale = Math.max(1, Number(opts.currentScale || 1.10)); // escala do CURRENT
+  const heroHBase    = Math.max(100, Number(opts.heroHeight ?? 224));
+  const cardRatio    = Number(opts.cardRatio || (144 / 224)); // w/h do teu layout
+  const currentScale = Math.max(1, Number(opts.currentScale || 1.10));
   const safePadRight = 18;
 
   // BEST/WORST
@@ -1245,11 +1246,11 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
   const best  = showBestWorst && scored.length ? scored.reduce((a,b)=>a._score>b._score?a:b) : null;
   const worst = showBestWorst && scored.length ? scored.reduce((a,b)=>a._score<b._score?a:b) : null;
 
-  // Conjuntos
+  // Hero + lista
   const hero = slots.slice(0, visible);
   const side = slots;
 
-  // Dimensões e “no-crop”: encolhe só se não couber
+  // “No-crop” no conjunto (encaixa tudo sem cortar o container)
   const cardWBase  = Math.round(heroHBase * cardRatio);
   const sideBlock  = side?.length ? (listWidthPx + 12) : 0;
   const innerPadX  = 12;
@@ -1257,15 +1258,13 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
   const needWidth  = visible * cardWBase + (visible - 1) * gapPx;
   const downScale  = needWidth > 0 ? Math.min(1, availW / needWidth) : 1;
 
-  // altura máxima disponível (sem cortar)
   const maxH = baseH - 24;
   const heroH = Math.min(Math.round(heroHBase * downScale), maxH);
   const cardW = Math.round(heroH * cardRatio);
 
-  const currentHIfScaled = heroH * currentScale;
   const currentScaleFit  = Math.min(currentScale, maxH / Math.max(1, heroH));
 
-  // Caixa exterior (mesmo look de antes)
+  // Caixa exterior
   const Box = ({ children }) => (
     <div
       className="rounded-xl overflow-visible relative"
@@ -1286,7 +1285,7 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
     </div>
   );
 
-  // Linha da lista (igual ao anterior)
+  // Linha da lista
   const Row = ({ s, i }) => (
     <div className="flex items-center gap-2" style={{ height: listRowH }}>
       <div className="text-[11px] font-semibold opacity-90 w-6 text-right">#{i + 1}</div>
@@ -1317,10 +1316,10 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
       style={{
         width: listWidthPx,
         height: listH,
-        borderRadius: 12,
-        background: "rgba(0,0,0,.55)",
-        border: "1px solid rgba(255,255,255,.12)",
-        padding: 6,
+        borderRadius: listPanel ? 12 : 0,
+        background: listPanel ? "rgba(0,0,0,.55)" : "transparent",
+        border: listPanel ? "1px solid rgba(255,255,255,.12)" : "none",
+        padding: listPanel ? 6 : 0,
         overflow: "hidden",
       }}
     >
@@ -1352,11 +1351,8 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
       >
         {listSide === "left" && ListPane}
 
-        {/* Cards (mantém o visual anterior) */}
-        <div
-          className="relative flex-1"
-          style={{ overflow: "visible", paddingRight: safePadRight }}
-        >
+        {/* Cards com imagem a 100% (sem bordas/gradientes internos) */}
+        <div className="relative flex-1" style={{ overflow: "visible", paddingRight: safePadRight }}>
           <div
             className="w-full"
             style={{
@@ -1369,8 +1365,7 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
           >
             <div className="flex" style={{ gap: gapPx, width: "max-content" }}>
               {hero.map((s, i) => {
-                // Usa a tua lógica real para "current" (aqui fica o card do meio)
-                const isCurrent = i === Math.floor(visible / 2);
+                const isCurrent = i === Math.floor(visible / 2); // usa o teu índice real se tiveres
                 const isBest    = !!best && best.id === s.id;
                 const isWorst   = !!worst && worst.id === s.id;
 
@@ -1379,8 +1374,8 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
 
                 return (
                   <div key={s.id} className="relative" style={{ width: w, height: h }}>
-                    {/* Content box (igual ao antigo) */}
-                    <div className="absolute inset-0 rounded-xl overflow-hidden border border-white/10 shadow-[0_12px_28px_rgba(0,0,0,.35)]">
+                    {/* Full bleed image */}
+                    <div className="absolute inset-0 rounded-xl overflow-hidden">
                       {s.thumbnail ? (
                         <img
                           src={s.thumbnail}
@@ -1391,43 +1386,28 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
                         <div className="w-full h-full bg-white/10" />
                       )}
 
-                      {/* Gradientes top/bottom (iguais ao look anterior) */}
-                      <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/60 to-transparent pointer-events-none" />
-                      <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/70 to-transparent pointer-events-none" />
-
-                      {/* Índice */}
+                      {/* Índice + badges — topo/direita, sem cortar */}
                       <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">
                         #{i + 1}
                       </div>
 
-                      {/* Chips SEM cortar (ficam dentro do card) */}
-                      {isBest && (
-                        <span
-                          className="absolute top-1 right-1 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold"
-                          style={{ background: "#22c55e", color: "#0b0b0b", maxWidth: "72%" }}
-                        >
-                          BEST
-                        </span>
-                      )}
-                      {isWorst && (
-                        <span
-                          className="absolute top-1 right-1 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold"
-                          style={{ background: "#ef4444", color: "#0b0b0b", maxWidth: "72%" }}
-                        >
-                          WORST
-                        </span>
-                      )}
-                      {isCurrent && (
-                        <span
-                          className="absolute top-1 right-1 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold"
-                          style={{ background: "#38bdf8", color: "#0b0b0b", maxWidth: "78%" }}
-                        >
-                          CURRENT
-                        </span>
-                      )}
+                      <div className="absolute right-1 top-1 z-10 flex gap-1 max-w-[85%]">
+                        {isWorst && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold"
+                                style={{ background: "#ef4444", color: "#0b0b0b" }}>WORST</span>
+                        )}
+                        {isBest && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold"
+                                style={{ background: "#22c55e", color: "#0b0b0b" }}>BEST</span>
+                        )}
+                        {isCurrent && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold"
+                                style={{ background: "#38bdf8", color: "#0b0b0b" }}>CURRENT</span>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Realce do CURRENT sem cortar (sombra/borda por fora do clip) */}
+                    {/* Realce do CURRENT por fora, sem recorte */}
                     {isCurrent && (
                       <div
                         className="pointer-events-none absolute -inset-1 rounded-2xl"
