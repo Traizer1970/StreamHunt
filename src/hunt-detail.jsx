@@ -807,9 +807,12 @@ const DEFAULT_OPENING_OVERLAY = {
   showBox: true,           // caixa/gradiente de fundo
   showBestWorst: true,     // badges BEST / WORST
   metric: "x",             // "x" (multiplicador) | "payout"
+  // ← usados no preview do Opening
   listAutoScroll: true,
   listSpeedSec: 18,
-  showTopChips: true,
+  // ← cabeçalho do topo
+  showTopChips: true,   // mostra/esconde os 2 chips do topo
+  showCurrent: true,    // mostra/esconde o chip da slot atual (direita)
 };
 
 /* ───────────────────────── URLs ───────────────────────── */
@@ -874,6 +877,7 @@ function buildOpeningOverlayUrl(base, numberId, opts = {}) {
   // (opcionais) ocultar chips do topo
   if (opts.showTitle !== undefined)    qs.set("title",  opts.showTitle   ? "1" : "0");
   if (opts.showCurrent !== undefined)  qs.set("current",opts.showCurrent ? "1" : "0");
+  if (opts.showTopChips !== undefined) qs.set("chips",   opts.showTopChips ? "1" : "0");
 
   return `${base}#/overlay/opening/${encodeURIComponent(numberId)}?${qs.toString()}`;
 }
@@ -1283,16 +1287,27 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
 
   return (
     <Box>
-      <div className="absolute inset-x-0 top-2 px-3 flex items-center justify-between">
-        <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
-          {hunt?.title || "Hunt"} — Opening
-        </div>
-        <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
-          {slots[0]?.name || "—"}
-        </div>
-      </div>
+      {opts.showTopChips !== false && (
+  <div className="absolute inset-x-0 top-2 px-3 flex items-center justify-between">
+    <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
+      {hunt?.title || "Hunt"} — Opening
+    </div>
 
-      <div className="h-full w-full flex items-end gap-3 px-3 pb-3 pt-10">
+    {opts.showCurrent !== false && (
+      <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
+        {slots[0]?.name || "—"}
+      </div>
+    )}
+  </div>
+)}
+
+
+       <div
+   className={cn(
+     "h-full w-full flex items-end gap-3 px-3 pb-3",
+     opts.showTopChips !== false ? "pt-10" : "pt-3"
+   )}
+ >
         {listSide === "left" && ListPane}
 
         {/* cartões “hero” */}
@@ -2055,6 +2070,27 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
       <Toggle label="Mostrar cabeçalho (chips)"
               checked={opts.showTopChips !== false}
               onChange={(v)=>setOpts(o=>({...o, showTopChips: !!v}))}/>
+              <Toggle label="Mostrar slot atual no topo"
+        checked={opts.showCurrent !== false}
+        onChange={(v)=>setOpts(o=>({...o, showCurrent: !!v}))}/>
+
+<Toggle label="Rolar nomes (lista esquerda)"
+        checked={!!opts.listAutoScroll}
+        onChange={(v)=>setOpts(o=>({...o, listAutoScroll: !!v}))}/>
+<Field label="Velocidade do scroll (s)">
+  <SoftInput
+    type="number"
+    min={5}
+    max={180}
+    disabled={!opts.listAutoScroll}
+    value={Number(opts.listSpeedSec ?? 18)}
+    onChange={(e)=>setOpts(o=>({
+      ...o,
+      listSpeedSec: Math.max(5, Math.min(180, Number(e.target.value) || 18)),
+    }))}
+  />
+</Field>
+
     </div>
 
     <Field label="Métrica para Best/Worst">
