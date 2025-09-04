@@ -825,6 +825,7 @@ const DEFAULT_OPENING_OVERLAY = {
   listRowsVisible: 0,   // 0 = auto
   listRowH: 40,         // altura de cada linha (se quiseres expor depois)
   listPanel: false,     // se quiseres ativar caixa de fundo na lista
+  bestWorstMode: "badges", // "badges" (padrão) | "cards"
 };
 
 /* ───────────────────────── URLs ───────────────────────── */
@@ -1217,70 +1218,41 @@ return (
 
 /* ───────────────────────── Opening Preview ───────────────────────── */
 function OpeningOverlayPreview({ hunt, slots, opts }) {
-  // Canvas
   const baseW = Number(opts.baseW || 560);
   const baseH = Number(opts.baseH || 320);
+  const listSide = String(opts.listSide || "left");
+  const visible = Math.max(1, Number(opts.visible || 5));
 
-  // Layout
-  const visible       = Math.max(1, Number(opts.visible || 5));
-  const listSide      = String(opts.listSide || "left");
-  const showBox       = opts.showBox !== false;
-  const showBestWorst = !!opts.showBestWorst;
-  const metric        = String(opts.metric || "x"); // "x" | "payout"
-
-  // Lista (sem painel por defeito)
-  const listPanel       = !!opts.listPanel;
-  const listWidthPx     = Math.max(80, Number(opts.listWidthPx ?? 208));
-  const listRowH        = Math.max(28, Number(opts.listRowH ?? 40));
-  const listRowsVisible = Math.max(0, Number(opts.listRowsVisible ?? 0)); // 0 = auto
-  const listAutoScroll  = opts.listAutoScroll !== false;
-  const listSpeedSec    = Math.max(4, Number(opts.listSpeedSec ?? 18));
-
-  // Cards
-  const cardsPos     = String(opts.cardsPos || "center"); // "top"|"center"|"bottom"
-  const vOffset      = Number(opts.vOffset || 0);
-  const gapPx        = Math.max(6, Number(opts.cardsGapPx ?? 12));
-  const heroHBase    = Math.max(100, Number(opts.heroHeight ?? 224));
-  const cardRatio    = Number(opts.cardRatio || (144 / 224)); // w/h base dos posters
-  const currentScale = Math.max(1, Number(opts.currentScale || 1.10));
-  const safePadRight = 18;
-
-  // BEST/WORST
+  // --------- Best / Worst ----------
   const scored = slots
     .map((s) => {
       const bet = toNum(s.bet_size);
       const payout = toNum(s.payout);
       const x = bet > 0 ? payout / bet : 0;
-      const score = metric === "payout" ? payout : x;
+      const score = (opts.metric || "payout") === "payout" ? payout : x;
       return { ...s, _score: score };
     })
     .filter((s) => s._score > 0);
 
-  const best  = showBestWorst && scored.length ? scored.reduce((a,b)=>a._score>b._score?a:b) : null;
-  const worst = showBestWorst && scored.length ? scored.reduce((a,b)=>a._score<b._score?a:b) : null;
+  const best  = opts.showBestWorst && scored.length ? scored.reduce((a,b)=>a._score>b._score?a:b) : null;
+  const worst = opts.showBestWorst && scored.length ? scored.reduce((a,b)=>a._score<b._score?a:b) : null;
 
-  // Hero + lista
-  const hero = slots.slice(0, visible);
-  const side = slots;
+  const bwMode = (opts.bestWorstMode || "badges"); // "badges" | "cards"
 
-  // Encaixe sem crop
-  const cardWBase  = Math.round(heroHBase * cardRatio);
-  const sideBlock  = side?.length ? (listWidthPx + 12) : 0;
-  const innerPadX  = 12;
-  const availW     = baseW - innerPadX * 2 - sideBlock - safePadRight;
-  const needWidth  = visible * cardWBase + (visible - 1) * gapPx;
-  const downScale  = needWidth > 0 ? Math.min(1, availW / needWidth) : 1;
+  // --------- Current + heróis (prev, current, next) ----------
+  const currentIdx = Math.max(0, slots.findIndex(s => s.payout == null));
+  const indices = [currentIdx - 1, currentIdx, currentIdx + 1];
+  const hero = indices.map(i => (i >= 0 && i < slots.length) ? { s: slots[i], i } : null).filter(Boolean);
 
-  const maxH = baseH - 24;
-  const heroH = Math.min(Math.round(heroHBase * downScale), maxH);
-  const cardW = Math.round(heroH * cardRatio);
+  // Dimensões — imagem SEM letterbox (cobre o card todo)
+  const cardW = 180, cardH = 260, gap = 18;
+  const currentScale = Number(opts.currentScale || 1.08);
+  const miniScale = 0.9; // escala dos cards BEST/WORST (modo "cards")
 
-  const currentScaleFit  = Math.min(currentScale, maxH / Math.max(1, heroH));
-
-  // Caixa exterior
+  const showBox = opts.showBox !== false;
   const Box = ({ children }) => (
     <div
-      className="rounded-xl overflow-visible relative"
+      className="rounded-xl overflow-hidden relative"
       style={{
         width: baseW,
         height: baseH,
@@ -1291,16 +1263,12 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
         fontFamily: RUBIK_STACK,
       }}
     >
-      <style>{`
-        @keyframes marqueeY { 0% { transform: translateY(0) } 100% { transform: translateY(-50%) } }
-      `}</style>
       {children}
     </div>
   );
 
-  // Linha da lista
   const Row = ({ s, i }) => (
-    <div className="flex items-center gap-2" style={{ height: listRowH }}>
+    <div className="flex items-center gap-2 h-10">
       <div className="text-[11px] font-semibold opacity-90 w-6 text-right">#{i + 1}</div>
       <div className="w-9 h-9 rounded-md overflow-hidden border border-white/10 shrink-0">
         {s.thumbnail ? (
@@ -1313,131 +1281,146 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
     </div>
   );
 
-  // Altura real da lista
-  const headerH = 0;
+  // Lista lateral (altura, auto-scroll e largura personalizável)
+  const rowH = Number(opts.listRowH || 40);
+  const headerH = 0; // sem header dentro do box (tiras o “chip” para não duplicar)
   const listH = (() => {
-    if (listRowsVisible > 0) return listRowsVisible * listRowH + 12;
-    const avail = baseH - headerH - 12;
-    const rows  = Math.max(1, Math.floor(avail / listRowH));
-    return rows * listRowH + 12;
+    const req = Number(opts.listRowsVisible || 0);
+    if (req > 0) return Math.min(req, Math.max(1, slots.length)) * rowH;
+    return Math.max(4, Math.floor((baseH - headerH - 12) / rowH)) * rowH;
   })();
-  const doAuto = listAutoScroll && side.length * listRowH > listH;
+  const doAuto = (opts.listAutoScroll !== false) && slots.length * rowH > listH;
+  const speed = Math.max(4, Number(opts.listSpeedSec ?? 18));
+  const listW = Math.max(80, Number(opts.listWidthPx || 208));
 
   const ListPane = (
-    <div
-      className="shrink-0"
-      style={{
-        width: listWidthPx,
-        height: listH,
-        borderRadius: listPanel ? 12 : 0,
-        background: listPanel ? "rgba(0,0,0,.55)" : "transparent",
-        border: listPanel ? "1px solid rgba(255,255,255,.12)" : "none",
-        padding: listPanel ? 6 : 0,
-        overflow: "hidden",
-      }}
-    >
-      <div style={{ animation: doAuto ? `marqueeY ${listSpeedSec}s linear infinite` : undefined }}>
-        {[...side, ...side].map((s, idx) => (
-          <Row key={`${s.id}-${idx}`} s={s} i={idx % side.length} />
+    <div className="shrink-0" style={{ width: listW, height: listH, overflow: "hidden" }}>
+      <div
+        style={{
+          animation: doAuto ? `marqueeY ${speed}s linear infinite` : undefined,
+        }}
+      >
+        {[...slots, ...slots].map((s, idx) => (
+          <Row key={`${s.id}-${idx}`} s={s} i={idx % slots.length} />
         ))}
       </div>
     </div>
   );
 
-  // Alinhamento vertical dos cards
-  const alignY =
-    cardsPos === "top" ? "flex-start" : cardsPos === "bottom" ? "flex-end" : "center";
+  // Card genérico (imagem cobre tudo; badge opcional)
+  function Card({ s, rank, isCurrent=false, badge=null, scale=1 }) {
+    const w = Math.round(cardW * scale), h = Math.round(cardH * scale);
+    const borderCol = isCurrent ? "#22d3ee" : "rgba(255,255,255,.2)";
+    const glow = isCurrent ? "0 0 0 3px rgba(34,211,238,.8), 0 14px 44px rgba(0,0,0,.55)" : "0 12px 32px rgba(0,0,0,.45)";
+    return (
+      <div
+        className="relative rounded-[16px] overflow-hidden"
+        style={{
+          width: w, height: h,
+          boxShadow: glow,
+          border: `2px solid ${borderCol}`,
+          background: "#000"
+        }}
+        title={s?.name}
+      >
+        {s?.thumbnail
+          ? <img src={s.thumbnail} alt="" className="absolute inset-0 w-full h-full object-cover object-center" />
+          : <div className="absolute inset-0 bg-white/10" />
+        }
+
+        {/* chips */}
+        <div className="absolute left-2 top-2 z-10 text-[11px] font-bold px-2 py-0.5 rounded bg-black/75 text-white shadow">
+          #{rank}
+        </div>
+
+        {badge && (
+          <div
+            className="absolute right-2 top-2 z-10 text-[11px] font-bold px-2 py-0.5 rounded-full shadow"
+            style={{ background: badge.bg, color: badge.fg }}
+          >
+            {badge.text}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Badges no card (somente neste modo)
+  const isBest = (id)  => !!best && best.id === id;
+  const isWorst = (id) => !!worst && worst.id === id;
+
+  // Posição vertical dos cards + offset
+  const pos = String(opts.cardsPos || "center"); // "top" | "center" | "bottom"
+  const justify =
+    pos === "top" ? "items-start" :
+    pos === "bottom" ? "items-end" : "items-center";
+  const vOffset = Number(opts.vOffset || 0);
 
   return (
     <Box>
-      <div
-        className="h-full w-full"
-        style={{
-          display: "flex",
-          alignItems: "flex-end",
-          paddingLeft: innerPadX,
-          paddingRight: innerPadX,
-          paddingTop: 10,
-          paddingBottom: 10,
-          gap: 12,
-        }}
-      >
+      <style>{`
+        @keyframes marqueeY { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
+      `}</style>
+
+      <div className={cn("h-full w-full flex gap-3 px-3", justify)} style={{ paddingTop: 8, paddingBottom: 8 }}>
         {listSide === "left" && ListPane}
 
-        {/* Cards com imagem a 100% (sem bordas pretas) */}
-        <div className="relative flex-1" style={{ overflow: "visible", paddingRight: safePadRight }}>
-          <div
-            className="w-full"
-            style={{
-              height: "100%",
-              display: "flex",
-              alignItems: alignY,
-              justifyContent: "center",
-              transform: `translateY(${vOffset}px)`,
-            }}
-          >
-            <div className="flex" style={{ gap: gapPx, width: "max-content" }}>
-              {hero.map((s, i) => {
-                const isCurrent = i === Math.floor(visible / 2); // ajusta se tiveres índice real
-                const isBest    = !!best && best.id === s.id;
-                const isWorst   = !!worst && worst.id === s.id;
+        {/* Coluna principal: fila de 3 + (opcional) 2 cards abaixo */}
+        <div className="flex-1 flex flex-col" style={{ transform: `translateY(${vOffset}px)` }}>
+          {/* fila principal */}
+          <div className="flex justify-center" style={{ gap }}>
+            {hero.map(({ s, i }) => {
+              const isCur = i === currentIdx;
+              const rank = i + 1;
 
-                const h = isCurrent ? Math.round(heroH * currentScaleFit) : heroH;
-                const w = Math.round(h * cardRatio);
+              // badge para cada card (apenas quando bwMode === 'badges')
+              let badge = null;
+              if (bwMode === "badges") {
+                if (isBest(s.id))  badge = { text:"BEST",  bg:"#22c55e", fg:"#0b0b0b" };
+                if (isWorst(s.id)) badge = { text:"WORST", bg:"#ef4444", fg:"#0b0b0b" };
+                if (isCur)         badge = { text:"CURRENT", bg:"#38bdf8", fg:"#0b0b0b" };
+              } else {
+                if (isCur) badge = { text:"CURRENT", bg:"#38bdf8", fg:"#0b0b0b" };
+              }
 
-                // borda ciana diretamente no container da imagem (sem frincha)
-                const borderPx = isCurrent ? 3 : 0;
-                const radius   = 14;
-
-                return (
-                  <div key={s.id} className="relative overflow-visible" style={{ width: w, height: h }}>
-                    {/* container da imagem (full-bleed) */}
-                    <div
-                      className="absolute inset-0 overflow-hidden"
-                      style={{
-                        borderRadius: radius,
-                        border: borderPx ? `${borderPx}px solid #38bdf8` : "none",
-                        // glow suave por fora da imagem
-                        filter: isCurrent ? "drop-shadow(0 0 14px rgba(56,189,248,.40))" : "none",
-                        background: "transparent",
-                      }}
-                    >
-                      {s.thumbnail ? (
-                        <img
-                          src={s.thumbnail}
-                          alt=""
-                          className="w-full h-full object-cover object-center"
-                          style={{ display: "block" }}
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-white/10" />
-                      )}
-
-                      {/* Índice + badges — topo/direita */}
-                      <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">
-                        #{i + 1}
-                      </div>
-
-                      <div className="absolute right-1 top-1 z-10 flex gap-1 max-w-[85%]">
-                        {isWorst && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold"
-                                style={{ background: "#ef4444", color: "#0b0b0b" }}>WORST</span>
-                        )}
-                        {isBest && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold"
-                                style={{ background: "#22c55e", color: "#0b0b0b" }}>BEST</span>
-                        )}
-                        {isCurrent && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold"
-                                style={{ background: "#38bdf8", color: "#0b0b0b" }}>CURRENT</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+              return (
+                <Card
+                  key={s.id}
+                  s={s}
+                  rank={rank}
+                  isCurrent={isCur}
+                  badge={badge}
+                  scale={isCur ? currentScale : 1}
+                />
+              );
+            })}
           </div>
+
+          {/* modo "cards": BEST e WORST em baixo */}
+          {opts.showBestWorst && bwMode === "cards" && (best || worst) && (
+            <div className="mt-3 flex justify-center" style={{ gap }}>
+              {best && (
+                <Card
+                  key={`best-${best.id}`}
+                  s={best}
+                  rank={best._rawIndex || (slots.findIndex(x=>x.id===best.id)+1)}
+                  isCurrent={false}
+                  badge={{ text:"BEST", bg:"#22c55e", fg:"#0b0b0b" }}
+                  scale={miniScale}
+                />
+              )}
+              {worst && (!best || worst.id !== best.id) && (
+                <Card
+                  key={`worst-${worst.id}`}
+                  s={worst}
+                  rank={worst._rawIndex || (slots.findIndex(x=>x.id===worst.id)+1)}
+                  isCurrent={false}
+                  badge={{ text:"WORST", bg:"#ef4444", fg:"#0b0b0b" }}
+                  scale={miniScale}
+                />
+              )}
+            </div>
+          )}
         </div>
 
         {listSide === "right" && ListPane}
@@ -1691,6 +1674,20 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
             ]}
           />
         </Field>
+        {/* Como mostrar Best/Worst */}
+{opts.showBestWorst && (
+  <Field label="Best/Worst">
+    <Segmented
+      value={opts.bestWorstMode || "badges"}
+      onChange={(v)=>setOpts(o=>({...o, bestWorstMode: v}))}
+      options={[
+        { value:"badges", label:"Badges no card" },
+        { value:"cards",  label:"2 cards por baixo" }
+      ]}
+    />
+  </Field>
+)}
+
       </div>
 
 <div className="flex flex-wrap gap-2">
