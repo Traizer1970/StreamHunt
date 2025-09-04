@@ -1207,7 +1207,7 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
   const baseH = Number(opts.baseH || 320);
   const listSide = String(opts.listSide || "left");
 
-  /* ── Best/Worst ────────────────────────────────────────────── */
+  // ── Best / Worst
   const scored = slots
     .map((s) => {
       const bet = toNum(s.bet_size);
@@ -1221,7 +1221,7 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
   const best  = opts.showBestWorst && scored.length ? scored.reduce((a,b)=>a._score>b._score?a:b) : null;
   const worst = opts.showBestWorst && scored.length ? scored.reduce((a,b)=>a._score<b._score?a:b) : null;
 
-  /* ── Current + vizinhança (prev/next com wrap) ─────────────── */
+  // ── índice atual + vizinhos
   const N   = Math.max(1, slots.length);
   const cur = (() => {
     const i = slots.findIndex((s) => s.payout == null);
@@ -1235,13 +1235,10 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
 
   const currentBadge =
     (typeof document !== "undefined" &&
-      (document.documentElement.lang || "")
-        .toLowerCase()
-        .startsWith("pt"))
-      ? "ATUAL"
-      : "CURRENT";
+      (document.documentElement.lang || "").toLowerCase().startsWith("pt"))
+      ? "ATUAL" : "CURRENT";
 
-  /* ── Caixa (background) ────────────────────────────────────── */
+  // ── Caixa
   const showBox = opts.showBox !== false;
   const Box = ({ children }) => (
     <div
@@ -1258,25 +1255,18 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
       }}
     >
       <style>{`
-        @keyframes marqueeY {
-          0% { transform: translateY(0); }
-          100% { transform: translateY(-50%); }
-        }
+        @keyframes marqueeY { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
       `}</style>
       {children}
     </div>
   );
 
-  /* ── Listagem da esquerda (auto-scroll vertical) ───────────── */
+  // ── Lista vertical (auto scroll)
   const Row = ({ s, i }) => (
     <div className="flex items-center gap-2 h-10">
       <div className="text-[11px] font-semibold opacity-90 w-6 text-right">#{i + 1}</div>
       <div className="w-9 h-9 rounded-md overflow-hidden border border-white/10 shrink-0">
-        {s.thumbnail ? (
-          <img src={s.thumbnail} alt="" className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full bg-white/10" />
-        )}
+        {s.thumbnail ? <img src={s.thumbnail} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full bg-white/10" />}
       </div>
       <div className="text-sm truncate flex-1">{s.name || "—"}</div>
     </div>
@@ -1285,14 +1275,13 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
   const padX = 12, padY = 12;
   const gap  = 12;
 
-  // largura da lista configurável
   const wantList   = listSide === "left" || listSide === "right";
   const listWidth  = wantList ? Math.max(140, Math.min(360, Number(opts.listWidth ?? 208))) : 0;
 
   const contentH = Math.max(120, baseH - padY * 2);
   const areaW    = baseW - (wantList ? listWidth : 0) - padX * 2;
 
-  // dimensões dos cartões (proporção segura para banners verticais)
+  // dimensões dos cards (vertical)
   const heroCount  = hero.length;
   const aspect     = 0.64; // w = h * 0.64
   const maxWByArea = Math.floor((areaW - gap * (heroCount - 1)) / heroCount);
@@ -1300,7 +1289,7 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
   const cardH      = Math.min(contentH, hFromArea);
   const cardW      = Math.max(110, Math.round(cardH * aspect));
 
-  // lista: linhas visíveis configuráveis (0 = auto) para não cortar
+  // lista: linhas visíveis (0 = auto)
   const rowH   = 40;
   const rows   = Math.max(0, Number(opts.listRows || 0));
   const listH  = rows > 0 ? rowH * rows : Math.max(4, Math.floor(contentH / rowH)) * rowH;
@@ -1317,11 +1306,14 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
     </div>
   );
 
-  // alinhamento vertical + offset configurável
-  const heroAlign = String(opts.heroAlign || "bottom"); // "top" | "center" | "bottom"
+  // alinhamento & offset vertical dos heros
+  const heroAlign  = String(opts.heroAlign || "bottom"); // top|center|bottom
   const alignItems =
     heroAlign === "top" ? "flex-start" : heroAlign === "center" ? "center" : "flex-end";
-  const heroOffset = Math.max(-80, Math.min(80, Number(opts.heroOffset || 0))); // px
+  const heroOffset = Math.max(-80, Math.min(80, Number(opts.heroOffset || 0)));
+
+  // ESCALA do card atual
+  const curScale = Math.max(0.85, Math.min(1.4, Number(opts.currentScale ?? 1.06)));
 
   return (
     <Box>
@@ -1337,12 +1329,13 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
       >
         {listSide === "left" && ListPane}
 
-        {/* Prev • Current • Next (current centrado e destacado) */}
-        <div className="flex-1 overflow-hidden">
-          <div className="flex items-end justify-center" style={{ gap }}>
+        {/* Prev • Current • Next */}
+        <div className="flex-1 overflow-visible">
+          <div className="flex items-end justify-center overflow-visible" style={{ gap }}>
             {hero.map((s, i) => {
               const iAbs = heroIdxs[i];
               const isCurrent = i === Math.floor(hero.length / 2);
+
               return (
                 <div
                   key={s?.id ?? `h${i}`}
@@ -1350,8 +1343,12 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
                   style={{
                     width: cardW,
                     height: cardH,
+                    transform: isCurrent ? `scale(${curScale})` : "scale(1)",
+                    transformOrigin: "bottom center",
+                    transition: "transform 160ms ease-out",
+                    zIndex: isCurrent ? 3 : 1,                 // evita ser “cortado” pelos vizinhos
                     boxShadow: isCurrent
-                      ? "0 0 0 2px rgba(56,189,248,.9), 0 14px 36px rgba(56,189,248,.25), 0 18px 36px rgba(0,0,0,.55)"
+                      ? "0 0 0 2px rgba(56,189,248,.95), 0 16px 40px rgba(56,189,248,.25), 0 18px 36px rgba(0,0,0,.55)"
                       : "0 12px 28px rgba(0,0,0,.35)",
                     border: "1px solid rgba(255,255,255,.10)",
                     overflow: "visible",
@@ -1360,17 +1357,13 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
                   {/* imagem recortada nos cantos */}
                   <div className="absolute inset-0 rounded-xl overflow-hidden">
                     {s?.thumbnail ? (
-                      <img
-                        src={s.thumbnail}
-                        alt=""
-                        className="w-full h-full object-cover object-center"
-                      />
+                      <img src={s.thumbnail} alt="" className="w-full h-full object-cover object-center" />
                     ) : (
                       <div className="w-full h-full bg-white/10" />
                     )}
                   </div>
 
-                  {/* gradiente superior para legibilidade das etiquetas */}
+                  {/* gradiente topo para legibilidade */}
                   <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/55 to-transparent pointer-events-none rounded-t-xl" />
 
                   {/* index */}
@@ -1380,28 +1373,22 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
 
                   {/* BEST / WORST */}
                   {!!best && best.id === s.id && (
-                    <span
-                      className="absolute right-1.5 top-1.5 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold shadow"
-                      style={{ background: "#22c55e", color: "#0b0b0b" }}
-                    >
+                    <span className="absolute right-1.5 top-1.5 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold shadow"
+                          style={{ background: "#22c55e", color: "#0b0b0b" }}>
                       BEST
                     </span>
                   )}
                   {!!worst && worst.id === s.id && (
-                    <span
-                      className="absolute right-1.5 top-1.5 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold shadow"
-                      style={{ background: "#ef4444", color: "#0b0b0b" }}
-                    >
+                    <span className="absolute right-1.5 top-1.5 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold shadow"
+                          style={{ background: "#ef4444", color: "#0b0b0b" }}>
                       WORST
                     </span>
                   )}
 
-                  {/* CURRENT — só no cartão central */}
+                  {/* CURRENT (só no centro) */}
                   {isCurrent && (
-                    <span
-                      className="absolute left-1.5 top-1.5 z-10 translate-y-6 px-2 py-0.5 rounded-full text-[10px] font-bold shadow"
-                      style={{ background: "#38bdf8", color: "#0b0b0b" }}
-                    >
+                    <span className="absolute left-1.5 top-1.5 z-10 translate-y-6 px-2 py-0.5 rounded-full text-[10px] font-bold shadow"
+                          style={{ background: "#38bdf8", color: "#0b0b0b" }}>
                       {currentBadge}
                     </span>
                   )}
