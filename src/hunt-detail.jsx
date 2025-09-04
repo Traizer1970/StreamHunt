@@ -1202,30 +1202,35 @@ return (
 }
 
 /* ───────────────────────── Opening Preview ───────────────────────── */
+/* ───────────────────────── Opening Preview ───────────────────────── */
 function OpeningOverlayPreview({ hunt, slots, opts }) {
   /* ───────── dimensões base ───────── */
-  const baseW = Number(opts.baseW || 560);
-  const baseH = Number(opts.baseH || 320);
+  const baseW = Number(opts.baseW || 1920);
+  const baseH = Number(opts.baseH || 1080);
 
   /* ───────── opções (com defaults) ───────── */
-  const visible      = Math.max(1, Number(opts.visible || 3));
-  const listSide     = String(opts.listSide || "left");        // left | right
-  const listWidthPx  = Math.max(120, Number(opts.listWidthPx || 208));
-  const listRowH     = Math.max(28,  Number(opts.listRowH || 40));
-  const listRowsVis  = Math.max(0,   Number(opts.listRowsVisible || 0)); // 0=auto
+  const visible      = Math.max(1, Number(opts.visible || 3));          // 3,5,7…
+  const listSide     = String(opts.listSide || "left");                  // left | right
+  const listWidthPx  = Math.max(80,  Number(opts.listWidthPx || 208));  // largura da lista
+  const listRowH     = Math.max(28,  Number(opts.listRowH || 40));      // altura de linha
+  const listRowsVis  = Math.max(0,   Number(opts.listRowsVisible || 0));// 0 = auto
   const autoScroll   = opts.listAutoScroll !== false;
   const speedSec     = Math.max(4,   Number(opts.listSpeedSec || 18));
-  const cardsPos     = String(opts.cardsPos || "center");      // top | center | bottom
-  const vOffset      = Number(opts.vOffset || 0);
-  const heroH        = Math.max(120, Number(opts.heroHeight ?? opts.cardH ?? 224));
-  const cardRatio    = Number(opts.cardRatio || 0.64);         // W = H*ratio (ex.: 56x36 → 0.64)
-  const currentScale = Math.max(1.0, Number(opts.currentScale || 1.10));
-  const showBox      = opts.showBox !== false;
+  const cardsPos     = String(opts.cardsPos || "center");                // top|center|bottom
+  const vOffset      = Number(opts.vOffset || 0);                        // offset vertical dos cards
 
-  const cardW = Math.round(heroH * cardRatio);
-  const GAP   = 14;
-  const PADX  = 12;
-  const sideGap = 14; // gap entre lista e cards
+  // “Tamanho original” dos cards (define apenas a proporção; sem limite máximo)
+  const heroHBase    = Math.max(100, Number(opts.heroHeight ?? opts.cardH ?? 300));
+  const cardRatio    = Number(opts.cardRatio || 0.64);                   // W = H * 0.64 (56x36)
+  const gapPx        = Math.max(6,   Number(opts.cardsGapPx || 16));     // gap entre cards
+  const padX         = Math.max(0,   Number(opts.padX || 24));           // padding interno
+  const safePadRight = 16;                                               // “folga” p/ não cortar última
+
+  // Destaque do CURRENT (nunca corta a borda/Glow)
+  const currentScale = Math.max(1, Number(opts.currentScale || 1.12));   // aumenta o CURRENT
+  const currentGlow  = opts.currentGlow !== false;
+
+  const showBox      = opts.showBox !== false;
 
   /* ───────── BEST/WORST ───────── */
   const scored = slots
@@ -1241,159 +1246,213 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
   const best  = opts.showBestWorst && scored.length ? scored.reduce((a,b)=>a._score>b._score?a:b) : null;
   const worst = opts.showBestWorst && scored.length ? scored.reduce((a,b)=>a._score<b._score?a:b) : null;
 
-  /* ───────── current & janela centrada ───────── */
-  const currentIdx = (() => {
-    const i = slots.findIndex(s => s.payout == null);
-    return i === -1 ? 0 : i;
+  /* ───────── conjuntos ───────── */
+  const hero = slots.slice(0, visible);
+  const side = slots;
+
+  /* ───────── helpers ───────── */
+  const cardWBase = Math.round(heroHBase * cardRatio);
+
+  // área útil horizontal para os cards (sem a lista)
+  const hasList   = Boolean(side?.length);
+  const sideBlock = hasList ? (listWidthPx + 14) : 0; // 14 = gap entre lista e cards
+  const availW    = baseW - padX * 2 - sideBlock - safePadRight;
+
+  // sem “tamanho máximo”: usamos o tamanho base e apenas ENCOLHEMOS caso não caiba
+  const needWidth = visible * cardWBase + (visible - 1) * gapPx;
+  const downscale = needWidth > 0 ? Math.min(1, availW / needWidth) : 1;
+
+  // altura máxima para caber verticalmente; se o CURRENT crescer, ajusta para não cortar
+  const maxHForCards = baseH - 2 * Math.max(0, 12) /* pequena folga */;
+  const heroH = Math.min(heroHBase * downscale, maxHForCards);         // nunca corta vertical
+  const cardW = Math.round(heroH * cardRatio);
+
+  // escala efetiva do CURRENT (cresce, mas encolhe se for necessário caber)
+  const currentHIfScaled = heroH * currentScale;
+  const currentScaleFit  = Math.min(currentScale, maxHForCards / heroH);
+
+  /* ───────── componentes ───────── */
+  const Box = ({ children }) => (
+    <div
+      className="rounded-xl relative"
+      style={{
+        width: baseW,
+        height: baseH,
+        // sem cortes no conteúdo:
+        overflow: "visible",
+        border: showBox ? "1px solid rgba(255,255,255,.12)" : "none",
+        background: showBox
+          ? "linear-gradient(135deg, rgba(15,16,33,1) 0%, rgba(24,16,40,1) 100%)"
+          : "transparent",
+        fontFamily: RUBIK_STACK,
+      }}
+    >
+      <style>{`
+        @keyframes marqueeY { 0% {transform: translateY(0)} 100% {transform: translateY(-50%)} }
+      `}</style>
+      {children}
+    </div>
+  );
+
+  const Row = ({ s, i }) => (
+    <div className="grid grid-cols-[auto_auto_1fr] items-center gap-2" style={{ height: listRowH }}>
+      <div className="text-[11px] font-semibold opacity-90 w-6 text-right">#{i + 1}</div>
+      <div className="w-9 h-9 rounded-md overflow-hidden border border-white/10 shrink-0">
+        {s.thumbnail ? (
+          <img src={s.thumbnail} alt="" className="w-full h-full object-cover" />
+        ) : <div className="w-full h-full bg-white/10" />}
+      </div>
+      <div className="text-sm truncate">{s.name || "—"}</div>
+    </div>
+  );
+
+  const headerH = 0; // (se tiveres um header ali ao lado, ajusta)
+  const listH = (() => {
+    if (listRowsVis > 0) return listRowsVis * listRowH + 12;          // inclui padding interno
+    const avail = baseH - headerH - 12;
+    const fitRows = Math.max(1, Math.floor(avail / listRowH));
+    return fitRows * listRowH + 12;
   })();
-  const half  = Math.floor(visible / 2);
-  const start = Math.max(0, Math.min(Math.max(0, slots.length - visible), currentIdx - half));
-  const hero  = slots.slice(start, start + visible);
-
-  /* ───────── layout: lista ───────── */
-  const headerH = 0; // sem chips no topo
-  const autoListH = Math.max(4, Math.floor((baseH - headerH - 12) / listRowH)) * listRowH;
-  const listH = (listRowsVis > 0 ? listRowsVis * listRowH : autoListH);
-
+  const doAuto  = autoScroll && side.length * listRowH > listH;
   const ListPane = (
-    <div className="shrink-0" style={{ width: listWidthPx, height: listH, overflow: "hidden" }}>
-      <style>{`@keyframes marqueeY { 0%{transform:translateY(0)} 100%{transform:translateY(-50%)} }`}</style>
-      <div style={{ animation: autoScroll && slots.length * listRowH > listH ? `marqueeY ${speedSec}s linear infinite` : undefined }}>
-        {[...slots, ...slots].map((s, idx) => (
-          <div key={`${s.id}-${idx}`} className="flex items-center gap-2" style={{ height: listRowH }}>
-            <div className="text-[11px] font-semibold opacity-90 w-6 text-right">#{(idx % slots.length) + 1}</div>
-            <div className="w-9 h-9 rounded-md overflow-hidden border border-white/10 shrink-0">
-              {s.thumbnail ? <img src={s.thumbnail} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full bg-white/10" />}
-            </div>
-            <div className="text-sm truncate flex-1">{s.name || "—"}</div>
-          </div>
+    <div
+      className="shrink-0"
+      style={{
+        width: listWidthPx,
+        height: listH,
+        borderRadius: 12,
+        background: opts.listBox === false ? "transparent" : "rgba(0,0,0,.55)",
+        border: opts.listBox === false ? "1px solid transparent" : "1px solid rgba(255,255,255,.12)",
+        padding: 6,
+        overflow: "hidden",
+      }}
+    >
+      <div style={{ animation: doAuto ? `marqueeY ${speedSec}s linear infinite` : undefined }}>
+        {[...side, ...side].map((s, idx) => (
+          <Row key={`${s.id}-${idx}`} s={s} i={idx % side.length} />
         ))}
       </div>
     </div>
   );
 
-  /* ───────── container/Box ───────── */
-  const Box = ({ children }) => (
-    <div
-      className="rounded-xl overflow-hidden relative"
-      style={{
-        width: baseW,
-        height: baseH,
-        border: showBox ? "1px solid rgba(255,255,255,.12)" : "none",
-        background: showBox ? "linear-gradient(135deg, rgba(15,16,33,1) 0%, rgba(24,16,40,1) 100%)" : "transparent",
-        fontFamily: RUBIK_STACK,
-      }}
-    >
-      {children}
-    </div>
-  );
-
-  /* ───────── helper: tag no topo-direito (sem cortar) ───────── */
-  function Tag({ label, bg = "#0ea5e9" }) {
-    return (
-      <span
-        className="absolute z-20 top-1.5 right-1.5 font-semibold rounded-full px-2 py-0.5"
-        style={{
-          background: bg,
-          color: "#0b0b0b",
-          fontSize: 10,
-          lineHeight: 1,
-          maxWidth: "72%",
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-        }}
-      >
-        {label}
-      </span>
-    );
-  }
-
-  /* ───────── card (sem cortar o glow do current) ───────── */
-  function Card({ s, iAbs, isCurrent }) {
-    return (
-      <div
-        className="relative"
-        style={{
-          width: cardW,
-          height: heroH,
-          transform: isCurrent ? `scale(${currentScale})` : "none",
-          transition: "transform .18s ease",
-          marginLeft: isCurrent ? -(cardW * (currentScale - 1)) / 2 : 0,
-          marginRight: isCurrent ? -(cardW * (currentScale - 1)) / 2 : 0,
-        }}
-      >
-        <div
-          className="relative h-full w-full rounded-xl overflow-hidden border"
-          style={{
-            borderColor: isCurrent ? "rgba(56,189,248,.9)" : "rgba(255,255,255,.12)",
-            boxShadow: isCurrent
-              ? "0 0 0 2px rgba(56,189,248,.85), 0 0 24px rgba(56,189,248,.55), 0 10px 26px rgba(0,0,0,.55)"
-              : "0 12px 28px rgba(0,0,0,.35)",
-            background: s.thumbnail ? "transparent" : "rgba(255,255,255,.08)",
-          }}
-        >
-          {/* safety gradients para legibilidade e para não cortar tags */}
-          <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
-          <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
-
-          {s.thumbnail ? (
-            <img src={s.thumbnail} alt="" className="absolute inset-0 h-full w-full object-cover object-center" />
-          ) : null}
-
-          <span className="absolute top-1.5 left-1.5 z-20 text-[10px] font-bold px-1.5 py-0.5 rounded bg-black/70">#{iAbs + 1}</span>
-          {isCurrent && <Tag label="CURRENT" bg="#38bdf8" />}
-          {!!best && best.id === s.id && <Tag label="BEST" bg="#22c55e" />}
-          {!!worst && worst.id === s.id && <Tag label="WORST" bg="#ef4444" />}
-        </div>
-      </div>
-    );
-  }
-
-  /* ───────── alinhamento vertical dos cards ───────── */
   const alignY =
-    cardsPos === "top" ? "flex-start" :
-    cardsPos === "bottom" ? "flex-end" :
-    "center";
-  const offsetStyle =
-    cardsPos === "top" ? { marginTop: vOffset } :
-    cardsPos === "bottom" ? { marginBottom: vOffset } :
-    { marginTop: vOffset };
+    cardsPos === "top" ? "flex-start" : cardsPos === "bottom" ? "flex-end" : "center";
 
-  /* ───────── cálculo de escala do GRUPO (para nunca cortar) ───────── */
-  const leftPaneW = listSide === "left" || listSide === "right" ? listWidthPx + sideGap : 0;
-  const availW    = baseW - PADX * 2 - leftPaneW;
-  const neededW   = visible * cardW + (visible - 1) * GAP + (currentScale - 1) * cardW; // largura com current maior
-  const groupScale = Math.min(1, availW / Math.max(1, neededW)); // <=1 (apenas encolhe o conjunto se não couber)
-
-  /* ───────── render ───────── */
   return (
     <Box>
-      <div className="h-full w-full flex gap-3 px-3" style={{ alignItems: alignY, ...offsetStyle }}>
+      <div
+        className="h-full w-full"
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          paddingLeft: padX,
+          paddingRight: padX,
+          paddingTop: 12,
+          paddingBottom: 12,
+          gap: 14,
+        }}
+      >
         {listSide === "left" && ListPane}
-        {listSide === "left" && <div style={{ width: sideGap }} />}
 
-        {/* zona dos cards: sem overflow para não cortar brilho; grupo escala se necessário */}
-        <div className="flex-1 overflow-visible">
+        {/* zona dos cards */}
+        <div
+          className="relative flex-1"
+          style={{
+            // nunca corta; dá folga para a última slot quando a lista está à esquerda
+            overflow: "visible",
+            paddingRight: safePadRight,
+          }}
+        >
           <div
-            className="flex"
+            className="w-full"
             style={{
-              gap: GAP,
+              height: "100%",
+              display: "flex",
+              alignItems: alignY,
               justifyContent: "center",
-              alignItems: "center",
-              transform: `scale(${groupScale})`,
-              transformOrigin: "center center",
+              transform: `translateY(${vOffset}px)`,
             }}
           >
-            {hero.map((s, i) => {
-              const iAbs = start + i;
-              const isCurrent = iAbs === currentIdx;
-              return <Card key={s.id} s={s} iAbs={iAbs} isCurrent={isCurrent} />;
-            })}
+            <div className="flex" style={{ gap: gapPx, width: "max-content" }}>
+              {hero.map((s, i) => {
+                const isBest = !!best && best.id === s.id;
+                const isWorst = !!worst && worst.id === s.id;
+                const isCurrent = i === 1 || (s && s.payout == null); // ajusta a tua lógica de “current”
+
+                const h = isCurrent ? Math.round(heroH * currentScaleFit) : heroH;
+                const w = Math.round(h * cardRatio);
+
+                return (
+                  <div key={s.id} className="relative" style={{ width: w, height: h }}>
+                    {/* Glow / borda do CURRENT por fora (não corta) */}
+                    {isCurrent && currentGlow && (
+                      <div
+                        className="pointer-events-none absolute inset-0 rounded-2xl"
+                        style={{
+                          boxShadow:
+                            "0 0 0 2px rgba(56,189,248,.9), 0 0 24px 4px rgba(56,189,248,.35)",
+                        }}
+                      />
+                    )}
+
+                    {/* conteúdo clipado dentro do raio */}
+                    <div className="absolute inset-0 rounded-2xl overflow-hidden border border-white/10">
+                      {s.thumbnail ? (
+                        <img
+                          src={s.thumbnail}
+                          alt=""
+                          className="w-full h-full object-contain"
+                          style={{ background: "#00000020" }}
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-white/10" />
+                      )}
+
+                      {/* nº do card */}
+                      <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">
+                        #{i + 1}
+                      </div>
+
+                      {/* chips (sempre dentro → nunca cortam) */}
+                      {isBest && (
+                        <span
+                          className="absolute top-1 right-1 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold"
+                          style={{ background: "#22c55e", color: "#0b0b0b", maxWidth: "72%" }}
+                        >
+                          BEST
+                        </span>
+                      )}
+                      {isWorst && (
+                        <span
+                          className="absolute top-1 right-1 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold"
+                          style={{ background: "#ef4444", color: "#0b0b0b", maxWidth: "72%" }}
+                        >
+                          WORST
+                        </span>
+                      )}
+                      {isCurrent && (
+                        <span
+                          className="absolute top-1 right-1 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold"
+                          style={{
+                            background: "#38bdf8",
+                            color: "#0b0b0b",
+                            maxWidth: "78%",
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          CURRENT
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
-        {listSide === "right" && <div style={{ width: sideGap }} />}
         {listSide === "right" && ListPane}
       </div>
     </Box>
