@@ -819,6 +819,12 @@ const DEFAULT_OPENING_OVERLAY = {
   listWidth: 208,        // px
   listRows: 0,           // 0 = auto (calcula), >0 = linhas fixas
 
+  cardsPos: "center",   // "top" | "center" | "bottom"
+  vOffset: 0,           // px (positivo = desce)
+  listWidthPx: 208,     // largura da lista
+  listRowsVisible: 0,   // 0 = auto
+  listRowH: 40,         // altura de cada linha (se quiseres expor depois)
+  listPanel: false,     // se quiseres ativar caixa de fundo na lista
 };
 
 /* ───────────────────────── URLs ───────────────────────── */
@@ -874,19 +880,27 @@ function buildOpeningOverlayUrl(base, numberId, opts = {}) {
   const qs = new URLSearchParams();
   if (opts.listSide)      qs.set("infoside", opts.listSide === "right" ? "right" : "left");
   if (opts.visible)       qs.set("visible", String(opts.visible));
-  if (opts.showBox !== undefined)      qs.set("box", opts.showBox ? "1" : "0");
-  if (opts.showBestWorst !== undefined)qs.set("bestworst", opts.showBestWorst ? "1" : "0");
-  if (opts.bestWorstMetric)            qs.set("metric", String(opts.bestWorstMetric));
-  // novos controlos da lista à esquerda
-  if (opts.autoScroll !== undefined)   qs.set("scroll", opts.autoScroll ? "1" : "0");
-  if (opts.speedSec)                   qs.set("speed", String(opts.speedSec));
-  // (opcionais) ocultar chips do topo
-  if (opts.showTitle !== undefined)    qs.set("title",  opts.showTitle   ? "1" : "0");
-  if (opts.showCurrent !== undefined)  qs.set("current",opts.showCurrent ? "1" : "0");
-  if (opts.showTopChips !== undefined) qs.set("chips",   opts.showTopChips ? "1" : "0");
+  if (opts.showBox !== undefined)       qs.set("box", opts.showBox ? "1" : "0");
+  if (opts.showBestWorst !== undefined) qs.set("bestworst", opts.showBestWorst ? "1" : "0");
+  if (opts.metric)                      qs.set("metric", String(opts.metric));
+
+  // lista
+  if (opts.listAutoScroll !== undefined) qs.set("scroll", opts.listAutoScroll ? "1" : "0");
+  if (opts.listSpeedSec)                 qs.set("speed", String(opts.listSpeedSec));
+
+  // cabeçalho
+  if (opts.showTitle !== undefined)    qs.set("title",   opts.showTitle   ? "1" : "0");
+  if (opts.showCurrent !== undefined)  qs.set("current", opts.showCurrent ? "1" : "0");
+
+  // ⬇⬇ novos params
+  if (opts.cardsPos)        qs.set("cards", String(opts.cardsPos));      // top|center|bottom
+  if (opts.vOffset != null) qs.set("voff",  String(opts.vOffset));       // px
+  if (opts.listWidthPx)     qs.set("listw", String(opts.listWidthPx));   // px
+  if (opts.listRowsVisible != null) qs.set("rows", String(opts.listRowsVisible)); // 0=auto
 
   return `${base}#/overlay/opening/${encodeURIComponent(numberId)}?${qs.toString()}`;
 }
+
 
 
 /* ───────────────────────── Hunt Overlay Preview ───────────────────────── */
@@ -2194,12 +2208,12 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
     {/* posição dos cards */}
 <Field label="Posição dos cards">
   <Segmented
-    value={opts.heroAlign || "bottom"}
-    onChange={(v)=>setOpts(o=>({...o, heroAlign: v}))}
+    value={opts.cardsPos || "center"}
+    onChange={(v)=>setOpts(o=>({...o, cardsPos: v}))}
     options={[
-      {value:"top", label:"Topo"},
-      {value:"center", label:"Centro"},
-      {value:"bottom", label:"Fundo"},
+      { value: "top",    label: "Topo"   },
+      { value: "center", label: "Centro" },
+      { value: "bottom", label: "Fundo"  },
     ]}
   />
 </Field>
@@ -2208,16 +2222,16 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
   <Field label="Offset vertical (px)">
     <SoftInput
       type="number"
-      value={Number(opts.heroOffset ?? 0)}
-      onChange={(e)=>setOpts(o=>({...o, heroOffset: Number(e.target.value)||0}))}
+      value={Number.isFinite(opts.vOffset) ? opts.vOffset : 0}
+      onChange={(e)=>setOpts(o=>({...o, vOffset: Number(e.target.value)||0}))}
     />
   </Field>
 
   <Field label="Largura da lista (px)">
     <SoftInput
       type="number"
-      value={Number(opts.listWidth ?? 208)}
-      onChange={(e)=>setOpts(o=>({...o, listWidth: Math.max(140, Math.min(360, Number(e.target.value)||208))}))}
+      value={Number.isFinite(opts.listWidthPx) ? opts.listWidthPx : 208}
+      onChange={(e)=>setOpts(o=>({...o, listWidthPx: Math.max(80, Number(e.target.value)||208)}))}
     />
   </Field>
 </div>
@@ -2225,8 +2239,8 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
 <Field label="Linhas visíveis na lista (0 = auto)">
   <SoftInput
     type="number"
-    value={Number(opts.listRows ?? 0)}
-    onChange={(e)=>setOpts(o=>({...o, listRows: Math.max(0, Number(e.target.value)||0)}))}
+    value={Number.isFinite(opts.listRowsVisible) ? opts.listRowsVisible : 0}
+    onChange={(e)=>setOpts(o=>({...o, listRowsVisible: Math.max(0, Number(e.target.value)||0)}))}
   />
 </Field>
 
