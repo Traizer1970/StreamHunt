@@ -813,6 +813,12 @@ const DEFAULT_OPENING_OVERLAY = {
   // ← cabeçalho do topo
   showTopChips: false,   // mostra/esconde os 2 chips do topo
   showCurrent: false,    // mostra/esconde o chip da slot atual (direita)
+
+  heroAlign: "bottom",   // "top" | "center" | "bottom"
+  heroOffset: 0,         // px
+  listWidth: 208,        // px
+  listRows: 0,           // 0 = auto (calcula), >0 = linhas fixas
+
 };
 
 /* ───────────────────────── URLs ───────────────────────── */
@@ -1197,8 +1203,8 @@ return (
 
 /* ───────────────────────── Opening Preview ───────────────────────── */
 function OpeningOverlayPreview({ hunt, slots, opts }) {
-  const baseW   = Number(opts.baseW || 560);
-  const baseH   = Number(opts.baseH || 320);
+  const baseW = Number(opts.baseW || 560);
+  const baseH = Number(opts.baseH || 320);
   const listSide = String(opts.listSide || "left");
 
   /* ── Best/Worst ────────────────────────────────────────────── */
@@ -1277,29 +1283,32 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
   );
 
   const padX = 12, padY = 12;
-  const listW = 208; // largura fixa do painel da lista
-  const gap   = 12;
+  const gap  = 12;
+
+  // largura da lista configurável
+  const wantList   = listSide === "left" || listSide === "right";
+  const listWidth  = wantList ? Math.max(140, Math.min(360, Number(opts.listWidth ?? 208))) : 0;
 
   const contentH = Math.max(120, baseH - padY * 2);
-  const showList = listSide === "left" || listSide === "right";
-  const areaW    = baseW - (showList ? listW : 0) - padX * 2;
+  const areaW    = baseW - (wantList ? listWidth : 0) - padX * 2;
 
-  // dimensões dos cartões: mantém proporção alta (w:h ≈ 0.64) e garante que N não corta
-  const heroCount   = hero.length;
-  const aspect      = 0.64; // w = h * 0.64 (sem cortar os banners verticais)
-  const maxWByArea  = Math.floor((areaW - gap * (heroCount - 1)) / heroCount);
-  const hFromArea   = Math.round(maxWByArea / aspect);
-  const cardH       = Math.min(contentH, hFromArea);      // nunca maior que a área útil
-  const cardW       = Math.max(110, Math.round(cardH * aspect));
+  // dimensões dos cartões (proporção segura para banners verticais)
+  const heroCount  = hero.length;
+  const aspect     = 0.64; // w = h * 0.64
+  const maxWByArea = Math.floor((areaW - gap * (heroCount - 1)) / heroCount);
+  const hFromArea  = Math.round(maxWByArea / aspect);
+  const cardH      = Math.min(contentH, hFromArea);
+  const cardW      = Math.max(110, Math.round(cardH * aspect));
 
-  // lista -> altura disponível + animação
-  const rowH = 40;
-  const listH = Math.max(4, Math.floor(contentH / rowH)) * rowH;
+  // lista: linhas visíveis configuráveis (0 = auto) para não cortar
+  const rowH   = 40;
+  const rows   = Math.max(0, Number(opts.listRows || 0));
+  const listH  = rows > 0 ? rowH * rows : Math.max(4, Math.floor(contentH / rowH)) * rowH;
   const doAuto = (opts.listAutoScroll !== false) && slots.length * rowH > listH;
   const speed  = Math.max(4, Number(opts.listSpeedSec ?? 18));
 
   const ListPane = (
-    <div className="w-52 shrink-0" style={{ height: listH, overflow: "hidden" }}>
+    <div className="shrink-0" style={{ width: listWidth, height: listH, overflow: "hidden" }}>
       <div style={{ animation: doAuto ? `marqueeY ${speed}s linear infinite` : undefined }}>
         {[...slots, ...slots].map((s, idx) => (
           <Row key={`${s.id}-${idx}`} s={s} i={idx % N} />
@@ -1308,10 +1317,24 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
     </div>
   );
 
+  // alinhamento vertical + offset configurável
+  const heroAlign = String(opts.heroAlign || "bottom"); // "top" | "center" | "bottom"
+  const alignItems =
+    heroAlign === "top" ? "flex-start" : heroAlign === "center" ? "center" : "flex-end";
+  const heroOffset = Math.max(-80, Math.min(80, Number(opts.heroOffset || 0))); // px
+
   return (
     <Box>
-      <div className="absolute inset-0 px-3"
-           style={{ paddingTop: padY, paddingBottom: padY, display: "flex", alignItems: "flex-end", gap }}>
+      <div
+        className="absolute inset-0 px-3 flex"
+        style={{
+          paddingTop: padY,
+          paddingBottom: padY,
+          alignItems,
+          gap,
+          transform: heroOffset ? `translateY(${heroOffset}px)` : undefined,
+        }}
+      >
         {listSide === "left" && ListPane}
 
         {/* Prev • Current • Next (current centrado e destacado) */}
@@ -1327,15 +1350,14 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
                   style={{
                     width: cardW,
                     height: cardH,
-                    // destaque do atual sem escalar (evita cortes)
                     boxShadow: isCurrent
                       ? "0 0 0 2px rgba(56,189,248,.9), 0 14px 36px rgba(56,189,248,.25), 0 18px 36px rgba(0,0,0,.55)"
                       : "0 12px 28px rgba(0,0,0,.35)",
                     border: "1px solid rgba(255,255,255,.10)",
-                    overflow: "visible", // permite que as tags respirem dentro dos limites
+                    overflow: "visible",
                   }}
                 >
-                  {/* imagem com clip para cantos, tags ficam no wrapper (sem cortar) */}
+                  {/* imagem recortada nos cantos */}
                   <div className="absolute inset-0 rounded-xl overflow-hidden">
                     {s?.thumbnail ? (
                       <img
@@ -1348,7 +1370,7 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
                     )}
                   </div>
 
-                  {/* canto superior gradiente para legibilidade das etiquetas */}
+                  {/* gradiente superior para legibilidade das etiquetas */}
                   <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/55 to-transparent pointer-events-none rounded-t-xl" />
 
                   {/* index */}
@@ -1356,7 +1378,7 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
                     #{iAbs + 1}
                   </div>
 
-                  {/* BEST / WORST — dentro da área, sem valores negativos de top */}
+                  {/* BEST / WORST */}
                   {!!best && best.id === s.id && (
                     <span
                       className="absolute right-1.5 top-1.5 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold shadow"
@@ -1374,7 +1396,7 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
                     </span>
                   )}
 
-                  {/* CURRENT — só no cartão central; não corta porque fica dentro */}
+                  {/* CURRENT — só no cartão central */}
                   {isCurrent && (
                     <span
                       className="absolute left-1.5 top-1.5 z-10 translate-y-6 px-2 py-0.5 rounded-full text-[10px] font-bold shadow"
@@ -2154,6 +2176,45 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
         ]}
       />
     </Field>
+    {/* posição dos cards */}
+<Field label="Posição dos cards">
+  <Segmented
+    value={opts.heroAlign || "bottom"}
+    onChange={(v)=>setOpts(o=>({...o, heroAlign: v}))}
+    options={[
+      {value:"top", label:"Topo"},
+      {value:"center", label:"Centro"},
+      {value:"bottom", label:"Fundo"},
+    ]}
+  />
+</Field>
+
+<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+  <Field label="Offset vertical (px)">
+    <SoftInput
+      type="number"
+      value={Number(opts.heroOffset ?? 0)}
+      onChange={(e)=>setOpts(o=>({...o, heroOffset: Number(e.target.value)||0}))}
+    />
+  </Field>
+
+  <Field label="Largura da lista (px)">
+    <SoftInput
+      type="number"
+      value={Number(opts.listWidth ?? 208)}
+      onChange={(e)=>setOpts(o=>({...o, listWidth: Math.max(140, Math.min(360, Number(e.target.value)||208))}))}
+    />
+  </Field>
+</div>
+
+<Field label="Linhas visíveis na lista (0 = auto)">
+  <SoftInput
+    type="number"
+    value={Number(opts.listRows ?? 0)}
+    onChange={(e)=>setOpts(o=>({...o, listRows: Math.max(0, Number(e.target.value)||0)}))}
+  />
+</Field>
+
   </Section>
 )}
 
