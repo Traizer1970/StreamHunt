@@ -1203,25 +1203,31 @@ return (
 
 /* ───────────────────────── Opening Preview ───────────────────────── */
 function OpeningOverlayPreview({ hunt, slots, opts }) {
-  // --------- dimensões base
+  /* ───────── dimensões base ───────── */
   const baseW = Number(opts.baseW || 560);
   const baseH = Number(opts.baseH || 320);
 
-  // --------- opções / defaults
-  const visible        = Math.max(1, Number(opts.visible || 3));
-  const listSide       = String(opts.listSide || "left");        // "left" | "right"
-  const listWidthPx    = Math.max(160, Number(opts.listWidthPx || 208));
-  const listRowH       = Math.max(28, Number(opts.listRowH || 40)); // altura das linhas
-  const listRowsVis    = Math.max(0,  Number(opts.listRowsVisible || 0)); // 0 = auto
-  const autoScroll     = opts.listAutoScroll !== false;
-  const speedSec       = Math.max(4, Number(opts.listSpeedSec || 18));
-  const cardsPos       = String(opts.cardsPos || "center");      // "top" | "center" | "bottom"
-  const vOffset        = Number(opts.vOffset || 0);              // offset vertical extra (px)
-  const heroH          = Math.max(120, Number(opts.heroHeight ?? opts.cardH ?? 210));
-  const currentScale   = Math.max(1.0, Number(opts.currentScale || 1.10)); // escala do current
-  const showBox        = opts.showBox !== false;
+  /* ───────── opções (com defaults) ───────── */
+  const visible      = Math.max(1, Number(opts.visible || 3));
+  const listSide     = String(opts.listSide || "left");        // left | right
+  const listWidthPx  = Math.max(120, Number(opts.listWidthPx || 208));
+  const listRowH     = Math.max(28,  Number(opts.listRowH || 40));
+  const listRowsVis  = Math.max(0,   Number(opts.listRowsVisible || 0)); // 0=auto
+  const autoScroll   = opts.listAutoScroll !== false;
+  const speedSec     = Math.max(4,   Number(opts.listSpeedSec || 18));
+  const cardsPos     = String(opts.cardsPos || "center");      // top | center | bottom
+  const vOffset      = Number(opts.vOffset || 0);
+  const heroH        = Math.max(120, Number(opts.heroHeight ?? opts.cardH ?? 224));
+  const cardRatio    = Number(opts.cardRatio || 0.64);         // W = H*ratio (ex.: 56x36 → 0.64)
+  const currentScale = Math.max(1.0, Number(opts.currentScale || 1.10));
+  const showBox      = opts.showBox !== false;
 
-  // --------- BEST/WORST (por payout ou X)
+  const cardW = Math.round(heroH * cardRatio);
+  const GAP   = 14;
+  const PADX  = 12;
+  const sideGap = 14; // gap entre lista e cards
+
+  /* ───────── BEST/WORST ───────── */
   const scored = slots
     .map(s => {
       const bet = toNum(s.bet_size);
@@ -1235,46 +1241,38 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
   const best  = opts.showBestWorst && scored.length ? scored.reduce((a,b)=>a._score>b._score?a:b) : null;
   const worst = opts.showBestWorst && scored.length ? scored.reduce((a,b)=>a._score<b._score?a:b) : null;
 
-  // --------- current = primeira slot sem payout; se nenhuma, a primeira
+  /* ───────── current & janela centrada ───────── */
   const currentIdx = (() => {
     const i = slots.findIndex(s => s.payout == null);
     return i === -1 ? 0 : i;
   })();
-
-  // janela de "visible" centrada no current
   const half  = Math.floor(visible / 2);
   const start = Math.max(0, Math.min(Math.max(0, slots.length - visible), currentIdx - half));
   const hero  = slots.slice(start, start + visible);
 
-  // --------- ajuda: layout e tamanhos para o herói
-  // paddings internos do Box (px-3 -> 12px)
-  const PADX = 12;
-  const GAP  = 12; // gap entre cards
-  const hasList   = slots.length > 0;
-  const leftPaneW = hasList ? listWidthPx : 0;
-  const sideGap   = hasList ? 14 : 0; // espaço entre lista e cards
-
-  // largura disponível para os cards (sem cortar!)
-  const availW = baseW - PADX * 2 - (listSide === "left" || listSide === "right" ? leftPaneW + sideGap : 0);
-  const cardW  = Math.floor((availW - GAP * (visible - 1)) / visible);
-
-  // altura da lista
-  const headerH = 0; // header removido a teu pedido
+  /* ───────── layout: lista ───────── */
+  const headerH = 0; // sem chips no topo
   const autoListH = Math.max(4, Math.floor((baseH - headerH - 12) / listRowH)) * listRowH;
   const listH = (listRowsVis > 0 ? listRowsVis * listRowH : autoListH);
 
-  // alinhamento vertical + offset
-  const alignY =
-    cardsPos === "top" ? "flex-start" :
-    cardsPos === "bottom" ? "flex-end" :
-    "center";
+  const ListPane = (
+    <div className="shrink-0" style={{ width: listWidthPx, height: listH, overflow: "hidden" }}>
+      <style>{`@keyframes marqueeY { 0%{transform:translateY(0)} 100%{transform:translateY(-50%)} }`}</style>
+      <div style={{ animation: autoScroll && slots.length * listRowH > listH ? `marqueeY ${speedSec}s linear infinite` : undefined }}>
+        {[...slots, ...slots].map((s, idx) => (
+          <div key={`${s.id}-${idx}`} className="flex items-center gap-2" style={{ height: listRowH }}>
+            <div className="text-[11px] font-semibold opacity-90 w-6 text-right">#{(idx % slots.length) + 1}</div>
+            <div className="w-9 h-9 rounded-md overflow-hidden border border-white/10 shrink-0">
+              {s.thumbnail ? <img src={s.thumbnail} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full bg-white/10" />}
+            </div>
+            <div className="text-sm truncate flex-1">{s.name || "—"}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
-  const offsetStyle =
-    cardsPos === "top"    ? { marginTop:  vOffset } :
-    cardsPos === "bottom" ? { marginBottom: vOffset } :
-                             { marginTop: vOffset };
-
-  // --------- UI bits
+  /* ───────── container/Box ───────── */
   const Box = ({ children }) => (
     <div
       className="rounded-xl overflow-hidden relative"
@@ -1282,70 +1280,28 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
         width: baseW,
         height: baseH,
         border: showBox ? "1px solid rgba(255,255,255,.12)" : "none",
-        background: showBox
-          ? "linear-gradient(135deg, rgba(15,16,33,1) 0%, rgba(24,16,40,1) 100%)"
-          : "transparent",
+        background: showBox ? "linear-gradient(135deg, rgba(15,16,33,1) 0%, rgba(24,16,40,1) 100%)" : "transparent",
         fontFamily: RUBIK_STACK,
       }}
     >
-      <style>{`
-        @keyframes marqueeY {
-          0% { transform: translateY(0); }
-          100% { transform: translateY(-50%); }
-        }
-      `}</style>
       {children}
     </div>
   );
 
-  const Row = ({ s, i }) => (
-    <div className="flex items-center gap-2" style={{ height: listRowH }}>
-      <div className="text-[11px] font-semibold opacity-90 w-6 text-right">#{i + 1}</div>
-      <div className="w-9 h-9 rounded-md overflow-hidden border border-white/10 shrink-0">
-        {s.thumbnail ? (
-          <img src={s.thumbnail} alt="" className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full bg-white/10" />
-        )}
-      </div>
-      <div className="text-sm truncate flex-1">{s.name || "—"}</div>
-    </div>
-  );
-
-  const ListPane = (
-    <div
-      className="shrink-0"
-      style={{ width: listWidthPx, height: listH, overflow: "hidden" }}
-    >
-      <div
-        style={{
-          animation: autoScroll && slots.length * listRowH > listH ? `marqueeY ${speedSec}s linear infinite` : undefined,
-        }}
-      >
-        {[...slots, ...slots].map((s, idx) => (
-          <Row key={`${s.id}-${idx}`} s={s} i={idx % slots.length} />
-        ))}
-      </div>
-    </div>
-  );
-
-  // tag helper (encaixa no top-right e diminui em cards estreitos)
-  function Tag({ label, bg = "#0ea5e9", color = "#0b0b0b", shrinkByWidth = false }) {
-    const tagScale = shrinkByWidth && cardW < 150 ? 0.85 : 1;
+  /* ───────── helper: tag no topo-direito (sem cortar) ───────── */
+  function Tag({ label, bg = "#0ea5e9" }) {
     return (
       <span
         className="absolute z-20 top-1.5 right-1.5 font-semibold rounded-full px-2 py-0.5"
         style={{
           background: bg,
-          color,
+          color: "#0b0b0b",
           fontSize: 10,
           lineHeight: 1,
-          maxWidth: "70%",
+          maxWidth: "72%",
           whiteSpace: "nowrap",
           overflow: "hidden",
           textOverflow: "ellipsis",
-          transform: `scale(${tagScale})`,
-          transformOrigin: "top right",
         }}
       >
         {label}
@@ -1353,8 +1309,8 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
     );
   }
 
+  /* ───────── card (sem cortar o glow do current) ───────── */
   function Card({ s, iAbs, isCurrent }) {
-    // wrapper não tem overflow -> não corta o glow
     return (
       <div
         className="relative"
@@ -1363,12 +1319,10 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
           height: heroH,
           transform: isCurrent ? `scale(${currentScale})` : "none",
           transition: "transform .18s ease",
-          // para o scale não comer o vizinho:
-          marginLeft: isCurrent ? Math.max(0, (cardW * (currentScale - 1)) / 2) * -1 : 0,
-          marginRight: isCurrent ? Math.max(0, (cardW * (currentScale - 1)) / 2) * -1 : 0,
+          marginLeft: isCurrent ? -(cardW * (currentScale - 1)) / 2 : 0,
+          marginRight: isCurrent ? -(cardW * (currentScale - 1)) / 2 : 0,
         }}
       >
-        {/* conteúdo com overflow-hidden para cortar imagem, mas wrapper deixa ver o glow */}
         <div
           className="relative h-full w-full rounded-xl overflow-hidden border"
           style={{
@@ -1379,48 +1333,57 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
             background: s.thumbnail ? "transparent" : "rgba(255,255,255,.08)",
           }}
         >
-          {/* safe areas para tags */}
+          {/* safety gradients para legibilidade e para não cortar tags */}
           <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
           <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
 
-          {/* imagem */}
           {s.thumbnail ? (
-            <img
-              src={s.thumbnail}
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover object-center"
-            />
+            <img src={s.thumbnail} alt="" className="absolute inset-0 h-full w-full object-cover object-center" />
           ) : null}
 
-          {/* idx */}
-          <span className="absolute top-1.5 left-1.5 z-20 text-[10px] font-bold px-1.5 py-0.5 rounded bg-black/70">
-            #{iAbs + 1}
-          </span>
-
-          {/* tags */}
-          {isCurrent && <Tag label="CURRENT" bg="#38bdf8" color="#0b0b0b" shrinkByWidth />}
-          {!!best && best.id === s.id && <Tag label="BEST" bg="#22c55e" color="#0b0b0b" shrinkByWidth />}
-          {!!worst && worst.id === s.id && <Tag label="WORST" bg="#ef4444" color="#0b0b0b" shrinkByWidth />}
+          <span className="absolute top-1.5 left-1.5 z-20 text-[10px] font-bold px-1.5 py-0.5 rounded bg-black/70">#{iAbs + 1}</span>
+          {isCurrent && <Tag label="CURRENT" bg="#38bdf8" />}
+          {!!best && best.id === s.id && <Tag label="BEST" bg="#22c55e" />}
+          {!!worst && worst.id === s.id && <Tag label="WORST" bg="#ef4444" />}
         </div>
       </div>
     );
   }
 
-  // --------- render
+  /* ───────── alinhamento vertical dos cards ───────── */
+  const alignY =
+    cardsPos === "top" ? "flex-start" :
+    cardsPos === "bottom" ? "flex-end" :
+    "center";
+  const offsetStyle =
+    cardsPos === "top" ? { marginTop: vOffset } :
+    cardsPos === "bottom" ? { marginBottom: vOffset } :
+    { marginTop: vOffset };
+
+  /* ───────── cálculo de escala do GRUPO (para nunca cortar) ───────── */
+  const leftPaneW = listSide === "left" || listSide === "right" ? listWidthPx + sideGap : 0;
+  const availW    = baseW - PADX * 2 - leftPaneW;
+  const neededW   = visible * cardW + (visible - 1) * GAP + (currentScale - 1) * cardW; // largura com current maior
+  const groupScale = Math.min(1, availW / Math.max(1, neededW)); // <=1 (apenas encolhe o conjunto se não couber)
+
+  /* ───────── render ───────── */
   return (
     <Box>
-      <div
-        className="h-full w-full flex gap-3 px-3"
-        style={{ alignItems: alignY, ...offsetStyle }}
-      >
+      <div className="h-full w-full flex gap-3 px-3" style={{ alignItems: alignY, ...offsetStyle }}>
         {listSide === "left" && ListPane}
         {listSide === "left" && <div style={{ width: sideGap }} />}
 
-        {/* área dos cards (overflow visível para o glow/scale) */}
+        {/* zona dos cards: sem overflow para não cortar brilho; grupo escala se necessário */}
         <div className="flex-1 overflow-visible">
           <div
             className="flex"
-            style={{ gap: GAP, justifyContent: "center", alignItems: "center" }}
+            style={{
+              gap: GAP,
+              justifyContent: "center",
+              alignItems: "center",
+              transform: `scale(${groupScale})`,
+              transformOrigin: "center center",
+            }}
           >
             {hero.map((s, i) => {
               const iAbs = start + i;
