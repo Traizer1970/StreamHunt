@@ -1203,26 +1203,36 @@ return (
 
 /* ───────────────────────── Opening Preview ───────────────────────── */
 function OpeningOverlayPreview({ hunt, slots, opts }) {
-  const baseW   = Number(opts.baseW || 560);
-  const baseH   = Number(opts.baseH || 320);
-  const listW   = Number(opts.listW ?? 208);             // largura da lista
+  const baseW    = Number(opts.baseW || 560);
+  const baseH    = Number(opts.baseH || 320);
+
+  // ← LARGURA DA LISTA (aceita vários aliases)
+  const listW    = Number(
+    opts.listW ?? opts.listWidth ?? 208
+  );
+
+  // ← LADO DA LISTA
   const listSide = String(opts.listSide || "left");
+
+  // ← POSIÇÃO VERTICAL DOS CARDS (Top/Center/Bottom) + OFFSET MANUAL
+  const vAlign   = String(
+    opts.cardsVAlign ?? opts.cardsPos ?? "bottom"
+  ); // "top" | "center" | "bottom"
+  const offsetY  = Number(
+    opts.cardsOffset ?? opts.cardsOffsetY ?? opts.cardsYOffset ?? 0
+  );
+
   const showBox  = opts.showBox !== false;
 
-  // onde alinhar os 3 cards (top/center/bottom)
-  const vAlign = String(opts.cardsVAlign || "bottom");   // "top" | "center" | "bottom"
-  const vClass = vAlign === "top" ? "items-start" : vAlign === "center" ? "items-center" : "items-end";
-
-  // índice “current”: 1ª slot sem payout; se todas têm payout, usa a 1ª
+  // índice “current” = 1ª sem payout (senão 0)
   let cur = slots.findIndex(s => s.payout == null);
   if (cur < 0) cur = 0;
 
-  // 3 cards: anterior, current, seguinte (com wrap)
   const prev = (cur - 1 + slots.length) % slots.length;
   const next = (cur + 1) % slots.length;
   const trio = [prev, cur, next].map(i => slots[i]).filter(Boolean);
 
-  // Best / Worst (para o selo)
+  // Best/Worst para selos
   const scored = slots
     .map(s => {
       const bet = toNum(s.bet_size), pay = toNum(s.payout);
@@ -1233,23 +1243,22 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
   const best  = (opts.showBestWorst && scored.length) ? scored.reduce((a,b)=>a._score>b._score?a:b) : null;
   const worst = (opts.showBestWorst && scored.length) ? scored.reduce((a,b)=>a._score<b._score?a:b) : null;
 
-  // medidas
-  const padX = 24;                        // px-3 (12 + 12)
-  const gap  = 18;                        // espaço entre cards
-  const listSpace = (listSide === "left" || listSide === "right") ? listW : 0;
-  const heroAvailW = Math.max(120, baseW - listSpace - padX);     // espaço útil para os 3 cards
-  const cardW = Math.floor((heroAvailW - 2 * gap) / 3);           // 3 cards + 2 gaps
-  const cardH = Math.round(cardW * 1.55);                         // proporção vertical
-  const currentScale = Math.max(1.0, Number(opts.currentScale ?? 1.16)); // factor de destaque do current
-  const currentW = Math.floor(cardW * currentScale);
-  const currentH = Math.floor(cardH * currentScale);
+  // medidas dos cards (3 cartões + gaps), respeitando a lista
+  const padX = 24;                      // px-3 + px-3
+  const gap  = 18;
+  const listSpace   = (listSide === "left" || listSide === "right") ? listW : 0;
+  const heroAvailW  = Math.max(120, baseW - listSpace - padX);
+  const cardW       = Math.floor((heroAvailW - 2 * gap) / 3);
+  const cardH       = Math.round(cardW * 1.55);
 
-  // garante que o current nunca rebenta a largura disponível
-  const maxCurrentW = heroAvailW - 2 * (cardW + gap);             // espaço que sobra depois dos lados
-  const safeCurrentW = Math.min(currentW, Math.max(cardW, maxCurrentW));
-  const safeCurrentH = Math.round(safeCurrentW * (cardH / cardW));
+  // current maior, mas sem estourar a largura útil
+  const currentScale   = Math.max(1.0, Number(opts.currentScale ?? 1.16));
+  const wantedCurrentW = Math.floor(cardW * currentScale);
+  const maxCurrentW    = heroAvailW - 2 * (cardW + gap);
+  const curW           = Math.min(wantedCurrentW, Math.max(cardW, maxCurrentW));
+  const curH           = Math.round(curW * (cardH / cardW));
 
-  // selo “CURRENT/BEST/WORST” — fica SEMPRE no canto superior direito, e encolhe automaticamente
+  // selo responsivo no canto sup. direito
   const tagFont = Math.max(9, Math.min(12, Math.floor(cardW * 0.065)));
   const Tag = ({ children }) => (
     <span
@@ -1291,12 +1300,17 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
     </div>
   );
 
-  // lista da esquerda/direita com scroll vertical contínuo
-  const rowH = 40;
-  const headH = 0;                                   // sem “chips” no topo
-  const listH = Math.max(4, Math.floor((baseH - headH - 12) / rowH)) * rowH;
+  // ← LINHAS VISÍVEIS NA LISTA (0 = auto) + animação
+  const rowH  = 40;
+  const headH = 0;
+  const forcedRows = Math.max(0, Number(
+    opts.listRows ?? opts.listLines ?? opts.listVisibleRows ?? 0
+  ));
+  const autoH = Math.max(4, Math.floor((baseH - headH - 12) / rowH)) * rowH;
+  const listH = forcedRows > 0 ? forcedRows * rowH : autoH;
+
   const doAuto = (opts.listAutoScroll !== false) && slots.length * rowH > listH;
-  const speed = Math.max(4, Number(opts.listSpeedSec ?? 18));
+  const speed  = Math.max(4, Number(opts.listSpeedSec ?? opts.listSpeed ?? 18));
   const ListPane = (
     <div className="shrink-0" style={{ width: listW, height: listH, overflow: "hidden" }}>
       <div style={{ animation: doAuto ? `marqueeY ${speed}s linear infinite` : undefined }}>
@@ -1307,48 +1321,34 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
     </div>
   );
 
-  // card genérico
   function Card({ s, idx, w, h, isCurrent }) {
-    const radius = 14;
+    const r = 14;
     const borderCol = isCurrent ? "rgba(56,189,248,.85)" : "rgba(255,255,255,.14)";
-    const glow = isCurrent ? "0 10px 28px rgba(0,0,0,.40), 0 0 0 2px rgba(56,189,248,.8), 0 0 28px rgba(56,189,248,.45)" : "0 10px 28px rgba(0,0,0,.40)";
+    const glow = isCurrent
+      ? "0 10px 28px rgba(0,0,0,.40), 0 0 0 2px rgba(56,189,248,.8), 0 0 28px rgba(56,189,248,.45)"
+      : "0 10px 28px rgba(0,0,0,.40)";
     return (
       <div
         className="relative overflow-hidden"
-        style={{
-          width: w,
-          height: h,
-          borderRadius: radius,
-          border: `1px solid ${borderCol}`,
-          boxShadow: glow,
-        }}
+        style={{ width: w, height: h, borderRadius: r, border: `1px solid ${borderCol}`, boxShadow: glow }}
         title={s?.name}
       >
-        {/* imagem */}
-        {s?.thumbnail ? (
-          <img src={s.thumbnail} alt="" className="absolute inset-0 w-full h-full object-cover object-center" />
-        ) : (
-          <div className="absolute inset-0 bg-white/10" />
-        )}
+        {s?.thumbnail
+          ? <img src={s.thumbnail} alt="" className="absolute inset-0 w-full h-full object-cover object-center" />
+          : <div className="absolute inset-0 bg-white/10" />
+        }
 
-        {/* gradientes para legibilidade */}
         <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/55 to-transparent pointer-events-none" />
         <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/65 to-transparent pointer-events-none" />
 
-        {/* #index */}
         <div className="absolute left-2 top-2 z-20 text-[11px] font-bold px-1.5 py-0.5 rounded bg-black/70">
           #{idx + 1}
         </div>
 
-        {/* CURRENT no topo direito */}
         {isCurrent && (
-          <Tag>
-            <span className="px-1.5 py-0.5 rounded-full bg-sky-400 text-black">CURRENT</span>
-          </Tag>
+          <Tag><span className="px-1.5 py-0.5 rounded-full bg-sky-400 text-black">CURRENT</span></Tag>
         )}
-
-        {/* BEST / WORST (também no topo direito, atrás do CURRENT se coincidir) */}
-        {!isCurrent && !!best && best.id === s.id && opts.showBestWorst && (
+        {!isCurrent && !!best  && best.id  === s.id && opts.showBestWorst && (
           <Tag><span className="px-1.5 py-0.5 rounded-full bg-emerald-400 text-black">BEST</span></Tag>
         )}
         {!isCurrent && !!worst && worst.id === s.id && opts.showBestWorst && (
@@ -1357,6 +1357,10 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
       </div>
     );
   }
+
+  const vClass =
+    vAlign === "top" ? "items-start" :
+    vAlign === "center" ? "items-center" : "items-end";
 
   return (
     <Box>
@@ -1367,14 +1371,11 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
       <div className={`h-full w-full flex ${vClass} gap-4 px-3`} style={{ paddingBottom: 12, overflow: "hidden" }}>
         {listSide === "left" && ListPane}
 
-        {/* secção dos 3 cards — importante: overflow visible para o “glow” do current não cortar */}
-        <div className="flex-1 overflow-visible">
+        {/* 3 cards – com overflow visível para o glow do current e OFFSET vertical aplicado */}
+        <div className="flex-1 overflow-visible" style={{ transform: offsetY ? `translateY(${offsetY}px)` : undefined }}>
           <div className="flex gap-4 w-fit mx-auto">
-            {/* anterior */}
             {trio[0] && <Card s={trio[0]} idx={prev} w={cardW} h={cardH} isCurrent={false} />}
-            {/* current (centrado) */}
-            {trio[1] && <Card s={trio[1]} idx={cur}  w={safeCurrentW} h={safeCurrentH} isCurrent />}
-            {/* seguinte */}
+            {trio[1] && <Card s={trio[1]} idx={cur}  w={curW}  h={curH}  isCurrent />}
             {trio[2] && <Card s={trio[2]} idx={next} w={cardW} h={cardH} isCurrent={false} />}
           </div>
         </div>
