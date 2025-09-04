@@ -826,6 +826,8 @@ const DEFAULT_OPENING_OVERLAY = {
   listRowH: 40,         // altura de cada linha (se quiseres expor depois)
   listPanel: false,     // se quiseres ativar caixa de fundo na lista
   bestWorstMode: "badges", // "badges" (padrão) | "cards"
+  cardScale: 1.0,      // escala global dos cards (0.5–2.0)
+  currentScale: 1.08,  // multiplicador extra só no CURRENT (1.0–1.6)
 };
 
 /* ───────────────────────── URLs ───────────────────────── */
@@ -1245,9 +1247,15 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
   const hero = indices.map(i => (i >= 0 && i < slots.length) ? { s: slots[i], i } : null).filter(Boolean);
 
   // Dimensões — imagem SEM letterbox (cobre o card todo)
-  const cardW = 180, cardH = 260, gap = 18;
-  const currentScale = Number(opts.currentScale || 1.08);
-  const miniScale = 0.9; // escala dos cards BEST/WORST (modo "cards")
+  // tamanhos base + escala vinda das opções
+const baseCardW = 180, baseCardH = 260;
+const scaleAll = Math.max(0.5, Math.min(2, Number(opts.cardScale ?? 1)));
+const cardW = Math.round(baseCardW * scaleAll);
+const cardH = Math.round(baseCardH * scaleAll);
+const gap = Math.round(18 * scaleAll * 0.9); // gap acompanha o tamanho
+
+const currentScale = Math.max(1, Math.min(1.6, Number(opts.currentScale ?? 1.08)));
+
 
   const showBox = opts.showBox !== false;
   const Box = ({ children }) => (
@@ -2187,6 +2195,25 @@ function Designer({ open, onClose, opts, setOpts, title, type, hunt, slots }) {
       ...o,
       listSpeedSec: Math.max(5, Math.min(180, Number(e.target.value) || 18)),
     }))}
+  />
+</Field>
+{/* Tamanho dos cards */}
+<Field label="Tamanho dos cards">
+  <NiceSlider
+    min={0.5} max={2.0} step={0.05}
+    value={opts.cardScale ?? 1}
+    onChange={(v)=>setOpts(o=>({...o, cardScale: v}))}
+    ariaLabel="Card scale"
+  />
+</Field>
+
+{/* Escala extra do CURRENT */}
+<Field label="Destaque do current (escala)">
+  <NiceSlider
+    min={1.0} max={1.6} step={0.02}
+    value={opts.currentScale ?? 1.08}
+    onChange={(v)=>setOpts(o=>({...o, currentScale: v}))}
+    ariaLabel="Current scale"
   />
 </Field>
 
