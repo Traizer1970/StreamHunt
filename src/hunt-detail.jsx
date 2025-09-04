@@ -811,8 +811,8 @@ const DEFAULT_OPENING_OVERLAY = {
   listAutoScroll: true,
   listSpeedSec: 18,
   // ← cabeçalho do topo
-  showTopChips: true,   // mostra/esconde os 2 chips do topo
-  showCurrent: true,    // mostra/esconde o chip da slot atual (direita)
+  showTopChips: false,   // mostra/esconde os 2 chips do topo
+  showCurrent: false,    // mostra/esconde o chip da slot atual (direita)
 };
 
 /* ───────────────────────── URLs ───────────────────────── */
@@ -1196,11 +1196,9 @@ return (
 }
 
 /* ───────────────────────── Opening Preview ───────────────────────── */
-/* ───────────────────────── Opening Preview ───────────────────────── */
 function OpeningOverlayPreview({ hunt, slots, opts }) {
   const baseW = Number(opts.baseW || 560);
   const baseH = Number(opts.baseH || 320);
-  const visible = Math.max(1, Number(opts.visible || 5));
   const listSide = String(opts.listSide || "left");
 
   // Best/Worst
@@ -1214,17 +1212,35 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
     })
     .filter((s) => s._score > 0);
 
-  const best = opts.showBestWorst && scored.length
-    ? scored.reduce((a, b) => (a._score > b._score ? a : b))
-    : null;
-  const worst = opts.showBestWorst && scored.length
-    ? scored.reduce((a, b) => (a._score < b._score ? a : b))
-    : null;
+  const best =
+    opts.showBestWorst && scored.length
+      ? scored.reduce((a, b) => (a._score > b._score ? a : b))
+      : null;
+  const worst =
+    opts.showBestWorst && scored.length
+      ? scored.reduce((a, b) => (a._score < b._score ? a : b))
+      : null;
 
-  const hero = slots.slice(0, visible);
-  const side = slots;
+  // current (primeira sem payout), com wrap prev/next
+  const len = slots.length;
+  const firstUnopened = slots.findIndex((s) => s.payout == null);
+  const cur = len ? (firstUnopened >= 0 ? firstUnopened : 0) : 0;
+  const prev = (cur - 1 + len) % Math.max(1, len);
+  const next = (cur + 1) % Math.max(1, len);
+
+  const heroIdxs =
+    len <= 1 ? [cur] : len === 2 ? [prev, cur] : [prev, cur, next];
+  const hero = heroIdxs.map((i) => slots[i]);
+
+  const currentBadge =
+    (typeof document !== "undefined" &&
+      (document.documentElement.lang || "").toLowerCase().startsWith("pt")) ||
+    false
+      ? "ATUAL"
+      : "CURRENT";
 
   const showBox = opts.showBox !== false;
+
   const Box = ({ children }) => (
     <div
       className="rounded-xl overflow-hidden relative"
@@ -1250,7 +1266,9 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
 
   const Row = ({ s, i }) => (
     <div className="flex items-center gap-2 h-10">
-      <div className="text-[11px] font-semibold opacity-90 w-6 text-right">#{i + 1}</div>
+      <div className="text-[11px] font-semibold opacity-90 w-6 text-right">
+        #{i + 1}
+      </div>
       <div className="w-9 h-9 rounded-md overflow-hidden border border-white/10 shrink-0">
         {s.thumbnail ? (
           <img src={s.thumbnail} alt="" className="w-full h-full object-cover" />
@@ -1262,24 +1280,18 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
     </div>
   );
 
-  // altura da lista + animação
+  // lista lateral (auto scroll vertical)
   const rowH = 40;
-  const headerH = 38;
+  const headerH = 0; // sem cabeçalho
   const listH = Math.max(4, Math.floor((baseH - headerH - 12) / rowH)) * rowH;
-  const doAuto = (opts.listAutoScroll !== false) && side.length * rowH > listH;
+  const doAuto = opts.listAutoScroll !== false && len * rowH > listH;
   const speed = Math.max(4, Number(opts.listSpeedSec ?? 18));
 
   const ListPane = (
     <div className="w-52 shrink-0" style={{ height: listH, overflow: "hidden" }}>
-      <div className="px-3 pt-2 pb-1 text-[12px] opacity-80"> {hunt?.title || "Hunt"} — Opening </div>
-      <div
-        style={{
-          animation: doAuto ? `marqueeY ${speed}s linear infinite` : undefined,
-        }}
-      >
-        {/* duplicamos para loop contínuo */}
-        {[...side, ...side].map((s, idx) => (
-          <Row key={`${s.id}-${idx}`} s={s} i={idx % side.length} />
+      <div style={{ animation: doAuto ? `marqueeY ${speed}s linear infinite` : undefined }}>
+        {[...slots, ...slots].map((s, idx) => (
+          <Row key={`${s.id}-${idx}`} s={s} i={idx % len} />
         ))}
       </div>
     </div>
@@ -1287,54 +1299,62 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
 
   return (
     <Box>
-      {opts.showTopChips !== false && (
-  <div className="absolute inset-x-0 top-2 px-3 flex items-center justify-between">
-    <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
-      {hunt?.title || "Hunt"} — Opening
-    </div>
-
-    {opts.showCurrent !== false && (
-      <div className="px-3 py-1.5 rounded-full border border-white/15 bg-white/10 text-[12px]">
-        {slots[0]?.name || "—"}
-      </div>
-    )}
-  </div>
-)}
-
-
-       <div
-   className={cn(
-     "h-full w-full flex items-end gap-3 px-3 pb-3",
-     opts.showTopChips !== false ? "pt-10" : "pt-3"
-   )}
- >
+      <div className="h-full w-full flex items-end gap-3 px-3 pb-3 pt-3">
         {listSide === "left" && ListPane}
 
-        {/* cartões “hero” */}
+        {/* cartões “hero”: prev • current • next (current centrado) */}
         <div className="flex-1 overflow-hidden">
-          <div className="flex gap-3">
-            {hero.map((s, i) => (
-              <div key={s.id} className="relative w-36 h-56 rounded-xl overflow-hidden border border-white/10">
-                <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">
-                  #{i + 1}
+          <div className="flex gap-3 justify-center items-end">
+            {hero.map((s, i) => {
+              const iAbs = heroIdxs[i];
+              const isCenter = i === Math.floor(hero.length / 2);
+              return (
+                <div
+                  key={s?.id ?? `h${i}`}
+                  className="relative w-40 h-64 rounded-xl overflow-hidden border border-white/10"
+                >
+                  <div className="absolute left-1 top-1 z-10 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70">
+                    #{iAbs + 1}
+                  </div>
+
+                  {!!best && best.id === s.id && (
+                    <span
+                      className="absolute -top-2 right-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold shadow"
+                      style={{ background: "#22c55e", color: "#0b0b0b" }}
+                    >
+                      BEST
+                    </span>
+                  )}
+                  {!!worst && worst.id === s.id && (
+                    <span
+                      className="absolute -top-2 right-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold shadow"
+                      style={{ background: "#ef4444", color: "#0b0b0b" }}
+                    >
+                      WORST
+                    </span>
+                  )}
+
+                  {isCenter && (
+                    <span
+                      className="absolute -top-2 left-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold shadow"
+                      style={{ background: "#38bdf8", color: "#0b0b0b" }}
+                    >
+                      {currentBadge}
+                    </span>
+                  )}
+
+                  {s?.thumbnail ? (
+                    <img
+                      src={s.thumbnail}
+                      alt=""
+                      className="w-full h-full object-cover object-center"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-white/10" />
+                  )}
                 </div>
-                {!!best && best.id === s.id && (
-                  <span className="absolute -top-2 right-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold shadow" style={{ background: "#22c55e", color: "#0b0b0b" }}>
-                    BEST
-                  </span>
-                )}
-                {!!worst && worst.id === s.id && (
-                  <span className="absolute -top-2 right-2 z-10 px-2 py-0.5 rounded-full text-[10px] font-bold shadow" style={{ background: "#ef4444", color: "#0b0b0b" }}>
-                    WORST
-                  </span>
-                )}
-                {s.thumbnail ? (
-                  <img src={s.thumbnail} alt="" className="w-full h-full object-cover object-center" />
-                ) : (
-                  <div className="w-full h-full bg-white/10" />
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
