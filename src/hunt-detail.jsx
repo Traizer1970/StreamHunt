@@ -2476,7 +2476,6 @@ async function handleAdd() {
     const bs = toNum(betSize);
     if (!Number.isFinite(bs) || bs <= 0) return setErr("Betsize inválida.");
 
-    // próxima posição é o fim da lista atual
     const nextIndex = (slots?.length || 0) + 1;
 
     const payload = {
@@ -2488,8 +2487,6 @@ async function handleAdd() {
 
     setBusy(true);
     await addHuntSlot(numberId, payload);
-
-    // refresca sem perder a ordem atual
     onAdded && onAdded();
     handleClose();
   } catch (e) {
@@ -2498,6 +2495,7 @@ async function handleAdd() {
     setBusy(false);
   }
 }
+
 async function persistOrder(listInOrder) {
   for (let i = 0; i < listInOrder.length; i++) {
     const row = listInOrder[i];
@@ -3508,15 +3506,22 @@ const refreshSlots = React.useCallback(async () => {
   try {
     setErrSlots("");
 
-    const { data, error } = await supabase
-      .from("hunt_slots")
-      .select("*")
-      .eq("hunt_number_id", nId)
-      .order("order_index", { ascending: true });
+    const { slots: apiSlots } = await listHuntSlots({ numberId: nId });
+    let list = apiSlots || [];
 
-    if (error) throw error;
+    // ordem estável: primeiro por order_index (quando houver), senão por id
+    list = [...list].sort((a, b) => {
+      const aa = Number(a?.order_index);
+      const bb = Number(b?.order_index);
+      const aOk = Number.isFinite(aa);
+      const bOk = Number.isFinite(bb);
+      if (aOk && bOk) return aa - bb || a.id - b.id;
+      if (aOk && !bOk) return -1;   // quem tem order_index vem antes
+      if (!aOk && bOk) return 1;
+      return a.id - b.id;           // fallback estável
+    });
 
-    setSlots(data || []);
+    setSlots(list);
     setSortBy((s) => (s.key === "order" ? s : { key: "order", dir: 1 }));
   } catch (e) {
     console.error(e);
