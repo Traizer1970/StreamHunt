@@ -3508,46 +3508,23 @@ const refreshSlots = React.useCallback(async () => {
   try {
     setErrSlots("");
 
-    // vai buscar os dados (não ordenamos aqui)
-    const { slots: apiSlots } = await listHuntSlots({ numberId: nId });
-    const fresh = apiSlots || [];
+    const { data, error } = await supabase
+      .from("hunt_slots")
+      .select("*")
+      .eq("hunt_number_id", nId)
+      .order("order_index", { ascending: true });
 
-    // mapa por id para mesclar sem mexer na ordem atual
-    const byId = new Map(fresh.map(r => [r.id, r]));
+    if (error) throw error;
 
-    setSlots(prev => {
-      // 1) atualiza cada item mantendo a ordem atual
-      const updated = (prev || []).map(oldRow => {
-        const newer = byId.get(oldRow.id);
-        if (newer) byId.delete(oldRow.id);
-        return newer ? { ...oldRow, ...newer } : oldRow;
-      });
-
-      // 2) o que sobrou no byId são novos registos -> entram no FIM
-      const newOnes = Array.from(byId.values());
-
-      // 3) se houver order_index definido nesses novos, respeita; senão, fica no fim
-      newOnes.sort((a, b) => {
-        const A = Number(a.order_index);
-        const B = Number(b.order_index);
-        const aOk = Number.isFinite(A), bOk = Number.isFinite(B);
-        if (aOk && bOk) return A - B || a.id - b.id;
-        if (aOk && !bOk) return -1;
-        if (!aOk && bOk) return 1;
-        return a.id - b.id;
-      });
-
-      return [...updated, ...newOnes];
-    });
-
-    // mantém o sort visual por "order"
-    setSortBy(s => (s.key === "order" ? s : { key: "order", dir: 1 }));
+    setSlots(data || []);
+    setSortBy((s) => (s.key === "order" ? s : { key: "order", dir: 1 }));
   } catch (e) {
     console.error(e);
     setSlots([]);
     setErrSlots("Falha a carregar as slots deste hunt.");
   }
-}, [nId, setSlots]);
+}, [nId]);
+
 
   React.useEffect(() => { refreshSlots(); }, [refreshSlots]);
 
