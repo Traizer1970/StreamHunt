@@ -2476,14 +2476,14 @@ async function handleAdd() {
     const bs = toNum(betSize);
     if (!Number.isFinite(bs) || bs <= 0) return setErr("Betsize inválida.");
 
-    // calcula próxima posição (slots atuais + 1)
+    // calcular próximo índice baseado nas slots já carregadas
     const nextIndex = (slots?.length || 0) + 1;
 
-    const payload = { 
-      slot_id: selected.id, 
-      bet_size: bs, 
+    const payload = {
+      slot_id: selected.id,
+      bet_size: bs,
       super: isSuper,
-      order_index: nextIndex
+      order_index: nextIndex, // <-- fix: define sempre posição
     };
 
     setBusy(true);
@@ -3495,26 +3495,26 @@ const refreshSlots = React.useCallback(async () => {
   if (!nId) return;
   try {
     setErrSlots("");
+    const { slots: apiSlots } = await listHuntSlots({ numberId: nId });
+    let list = apiSlots || [];
 
-    const { data, error } = await supabase
-      .from("hunt_slots")
-      .select("*")
-      .eq("hunt_number_id", nId)
-      .order("order_index", { ascending: true });
+    // Garantir que sempre usamos order_index se existir
+    list = [...list].sort((a, b) => {
+      const aa = readOrderFromRow(a);
+      const bb = readOrderFromRow(b);
+      const A = Number.isFinite(aa) ? aa : Number.MAX_SAFE_INTEGER;
+      const B = Number.isFinite(bb) ? bb : Number.MAX_SAFE_INTEGER;
+      return A - B || a.id - b.id;
+    });
 
-    if (error) throw error;
-
-    const list = data || [];
     setSlots(list);
-
-    // força a vista para ordenar por "order"
     setSortBy((s) => (s.key === "order" ? s : { key: "order", dir: 1 }));
-  } catch (e) {
-    console.error("Erro ao carregar slots:", e);
+  } catch {
     setSlots([]);
     setErrSlots("Falha a carregar as slots deste hunt.");
   }
 }, [nId]);
+
 
 
   React.useEffect(() => { refreshSlots(); }, [refreshSlots]);
