@@ -3,7 +3,7 @@ import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { AuthCtx, useTheme } from "@/contexts/auth-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { listHunts } from "@/lib/hunts";
-import { supabase } from "@/lib/supabase";
+import { supabase, safeSignOut } from "@/lib/supabase";
 import { Eye, Trophy, BarChart2, Calculator, Hash, Star, Lock } from "lucide-react";
 
 /* ---------------- utils ---------------- */

@@ -1247,7 +1247,6 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
   const hero = indices.map(i => (i >= 0 && i < slots.length) ? { s: slots[i], i } : null).filter(Boolean);
 
   // Dimensões — imagem SEM letterbox (cobre o card todo)
-  // tamanhos base + escala vinda das opções
 const baseCardW = 180, baseCardH = 260;
 const scaleAll = Math.max(0.5, Math.min(2, Number(opts.cardScale ?? 1)));
 const cardW = Math.round(baseCardW * scaleAll);
