@@ -3488,7 +3488,7 @@ const [stopBox, setStopBox] = useLocalState(`hunt:${nId}:stop`, { value: 0 });
       const { slots: apiSlots } = await listHuntSlots({ numberId: nId });
       let list = apiSlots || [];
 
-      const haveOrder = list.some((s) => readOrderFromRow(s) != null);
+      const haveOrder = list.every((s) => readOrderFromRow(s) != null);
       if (haveOrder) {
         list = [...list].sort((a, b) => {
           const aa = readOrderFromRow(a);
