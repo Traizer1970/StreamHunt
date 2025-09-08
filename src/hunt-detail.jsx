@@ -2476,24 +2476,36 @@ async function handleAdd() {
     const bs = toNum(betSize);
     if (!Number.isFinite(bs) || bs <= 0) return setErr("Betsize inválida.");
 
-    // calcular próximo índice baseado nas slots já carregadas
+    // próxima posição é o fim da lista atual
     const nextIndex = (slots?.length || 0) + 1;
 
     const payload = {
       slot_id: selected.id,
       bet_size: bs,
       super: isSuper,
-      order_index: nextIndex, // <-- fix: define sempre posição
+      order_index: nextIndex,
     };
 
     setBusy(true);
     await addHuntSlot(numberId, payload);
+
+    // refresca sem perder a ordem atual
     onAdded && onAdded();
     handleClose();
   } catch (e) {
     setErr(e.message || "Falha ao adicionar bonus.");
   } finally {
     setBusy(false);
+  }
+}
+async function persistOrder(listInOrder) {
+  for (let i = 0; i < listInOrder.length; i++) {
+    const row = listInOrder[i];
+    const { error } = await supabase
+      .from("hunt_slots")
+      .update({ order_index: i + 1 })
+      .eq("id", row.id);
+    if (error) console.warn("persistOrder:", error.message);
   }
 }
 
@@ -3495,27 +3507,47 @@ const refreshSlots = React.useCallback(async () => {
   if (!nId) return;
   try {
     setErrSlots("");
-    const { slots: apiSlots } = await listHuntSlots({ numberId: nId });
-    let list = apiSlots || [];
 
-    // Garantir que sempre usamos order_index se existir
-    list = [...list].sort((a, b) => {
-      const aa = readOrderFromRow(a);
-      const bb = readOrderFromRow(b);
-      const A = Number.isFinite(aa) ? aa : Number.MAX_SAFE_INTEGER;
-      const B = Number.isFinite(bb) ? bb : Number.MAX_SAFE_INTEGER;
-      return A - B || a.id - b.id;
+    // vai buscar os dados (não ordenamos aqui)
+    const { slots: apiSlots } = await listHuntSlots({ numberId: nId });
+    const fresh = apiSlots || [];
+
+    // mapa por id para mesclar sem mexer na ordem atual
+    const byId = new Map(fresh.map(r => [r.id, r]));
+
+    setSlots(prev => {
+      // 1) atualiza cada item mantendo a ordem atual
+      const updated = (prev || []).map(oldRow => {
+        const newer = byId.get(oldRow.id);
+        if (newer) byId.delete(oldRow.id);
+        return newer ? { ...oldRow, ...newer } : oldRow;
+      });
+
+      // 2) o que sobrou no byId são novos registos -> entram no FIM
+      const newOnes = Array.from(byId.values());
+
+      // 3) se houver order_index definido nesses novos, respeita; senão, fica no fim
+      newOnes.sort((a, b) => {
+        const A = Number(a.order_index);
+        const B = Number(b.order_index);
+        const aOk = Number.isFinite(A), bOk = Number.isFinite(B);
+        if (aOk && bOk) return A - B || a.id - b.id;
+        if (aOk && !bOk) return -1;
+        if (!aOk && bOk) return 1;
+        return a.id - b.id;
+      });
+
+      return [...updated, ...newOnes];
     });
 
-    setSlots(list);
-    setSortBy((s) => (s.key === "order" ? s : { key: "order", dir: 1 }));
-  } catch {
+    // mantém o sort visual por "order"
+    setSortBy(s => (s.key === "order" ? s : { key: "order", dir: 1 }));
+  } catch (e) {
+    console.error(e);
     setSlots([]);
     setErrSlots("Falha a carregar as slots deste hunt.");
   }
-}, [nId]);
-
-
+}, [nId, setSlots]);
 
   React.useEffect(() => { refreshSlots(); }, [refreshSlots]);
 
