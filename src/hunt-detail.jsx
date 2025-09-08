@@ -534,17 +534,16 @@ const getIsSuper = (s) =>
   !!(s?.is_super ?? s?.super ?? s?._raw?.is_super ?? s?._raw?.super);
 
 async function persistOrder(slots) {
-  const colCandidates = ["order_index", "order", "position", "sort", "order_idx"];
   for (let i = 0; i < slots.length; i++) {
     const rowId = slots[i].id;
-    let ok = false;
-    for (const col of colCandidates) {
-      const r1 = await supabase.from("hunt_slots").update({ [col]: i + 1 }).eq("id", rowId);
-      if (!r1.error) { ok = true; break; }
-      const r2 = await supabase.from("hunt_slots").update({ [col]: i + 1 }).eq("ID", rowId);
-      if (!r2.error) { ok = true; break; }
+    const { error } = await supabase
+      .from("hunt_slots")
+      .update({ order_index: i + 1 })   // <-- usa só order_index
+      .eq("id", rowId);
+
+    if (error) {
+      console.error("Erro a persistir ordem:", error);
     }
-    if (!ok) { /* ignora */ }
   }
 }
 
@@ -2470,23 +2469,34 @@ function AddBonusModal({ open, onClose, numberId, onAdded }) {
   };
   const handleClose = () => { resetForm(); onClose && onClose(); };
 
-  async function handleAdd() {
-    try {
-      setErr("");
-      if (!selected) return setErr("Escolhe uma slot.");
-      const bs = toNum(betSize);
-      if (!Number.isFinite(bs) || bs <= 0) return setErr("Betsize inválida.");
-      const payload = { slot_id: selected.id, bet_size: bs, super: isSuper };
-      setBusy(true);
-      await addHuntSlot(numberId, payload);
-      onAdded && onAdded();
-      handleClose();
-    } catch (e) {
-      setErr(e.message || "Falha ao adicionar bonus.");
-    } finally {
-      setBusy(false);
-    }
+async function handleAdd() {
+  try {
+    setErr("");
+    if (!selected) return setErr("Escolhe uma slot.");
+    const bs = toNum(betSize);
+    if (!Number.isFinite(bs) || bs <= 0) return setErr("Betsize inválida.");
+
+    // calcula próxima posição (slots atuais + 1)
+    const nextIndex = (slots?.length || 0) + 1;
+
+    const payload = { 
+      slot_id: selected.id, 
+      bet_size: bs, 
+      super: isSuper,
+      order_index: nextIndex
+    };
+
+    setBusy(true);
+    await addHuntSlot(numberId, payload);
+    onAdded && onAdded();
+    handleClose();
+  } catch (e) {
+    setErr(e.message || "Falha ao adicionar bonus.");
+  } finally {
+    setBusy(false);
   }
+}
+
 
   if (!open) return null;
 
@@ -3481,31 +3491,31 @@ const [stopBox, setStopBox] = useLocalState(`hunt:${nId}:stop`, { value: 0 });
     return () => (active = false);
   }, [nId]);
 
-  const refreshSlots = React.useCallback(async () => {
-    if (!nId) return;
-    try {
-      setErrSlots("");
-      const { slots: apiSlots } = await listHuntSlots({ numberId: nId });
-      let list = apiSlots || [];
+const refreshSlots = React.useCallback(async () => {
+  if (!nId) return;
+  try {
+    setErrSlots("");
 
-      const haveOrder = list.every((s) => readOrderFromRow(s) != null);
-      if (haveOrder) {
-        list = [...list].sort((a, b) => {
-          const aa = readOrderFromRow(a);
-          const bb = readOrderFromRow(b);
-          const A = Number.isFinite(aa) ? aa : Number.MAX_SAFE_INTEGER;
-          const B = Number.isFinite(bb) ? bb : Number.MAX_SAFE_INTEGER;
-          return A - B || a.id - b.id;
-        });
-      }
+    const { data, error } = await supabase
+      .from("hunt_slots")
+      .select("*")
+      .eq("hunt_number_id", nId)
+      .order("order_index", { ascending: true });
 
-      setSlots(list);
-      setSortBy((s) => (s.key === "order" ? s : { key: "order", dir: 1 }));
-    } catch {
-      setSlots([]);
-      setErrSlots("Falha a carregar as slots deste hunt.");
-    }
-  }, [nId]);
+    if (error) throw error;
+
+    const list = data || [];
+    setSlots(list);
+
+    // força a vista para ordenar por "order"
+    setSortBy((s) => (s.key === "order" ? s : { key: "order", dir: 1 }));
+  } catch (e) {
+    console.error("Erro ao carregar slots:", e);
+    setSlots([]);
+    setErrSlots("Falha a carregar as slots deste hunt.");
+  }
+}, [nId]);
+
 
   React.useEffect(() => { refreshSlots(); }, [refreshSlots]);
 
