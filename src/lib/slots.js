@@ -22,6 +22,27 @@ function normCatalogRow(r) {
   return { id, name, provider, thumbnail, _raw: r };
 }
 
+// Lê order_index com vários nomes possíveis
+function readOrder(r) {
+  return firstDefined(
+    r.order_index,
+    r.ORDER_INDEX,
+    r.order,
+    r.ORDER,
+    r.position,
+    r.POSITION,
+    r.sort,
+    r.SORT,
+    r.order_idx,
+    r.ORDER_IDX,
+    r._raw?.order_index,
+    r._raw?.order,
+    r._raw?.position,
+    r._raw?.sort,
+    r._raw?.order_idx
+  );
+}
+
 function normHuntSlotRow(r, catalogById) {
   const id = firstDefined(r.id, r.ID);
   const slotId =
@@ -39,6 +60,7 @@ function normHuntSlotRow(r, catalogById) {
   const spins_used = firstDefined(r.spins_used, r.spins, r.spinsUsed);
   const payout = firstDefined(r.payout, r.PAYOUT);
   const multiplier = firstDefined(r.multiplier, r.MULTIPLIER);
+  const order_index = Number(readOrder(r));
 
   // normalizar flag "super" com vários nomes possíveis
   const is_super = !!firstDefined(
@@ -62,6 +84,7 @@ function normHuntSlotRow(r, catalogById) {
     spins_used,
     payout,
     multiplier,
+    order_index: Number.isFinite(order_index) ? order_index : undefined,
     is_super,
     _raw: r,
   };
@@ -89,7 +112,7 @@ async function tryMany(variants) {
 
 /**
  * Lista as slots de um hunt (por numberId).
- * Evita 400 do Supabase quando o id é inválido e faz fallbacks de colunas.
+ * Retorna SEMPRE ordenado por order_index (quando existir), senão por id.
  */
 export async function listHuntSlots({ numberId }) {
   const n = Number(numberId);
@@ -100,16 +123,34 @@ export async function listHuntSlots({ numberId }) {
 
   let hs = [];
   let ok = false;
+
+  // Primeiro, tenta já ordenar por order_index no servidor (nulls last)
   for (const col of huntColCandidates) {
     const { data, error } = await supabase
       .from("hunt_slots")
       .select("*")
-      .eq(col, n);
+      .eq(col, n)
+      .order("order_index", { ascending: true, nullsFirst: false });
 
     if (!error) {
       hs = data || [];
       ok = true;
       break;
+    }
+  }
+
+  // Se falhar (ex.: coluna não existe), tenta sem order() e ordena no cliente
+  if (!ok) {
+    for (const col of huntColCandidates) {
+      const { data, error } = await supabase
+        .from("hunt_slots")
+        .select("*")
+        .eq(col, n);
+      if (!error) {
+        hs = data || [];
+        ok = true;
+        break;
+      }
     }
   }
 
@@ -182,6 +223,19 @@ export async function listHuntSlots({ numberId }) {
 
   // 4) Normalizar hunt_slots
   const normalized = hs.map((r) => normHuntSlotRow(r, catalogById));
+
+  // 5) Ordenar no cliente (garantia extra, caso o .order falhe)
+  normalized.sort((a, b) => {
+    const aa = Number(readOrder(a));
+    const bb = Number(readOrder(b));
+    const aOk = Number.isFinite(aa);
+    const bOk = Number.isFinite(bb);
+    if (aOk && bOk) return aa - bb || a.id - b.id;
+    if (aOk && !bOk) return -1;
+    if (!aOk && bOk) return 1;
+    return a.id - b.id;
+  });
+
   return { slots: normalized };
 }
 
@@ -230,7 +284,7 @@ export async function searchCatalogSlots(q, { limit = 25 } = {}) {
 
 /**
  * Adiciona uma slot ao hunt.
- * payload: { slot_id, bet_size, remaining_balance?, spins_used?, super? }
+ * payload: { slot_id, bet_size, remaining_balance?, spins_used?, super?, order_index? }
  */
 export async function addHuntSlot(numberId, payload) {
   const sid = firstDefined(
@@ -256,8 +310,15 @@ export async function addHuntSlot(numberId, payload) {
     payload.is_super,
     payload.super_bonus
   );
+  const orderVal = firstDefined(
+    payload.order_index,
+    payload.order,
+    payload.position,
+    payload.sort,
+    payload.order_idx
+  );
 
-  // variações comuns de nomes de colunas
+  // variações comuns de nomes de colunas (mantemos compat mas preferimos hunt_number_id/bet_size/slot_id)
   const variants = [
     { hunt: "hunt_number_id", bet: "bet_size", remain: "remaining_balance", spins: "spins_used", slot: "slot_id" },
     { hunt: "hunt_id",        bet: "bet_size", remain: "remaining_balance", spins: "spins_used", slot: "slot_id" },
@@ -270,15 +331,39 @@ export async function addHuntSlot(numberId, payload) {
   ];
 
   const superCols = ["super", "is_super", "super_bonus"];
+  const orderCols = ["order_index", "order", "position", "sort", "order_idx"];
   let lastErr = null;
 
   for (const v of variants) {
-    // 1) tenta inserir sem o campo "super"
-    {
-      const row = { [v.hunt]: numberId, [v.slot]: sid, [v.bet]: betVal };
-      if (remainVal !== undefined && remainVal !== null) row[v.remain] = remainVal;
-      if (spinsVal  !== undefined && spinsVal  !== null) row[v.spins]  = spinsVal;
+    // 1) tenta inserir com/sem 'super' e com/sem 'order_index'
+    const baseRow = { [v.hunt]: numberId, [v.slot]: sid, [v.bet]: betVal };
+    if (remainVal !== undefined && remainVal !== null) baseRow[v.remain] = remainVal;
+    if (spinsVal  !== undefined && spinsVal  !== null) baseRow[v.spins]  = spinsVal;
 
+    // tentativas: (sem super, sem order) -> (com order) -> (com super) -> (com super + order)
+    const attempts = [];
+
+    // sem super, sem order
+    attempts.push({ ...baseRow });
+
+    // sem super, com order
+    if (orderVal !== undefined && orderVal !== null) {
+      for (const oc of orderCols) attempts.push({ ...baseRow, [oc]: Number(orderVal) });
+    }
+
+    // com super (cada nome), sem order
+    if (superVal !== undefined && superVal !== null) {
+      for (const sc of superCols) attempts.push({ ...baseRow, [sc]: !!superVal });
+    }
+
+    // com super + order
+    if (superVal !== undefined && superVal !== null && orderVal !== undefined && orderVal !== null) {
+      for (const sc of superCols) {
+        for (const oc of orderCols) attempts.push({ ...baseRow, [sc]: !!superVal, [oc]: Number(orderVal) });
+      }
+    }
+
+    for (const row of attempts) {
       const { data, error } = await supabase
         .from("hunt_slots")
         .insert([row])
@@ -287,36 +372,14 @@ export async function addHuntSlot(numberId, payload) {
       if (!error) return data;
       lastErr = error;
     }
-
-    // 2) se temos valor para super, tenta com cada nome de coluna
-    if (superVal !== undefined && superVal !== null) {
-      for (const sCol of superCols) {
-        const row = {
-          [v.hunt]: numberId,
-          [v.slot]: sid,
-          [v.bet]: betVal,
-          [sCol]: !!superVal,
-        };
-        if (remainVal !== undefined && remainVal !== null) row[v.remain] = remainVal;
-        if (spinsVal  !== undefined && spinsVal  !== null) row[v.spins]  = spinsVal;
-
-        const { data, error } = await supabase
-          .from("hunt_slots")
-          .insert([row])
-          .select("*")
-          .single();
-        if (!error) return data;
-        lastErr = error;
-      }
-    }
   }
 
-  throw new Error(
-    lastErr?.message || "Não foi possível inserir em hunt_slots."
-  );
+  throw new Error(lastErr?.message || "Não foi possível inserir em hunt_slots.");
 }
 
-/** Atualiza um registo da tabela hunt_slots (com fallbacks) */
+/** Atualiza um registo da tabela hunt_slots (com fallbacks).
+ *  NÃO mexe em order_index aqui (só nos fluxos de reordenação).
+ */
 export async function updateHuntSlot(rowId, patch) {
   const betVal     = firstDefined(patch.bet_size, patch.bet, patch.betsize);
   const remainVal  = firstDefined(patch.remaining_balance, patch.remaining, patch.remain);

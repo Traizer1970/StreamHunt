@@ -1232,8 +1232,6 @@ const key = `opening:idx:${hunt?.number_id ?? hunt?.id ?? ""}`;
 const savedIdx = Number(localStorage.getItem(key));
 // no OpeningOverlayPreview
 const currentIdx = Math.max(0, slots.findIndex((s) => s.payout == null));
-
-
   const indices = [currentIdx - 1, currentIdx, currentIdx + 1];
   const hero = indices.map(i => (i >= 0 && i < slots.length) ? { s: slots[i], i } : null).filter(Boolean);
 
@@ -3498,16 +3496,9 @@ const refreshSlots = React.useCallback(async () => {
   try {
     setErrSlots("");
 
-    // Busca já ORDENADO pela coluna oficial da BD
-    const { data, error } = await supabase
-      .from("hunt_slots")
-      .select("*")
-      .eq("hunt_number_id", nId)
-      .order("order_index", { ascending: true });
+    const { slots: apiSlots } = await listHuntSlots({ numberId: nId });
+    setSlots(apiSlots || []);
 
-    if (error) throw error;
-
-    setSlots(data || []);
     setSortBy((s) => (s.key === "order" ? s : { key: "order", dir: 1 }));
   } catch (e) {
     console.error(e);
@@ -3515,8 +3506,6 @@ const refreshSlots = React.useCallback(async () => {
     setErrSlots("Falha a carregar as slots deste hunt.");
   }
 }, [nId]);
-
-
 
   React.useEffect(() => { refreshSlots(); }, [refreshSlots]);
 
