@@ -2847,24 +2847,24 @@ function RedeemModal({ open, onClose, slots, onSaved }) {
     }
   }
 
-  async function saveAll() {
-    try {
-      setSavingAll(true);
-      for (const s of slots) {
-        const v = form[s.id];
-        if (v === "" || String(v) === String(s.payout ?? "")) continue;
-        const payout = toNum(v);
-        const bet = toNum(s.bet_size);
-        const multiplier = bet > 0 ? payout / bet : null;
-        await updateHuntSlot(s.id, { payout, multiplier });
-      }
-      onSaved && onSaved();
-    } catch (e) {
-      alert(e.message || "Falha ao guardar.");
-    } finally {
-      setSavingAll(false);
+async function saveAll() {
+  try {
+    setSavingAll(true);
+    for (const s of slots) {
+      const v = form[s.id];
+      if (v === "" || String(v) === String(s.payout ?? "")) continue;
+      const payout = toNum(v);
+      const bet = toNum(s.bet_size);
+      const multiplier = bet > 0 ? payout / bet : null;
+      await updateHuntSlot(s.id, { payout, multiplier });
     }
+    onSaved && onSaved();
+  } catch (e) {
+    alert(e.message || "Falha ao guardar.");
+  } finally {
+    setSavingAll(false);
   }
+}
 
   const fillPreset = (row, mul) => {
     const v = mul === 0 ? 0 : toNum(row.bet_size) * mul;
