@@ -533,20 +533,6 @@ async function updateSuperFlag(rowId, value) {
 const getIsSuper = (s) =>
   !!(s?.is_super ?? s?.super ?? s?._raw?.is_super ?? s?._raw?.super);
 
-async function persistOrder(slots) {
-  for (let i = 0; i < slots.length; i++) {
-    const rowId = slots[i].id;
-    const { error } = await supabase
-      .from("hunt_slots")
-      .update({ order_index: i + 1 })   // <-- usa só order_index
-      .eq("id", rowId);
-
-    if (error) {
-      console.error("Erro a persistir ordem:", error);
-    }
-  }
-}
-
 /* ───────────────────────── Salvar/ler opções do overlay (DB + fallback) ───────────────────────── */
 function useOverlaySettings({ type, huntNumberId, defaultValue }) {
   const { user } = useAuth();
@@ -1241,7 +1227,13 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
   const bwMode = (opts.bestWorstMode || "badges"); // "badges" | "cards"
 
   // --------- Current + heróis (prev, current, next) ----------
-  const currentIdx = Math.max(0, slots.findIndex(s => s.payout == null));
+  // tenta usar um índice guardado; se não houver, cai no comportamento antigo
+const key = `opening:idx:${hunt?.number_id ?? hunt?.id ?? ""}`;
+const savedIdx = Number(localStorage.getItem(key));
+const currentIdx = Number.isFinite(savedIdx)
+  ? Math.max(0, Math.min(slots.length - 1, savedIdx))
+  : Math.max(0, slots.findIndex(s => s.payout == null));
+
   const indices = [currentIdx - 1, currentIdx, currentIdx + 1];
   const hero = indices.map(i => (i >= 0 && i < slots.length) ? { s: slots[i], i } : null).filter(Boolean);
 
@@ -2482,7 +2474,7 @@ async function handleAdd() {
       slot_id: selected.id,
       bet_size: bs,
       super: isSuper,
-      order_index: nextIndex,
+      order_index: nextIndex,  // <- novo slot no fim
     };
 
     setBusy(true);
@@ -2503,9 +2495,10 @@ async function persistOrder(listInOrder) {
       .from("hunt_slots")
       .update({ order_index: i + 1 })
       .eq("id", row.id);
-    if (error) console.warn("persistOrder:", error.message);
+    if (error) console.error("persistOrder:", error.message);
   }
 }
+
 
 
   if (!open) return null;
@@ -3506,22 +3499,15 @@ const refreshSlots = React.useCallback(async () => {
   try {
     setErrSlots("");
 
-    const { slots: apiSlots } = await listHuntSlots({ numberId: nId });
-    let list = apiSlots || [];
+    const { data, error } = await supabase
+      .from("hunt_slots")
+      .select("*")
+      .eq("hunt_number_id", nId)
+      .order("order_index", { ascending: true });  // <- aqui é a ordem oficial
 
-    // ordem estável: primeiro por order_index (quando houver), senão por id
-    list = [...list].sort((a, b) => {
-      const aa = Number(a?.order_index);
-      const bb = Number(b?.order_index);
-      const aOk = Number.isFinite(aa);
-      const bOk = Number.isFinite(bb);
-      if (aOk && bOk) return aa - bb || a.id - b.id;
-      if (aOk && !bOk) return -1;   // quem tem order_index vem antes
-      if (!aOk && bOk) return 1;
-      return a.id - b.id;           // fallback estável
-    });
+    if (error) throw error;
 
-    setSlots(list);
+    setSlots(data || []);
     setSortBy((s) => (s.key === "order" ? s : { key: "order", dir: 1 }));
   } catch (e) {
     console.error(e);
@@ -3529,6 +3515,7 @@ const refreshSlots = React.useCallback(async () => {
     setErrSlots("Falha a carregar as slots deste hunt.");
   }
 }, [nId]);
+
 
 
   React.useEffect(() => { refreshSlots(); }, [refreshSlots]);
