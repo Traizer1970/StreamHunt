@@ -1230,9 +1230,9 @@ function OpeningOverlayPreview({ hunt, slots, opts }) {
   // tenta usar um índice guardado; se não houver, cai no comportamento antigo
 const key = `opening:idx:${hunt?.number_id ?? hunt?.id ?? ""}`;
 const savedIdx = Number(localStorage.getItem(key));
-const currentIdx = Number.isFinite(savedIdx)
-  ? Math.max(0, Math.min(slots.length - 1, savedIdx))
-  : Math.max(0, slots.findIndex(s => s.payout == null));
+// no OpeningOverlayPreview
+const currentIdx = Math.max(0, slots.findIndex((s) => s.payout == null));
+
 
   const indices = [currentIdx - 1, currentIdx, currentIdx + 1];
   const hero = indices.map(i => (i >= 0 && i < slots.length) ? { s: slots[i], i } : null).filter(Boolean);
@@ -2468,13 +2468,14 @@ async function handleAdd() {
     const bs = toNum(betSize);
     if (!Number.isFinite(bs) || bs <= 0) return setErr("Betsize inválida.");
 
+    // nova entra no FIM da ordem atual
     const nextIndex = (slots?.length || 0) + 1;
 
     const payload = {
       slot_id: selected.id,
       bet_size: bs,
       super: isSuper,
-      order_index: nextIndex,  // <- novo slot no fim
+      order_index: nextIndex, // <- posição garantida
     };
 
     setBusy(true);
@@ -2498,8 +2499,6 @@ async function persistOrder(listInOrder) {
     if (error) console.error("persistOrder:", error.message);
   }
 }
-
-
 
   if (!open) return null;
 
@@ -3499,11 +3498,12 @@ const refreshSlots = React.useCallback(async () => {
   try {
     setErrSlots("");
 
+    // Busca já ORDENADO pela coluna oficial da BD
     const { data, error } = await supabase
       .from("hunt_slots")
       .select("*")
       .eq("hunt_number_id", nId)
-      .order("order_index", { ascending: true });  // <- aqui é a ordem oficial
+      .order("order_index", { ascending: true });
 
     if (error) throw error;
 
