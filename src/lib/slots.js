@@ -295,9 +295,11 @@ export async function addHuntSlot(numberId, payload) {
   );
   if (!sid) throw new Error("slot_id em falta.");
 
-  const betVal = firstDefined(payload.bet_size, payload.bet, payload.betsize);
-  if (!(Number.isFinite(betVal) || typeof betVal === "number"))
-    throw new Error("Betsize inválida.");
+// força a ser número (aceita string "2.00" etc.)
+const betValRaw = firstDefined(payload.bet_size, payload.bet, payload.betsize);
+const betVal = Number(betValRaw);
+if (!Number.isFinite(betVal)) throw new Error("Betsize inválida.");
+
 
   const remainVal = firstDefined(
     payload.remaining_balance,
@@ -310,13 +312,16 @@ export async function addHuntSlot(numberId, payload) {
     payload.is_super,
     payload.super_bonus
   );
-  const orderVal = firstDefined(
-    payload.order_index,
-    payload.order,
-    payload.position,
-    payload.sort,
-    payload.order_idx
-  );
+// pode vir string; converte para número (ou null)
+const orderValRaw = firstDefined(
+  payload.order_index,
+  payload.order,
+  payload.position,
+  payload.sort,
+  payload.order_idx
+);
+const orderVal = orderValRaw == null ? null : Number(orderValRaw);
+
 
   // variações comuns de nomes de colunas (mantemos compat mas preferimos hunt_number_id/bet_size/slot_id)
   const variants = [
@@ -478,3 +483,13 @@ export default {
   getIsSuper,
   updateSuperFlag,
 };
+export async function persistOrder(listInOrder) {
+  for (let i = 0; i < listInOrder.length; i++) {
+    const row = listInOrder[i];
+    const { error } = await supabase
+      .from('hunt_slots')
+      .update({ order_index: i + 1 })
+      .eq('id', row.id);
+    if (error) console.error('persistOrder:', error.message);
+  }
+}

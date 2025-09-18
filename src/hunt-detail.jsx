@@ -165,6 +165,18 @@ function useLang() {
 /* ───────────────────────── utils ───────────────────────── */
 const ORDER_COLS = ["order_index", "order", "position", "sort", "order_idx"];
 const readOrderFromRow = (row) => {
+  // ─────────────────── ORDER: persistir no DB ───────────────────
+async function persistOrder(listInOrder) {
+  for (let i = 0; i < listInOrder.length; i++) {
+    const row = listInOrder[i];
+    const { error } = await supabase
+      .from('hunt_slots')
+      .update({ order_index: i + 1 })
+      .eq('id', row.id);
+    if (error) console.error('persistOrder:', error.message);
+  }
+}
+
   const raw = row?._raw || row || {};
   for (const c of ORDER_COLS) {
     const v = Number(raw[c]);
@@ -2425,7 +2437,7 @@ function OverlayCard({ type, hunt, slots, opts, setOpts }) {
 
 /* ───────────────────────── Redeem & CRUD (inalterado) ───────────────────────── */
 
-function AddBonusModal({ open, onClose, numberId, onAdded }) {
+function AddBonusModal({ open, onClose, numberId, onAdded, slots = [] }) {
   const { t } = useLang();
   const [query, setQuery] = React.useState("");
   const [busy, setBusy] = React.useState(false);
@@ -2466,15 +2478,21 @@ async function handleAdd() {
     const bs = toNum(betSize);
     if (!Number.isFinite(bs) || bs <= 0) return setErr("Betsize inválida.");
 
-    // nova entra no FIM da ordem atual
-    const nextIndex = (slots?.length || 0) + 1;
+// nova entra mesmo no FIM: usa o MAIOR order_index existente
+const maxOrder = slots.reduce((m, s) => {
+  const v = Number(s?.order_index ?? s?._raw?.order_index);
+  return Number.isFinite(v) ? Math.max(m, v) : m;
+}, 0);
+const nextIndex = maxOrder + 1;
 
-    const payload = {
-      slot_id: selected.id,
-      bet_size: bs,
-      super: isSuper,
-      order_index: nextIndex, // <- posição garantida
-    };
+const payload = {
+  slot_id: selected.id,
+  bet_size: bs,
+  super: isSuper,
+  order_index: nextIndex,
+};
+
+
 
     setBusy(true);
     await addHuntSlot(numberId, payload);
@@ -2486,18 +2504,6 @@ async function handleAdd() {
     setBusy(false);
   }
 }
-
-async function persistOrder(listInOrder) {
-  for (let i = 0; i < listInOrder.length; i++) {
-    const row = listInOrder[i];
-    const { error } = await supabase
-      .from("hunt_slots")
-      .update({ order_index: i + 1 })
-      .eq("id", row.id);
-    if (error) console.error("persistOrder:", error.message);
-  }
-}
-
   if (!open) return null;
 
   return (
@@ -2865,7 +2871,7 @@ async function saveAll() {
     setSavingAll(false);
   }
 }
-
+  
   const fillPreset = (row, mul) => {
     const v = mul === 0 ? 0 : toNum(row.bet_size) * mul;
     setVal(row.id, String(v).replace(".", ",")); // aceita vírgula
@@ -3456,24 +3462,22 @@ const [stopBox, setStopBox] = useLocalState(`hunt:${nId}:stop`, { value: 0 });
   const dragIndex = React.useRef(null);
   function onDragStart(i) { dragIndex.current = i; }
   function onDragOver(e) { e.preventDefault(); }
-  async function onDrop(i) {
-    const from = dragIndex.current;
-    if (from == null || from === i) return;
+async function onDrop(i) {
+  const from = dragIndex.current;
+  if (from == null || from === i) return;
 
-    const arr = [...sortedSlots];
-    const [moved] = arr.splice(from, 1);
-    arr.splice(i, 0, moved);
+  // trabalha sobre a lista tal como está visível
+  const arr = [...sortedSlots];
+  const [moved] = arr.splice(from, 1);
+  arr.splice(i, 0, moved);
 
-    arr.forEach((row, idx) => {
-      row._raw = { ...(row._raw || {}) };
-      for (const c of ORDER_COLS) row._raw[c] = idx + 1;
-    });
+  // atualiza estado imediatamente
+  setSlots(arr);
+  dragIndex.current = null;
 
-    setSlots(arr);
-    dragIndex.current = null;
+  try { await persistOrder(arr); } catch {}
+}
 
-    try { await persistOrder(arr); } catch {}
-  }
 
   React.useEffect(() => {
     let active = true;
@@ -3497,15 +3501,22 @@ const refreshSlots = React.useCallback(async () => {
     setErrSlots("");
 
     const { slots: apiSlots } = await listHuntSlots({ numberId: nId });
-    setSlots(apiSlots || []);
 
-    setSortBy((s) => (s.key === "order" ? s : { key: "order", dir: 1 }));
+    const normOrder = (r) => {
+      const v = Number(r?.order_index ?? r?._raw?.order_index);
+      return Number.isFinite(v) ? v : Number(r.id); // fallback estável
+    };
+
+    const byOrder = [...(apiSlots || [])].sort((a, b) => normOrder(a) - normOrder(b));
+    setSlots(byOrder);
+    setSortBy({ key: "order", dir: 1 });
   } catch (e) {
     console.error(e);
     setSlots([]);
     setErrSlots("Falha a carregar as slots deste hunt.");
   }
 }, [nId]);
+
 
   React.useEffect(() => { refreshSlots(); }, [refreshSlots]);
 
@@ -3558,9 +3569,12 @@ const beLeft = React.useMemo(() => {
   const openStart = () => setConfirmStart(true);
  // vai para o ecrã de Opening/Redeem depois de confirmares
 const confirmStartYes = React.useCallback(() => {
+  // fixa o modo de ordenação em "order" antes de abrir o fluxo
+  setSortBy({ key: "order", dir: 1 });
   setConfirmStart(false);
-  setRedeemFlowOpen(true); // <- abre o modal
+  setRedeemFlowOpen(true);
 }, []);
+
 
   if (busy) return <div className="max-w-7xl mx-auto px-4 py-10 text-sm opacity-70">A carregar…</div>;
   if (!hunt) {
@@ -3772,11 +3786,13 @@ const confirmStartYes = React.useCallback(() => {
 
       {/* Modais */}
       <AddBonusModal
-        open={openAdd}
-        onClose={() => setOpenAdd(false)}
-        numberId={hunt.number_id}
-        onAdded={refreshSlots}
-      />
+  open={openAdd}
+  onClose={() => setOpenAdd(false)}
+  numberId={hunt.number_id}
+  onAdded={refreshSlots}
+  slots={slots}
+/>
+
       <EditBonusModal
         open={editOpen}
         row={editRow}
