@@ -10,6 +10,10 @@ function firstDefined(...vals) {
   return undefined;
 }
 
+const ORDER_COLS = ["order_index", "order", "position", "sort", "order_idx"];
+const HUNT_COLS  = ["hunt_number_id", "hunt_id", "hunt_number", "huntid"];
+const SUPER_COLS = ["is_super", "super", "super_bonus"];
+
 function normCatalogRow(r) {
   if (!r) return null;
   const id =
@@ -62,7 +66,6 @@ function normHuntSlotRow(r, catalogById) {
   const multiplier = firstDefined(r.multiplier, r.MULTIPLIER);
   const order_index = Number(readOrder(r));
 
-  // normalizar flag "super" com vários nomes possíveis
   const is_super = !!firstDefined(
     r.is_super,
     r.super,
@@ -74,11 +77,11 @@ function normHuntSlotRow(r, catalogById) {
   return {
     id,
     slot_id: slotId,
-    // dados do catálogo
+    // catálogo
     name: cat?.name ?? "—",
     provider: cat?.provider ?? "—",
     thumbnail: cat?.thumbnail ?? null,
-    // dados de hunt_slots
+    // hunt_slots
     bet_size,
     remaining_balance,
     spins_used,
@@ -118,44 +121,32 @@ export async function listHuntSlots({ numberId }) {
   const n = Number(numberId);
   if (!Number.isFinite(n) || n <= 0) return { slots: [] };
 
-  // 1) Carregar hunt_slots para o hunt indicado, tentando nomes de colunas comuns
-  const huntColCandidates = ["hunt_number_id", "hunt_id", "hunt_number", "huntid"];
-
+  // 1) Carregar hunt_slots do hunt
   let hs = [];
   let ok = false;
 
-  // Primeiro, tenta já ordenar por order_index no servidor (nulls last)
-  for (const col of huntColCandidates) {
+  // tenta já ordenar por order_index (se existir)
+  for (const col of HUNT_COLS) {
     const { data, error } = await supabase
       .from("hunt_slots")
       .select("*")
       .eq(col, n)
       .order("order_index", { ascending: true, nullsFirst: false });
-
-    if (!error) {
-      hs = data || [];
-      ok = true;
-      break;
-    }
+    if (!error) { hs = data || []; ok = true; break; }
   }
 
-  // Se falhar (ex.: coluna não existe), tenta sem order() e ordena no cliente
+  // fallback: sem .order() e ordena no cliente
   if (!ok) {
-    for (const col of huntColCandidates) {
+    for (const col of HUNT_COLS) {
       const { data, error } = await supabase
         .from("hunt_slots")
         .select("*")
         .eq(col, n);
-      if (!error) {
-        hs = data || [];
-        ok = true;
-        break;
-      }
+      if (!error) { hs = data || []; ok = true; break; }
     }
   }
 
   if (!ok) {
-    // último fallback: carregar todos e filtrar em JS
     const { data, error } = await supabase.from("hunt_slots").select("*");
     if (error) throw error;
     hs = (data || []).filter((r) => {
@@ -167,7 +158,7 @@ export async function listHuntSlots({ numberId }) {
 
   if (!hs || hs.length === 0) return { slots: [] };
 
-  // 2) Extrair os slot_ids e carregar os respetivos do catálogo
+  // 2) Carregar catálogo (slots_catalog)
   const idsSet = new Set(
     hs
       .map((r) =>
@@ -179,7 +170,6 @@ export async function listHuntSlots({ numberId }) {
   let catalogRows = [];
 
   if (ids.length > 0) {
-    // tentar .in('id', ...) e .in('ID', ...); se falhar, carrega e filtra
     const { data: d1, error: e1 } = await supabase
       .from("slots_catalog")
       .select("*")
@@ -209,22 +199,19 @@ export async function listHuntSlots({ numberId }) {
     }
   }
 
-  // 3) Normalizar catálogo e construir map por id
   const catalogById = new Map();
   for (const r of catalogRows) {
     const ncat = normCatalogRow(r);
     if (!ncat) continue;
-    // guardar por string e number para evitar mismatches
     catalogById.set(ncat.id, ncat);
     const nId = Number(ncat.id);
     if (Number.isFinite(nId)) catalogById.set(nId, ncat);
     catalogById.set(String(ncat.id), ncat);
   }
 
-  // 4) Normalizar hunt_slots
   const normalized = hs.map((r) => normHuntSlotRow(r, catalogById));
 
-  // 5) Ordenar no cliente (garantia extra, caso o .order falhe)
+  // 5) Ordenar no cliente (garantia extra)
   normalized.sort((a, b) => {
     const aa = Number(readOrder(a));
     const bb = Number(readOrder(b));
@@ -255,13 +242,9 @@ export async function searchCatalogSlots(q, { limit = 25 } = {}) {
       .select("*")
       .ilike(col, `%${query}%`)
       .limit(limit);
-    if (!error) {
-      rows = data || [];
-      break;
-    }
+    if (!error) { rows = data || []; break; }
   }
 
-  // último fallback: carrega algumas e filtra em JS
   if (!rows) {
     const { data, error } = await supabase
       .from("slots_catalog")
@@ -295,7 +278,6 @@ export async function addHuntSlot(numberId, payload) {
   );
   if (!sid) throw new Error("slot_id em falta.");
 
-  // ——— garantir números
   const betVal = Number(
     firstDefined(payload.bet_size, payload.bet, payload.betsize)
   );
@@ -313,7 +295,7 @@ export async function addHuntSlot(numberId, payload) {
     payload.super_bonus
   );
 
-  // se não vier order_index no payload, vamos calcular (max + 1)
+  // se não vier order_index no payload, calcular (max + 1)
   let orderVal = firstDefined(
     payload.order_index,
     payload.order,
@@ -324,195 +306,77 @@ export async function addHuntSlot(numberId, payload) {
   if (orderVal == null) orderVal = await getNextOrderIndex(numberId);
   orderVal = Number(orderVal);
 
-  // variações comuns de nomes de colunas (mantemos compat mas preferimos hunt_number_id/bet_size/slot_id)
   const variants = [
-    {
-      hunt: "hunt_number_id",
-      bet: "bet_size",
-      remain: "remaining_balance",
-      spins: "spins_used",
-      slot: "slot_id",
-    },
-    {
-      hunt: "hunt_id",
-      bet: "bet_size",
-      remain: "remaining_balance",
-      spins: "spins_used",
-      slot: "slot_id",
-    },
-    {
-      hunt: "hunt_number_id",
-      bet: "bet",
-      remain: "remaining_balance",
-      spins: "spins",
-      slot: "slot_id",
-    },
-    {
-      hunt: "hunt_id",
-      bet: "bet",
-      remain: "remaining",
-      spins: "spins",
-      slot: "slot_id",
-    },
-    {
-      hunt: "hunt_id",
-      bet: "betsize",
-      remain: "remaining_balance",
-      spins: "spins_used",
-      slot: "slot_id",
-    },
-    {
-      hunt: "hunt_number_id",
-      bet: "betsize",
-      remain: "remaining",
-      spins: "spins",
-      slot: "slot_id",
-    },
-    {
-      hunt: "hunt_number_id",
-      bet: "bet_size",
-      remain: "remaining_balance",
-      spins: "spins_used",
-      slot: "SLOT_ID",
-    },
-    {
-      hunt: "hunt_id",
-      bet: "bet",
-      remain: "remaining",
-      spins: "spins",
-      slot: "SLOT_ID",
-    },
+    { hunt: "hunt_number_id", bet: "bet_size",           remain: "remaining_balance", spins: "spins_used", slot: "slot_id" },
+    { hunt: "hunt_id",        bet: "bet_size",           remain: "remaining_balance", spins: "spins_used", slot: "slot_id" },
+    { hunt: "hunt_number_id", bet: "bet",                remain: "remaining_balance", spins: "spins",      slot: "slot_id" },
+    { hunt: "hunt_id",        bet: "bet",                remain: "remaining",         spins: "spins",      slot: "slot_id" },
+    { hunt: "hunt_id",        bet: "betsize",            remain: "remaining_balance", spins: "spins_used", slot: "slot_id" },
+    { hunt: "hunt_number_id", bet: "betsize",            remain: "remaining",         spins: "spins",      slot: "slot_id" },
+    { hunt: "hunt_number_id", bet: "bet_size",           remain: "remaining_balance", spins: "spins_used", slot: "SLOT_ID" },
+    { hunt: "hunt_id",        bet: "bet",                remain: "remaining",         spins: "spins",      slot: "SLOT_ID" },
   ];
 
-  const superCols = ["super", "is_super", "super_bonus"];
-  const orderCols = ["order_index", "order", "position", "sort", "order_idx"];
   let lastErr = null;
-
   for (const v of variants) {
-    // 1) tenta inserir com/sem 'super' e com/sem 'order_index'
     const baseRow = { [v.hunt]: numberId, [v.slot]: sid, [v.bet]: betVal };
-    if (remainVal !== undefined && remainVal !== null)
-      baseRow[v.remain] = remainVal;
-    if (spinsVal !== undefined && spinsVal !== null) baseRow[v.spins] = spinsVal;
+    if (remainVal !== undefined && remainVal !== null) baseRow[v.remain] = remainVal;
+    if (spinsVal  !== undefined && spinsVal  !== null) baseRow[v.spins]  = spinsVal;
 
-    // tentativas: (sem super, sem order) -> (com order) -> (com super) -> (com super + order)
     const attempts = [];
-
-    // sem super, sem order
-    attempts.push({ ...baseRow });
-
-    // sem super, com order
+    attempts.push({ ...baseRow }); // sem super / sem order
     if (orderVal !== undefined && orderVal !== null) {
-      for (const oc of orderCols)
-        attempts.push({ ...baseRow, [oc]: Number(orderVal) });
+      for (const oc of ORDER_COLS) attempts.push({ ...baseRow, [oc]: Number(orderVal) });
     }
-
-    // com super (cada nome), sem order
     if (superVal !== undefined && superVal !== null) {
-      for (const sc of superCols) attempts.push({ ...baseRow, [sc]: !!superVal });
+      for (const sc of SUPER_COLS) attempts.push({ ...baseRow, [sc]: !!superVal });
     }
-
-    // com super + order
-    if (
-      superVal !== undefined &&
-      superVal !== null &&
-      orderVal !== undefined &&
-      orderVal !== null
-    ) {
-      for (const sc of superCols) {
-        for (const oc of orderCols)
-          attempts.push({
-            ...baseRow,
-            [sc]: !!superVal,
-            [oc]: Number(orderVal),
-          });
-      }
+    if (superVal !== undefined && superVal !== null && orderVal !== undefined && orderVal !== null) {
+      for (const sc of SUPER_COLS) for (const oc of ORDER_COLS)
+        attempts.push({ ...baseRow, [sc]: !!superVal, [oc]: Number(orderVal) });
     }
 
     for (const row of attempts) {
-      const { data, error } = await supabase
-        .from("hunt_slots")
-        .insert([row])
-        .select("*")
-        .single();
+      const { data, error } = await supabase.from("hunt_slots").insert([row]).select("*").single();
       if (!error) return data;
       lastErr = error;
     }
   }
-
   throw new Error(lastErr?.message || "Não foi possível inserir em hunt_slots.");
 }
 
-/** Atualiza um registo da tabela hunt_slots (com fallbacks).
- *  NÃO mexe em order_index aqui (só nos fluxos de reordenação).
- */
+/** Atualiza um registo da tabela hunt_slots (não mexe na ordem aqui). */
 export async function updateHuntSlot(rowId, patch) {
-  const betVal = firstDefined(patch.bet_size, patch.bet, patch.betsize);
-  const remainVal = firstDefined(
-    patch.remaining_balance,
-    patch.remaining,
-    patch.remain
-  );
-  const spinsVal = firstDefined(patch.spins_used, patch.spins, patch.spinsUsed);
+  const betVal    = firstDefined(patch.bet_size, patch.bet, patch.betsize);
+  const remainVal = firstDefined(patch.remaining_balance, patch.remaining, patch.remain);
+  const spinsVal  = firstDefined(patch.spins_used, patch.spins, patch.spinsUsed);
   const payoutVal = firstDefined(patch.payout, patch.PAYOUT);
-  const multVal = firstDefined(patch.multiplier, patch.MULTIPLIER);
+  const multVal   = firstDefined(patch.multiplier, patch.MULTIPLIER);
 
   const variants = [
-    {
-      bet: "bet_size",
-      remain: "remaining_balance",
-      spins: "spins_used",
-      payout: "payout",
-      mult: "multiplier",
-    },
-    {
-      bet: "bet",
-      remain: "remaining_balance",
-      spins: "spins",
-      payout: "payout",
-      mult: "multiplier",
-    },
-    {
-      bet: "betsize",
-      remain: "remaining",
-      spins: "spins",
-      payout: "payout",
-      mult: "multiplier",
-    },
+    { bet: "bet_size", remain: "remaining_balance", spins: "spins_used", payout: "payout", mult: "multiplier" },
+    { bet: "bet",      remain: "remaining_balance", spins: "spins",      payout: "payout", mult: "multiplier" },
+    { bet: "betsize",  remain: "remaining",         spins: "spins",      payout: "payout", mult: "multiplier" },
   ];
 
   const buildBody = (v) => {
     const b = {};
-    if (betVal !== undefined) b[v.bet] = betVal;
+    if (betVal    !== undefined) b[v.bet]    = betVal;
     if (remainVal !== undefined) b[v.remain] = remainVal;
-    if (spinsVal !== undefined) b[v.spins] = spinsVal;
+    if (spinsVal  !== undefined) b[v.spins]  = spinsVal;
     if (payoutVal !== undefined) b[v.payout] = payoutVal;
-    if (multVal !== undefined) b[v.mult] = multVal;
+    if (multVal   !== undefined) b[v.mult]   = multVal;
     return b;
   };
 
   const tryFns = [];
   for (const v of variants) {
     const body = buildBody(v);
-    tryFns.push(() =>
-      supabase
-        .from("hunt_slots")
-        .update(body)
-        .eq("id", rowId)
-        .select("*")
-        .single()
-    );
+    tryFns.push(() => supabase.from("hunt_slots").update(body).eq("id", rowId).select("*").single());
   }
   for (const v of variants) {
     const body = buildBody(v);
-    tryFns.push(() =>
-      supabase
-        .from("hunt_slots")
-        .update(body)
-        .eq("ID", rowId)
-        .select("*")
-        .single()
-    );
+    tryFns.push(() => supabase.from("hunt_slots").update(body).eq("ID", rowId).select("*").single());
   }
 
   const { data } = await tryMany(tryFns);
@@ -520,15 +384,9 @@ export async function updateHuntSlot(rowId, patch) {
 }
 
 export async function deleteHuntSlot(rowId) {
-  const { error: e1 } = await supabase
-    .from("hunt_slots")
-    .delete()
-    .eq("id", rowId);
+  const { error: e1 } = await supabase.from("hunt_slots").delete().eq("id", rowId);
   if (!e1) return;
-  const { error: e2 } = await supabase
-    .from("hunt_slots")
-    .delete()
-    .eq("ID", rowId);
+  const { error: e2 } = await supabase.from("hunt_slots").delete().eq("ID", rowId);
   if (!e2) return;
   throw e2 || e1;
 }
@@ -537,7 +395,6 @@ export async function deleteHuntSlot(rowId) {
    Helpers públicos p/ o modal de edição
 ----------------------------------------------------------- */
 
-/** Lê o estado "super" do registo (aceita várias colunas ou _raw) */
 export function getIsSuper(row) {
   return !!(
     row?.is_super ??
@@ -551,89 +408,98 @@ export function getIsSuper(row) {
   );
 }
 
-/** Atualiza a flag "super" tentando diferentes nomes de coluna; ignora caso não exista. */
 export async function updateSuperFlag(rowId, flag) {
-  const colNames = ["is_super", "super", "super_bonus"];
-
-  // tenta (id) e (ID) para cada nome de coluna
-  for (const col of colNames) {
-    let { error } = await supabase
-      .from("hunt_slots")
-      .update({ [col]: !!flag })
-      .eq("id", rowId);
+  for (const col of SUPER_COLS) {
+    let { error } = await supabase.from("hunt_slots").update({ [col]: !!flag }).eq("id", rowId);
     if (!error) return;
-
-    ({ error } = await supabase
-      .from("hunt_slots")
-      .update({ [col]: !!flag })
-      .eq("ID", rowId));
+    ({ error } = await supabase.from("hunt_slots").update({ [col]: !!flag }).eq("ID", rowId));
     if (!error) return;
   }
-  // se não conseguiu (coluna não existe), não falha a operação
 }
 
-/** Devolve o próximo order_index para um hunt (max + 1). */
+/** Lê TODAS as variantes de ordem e devolve max + 1. */
 export async function getNextOrderIndex(huntNumberId) {
-  const cols = ["hunt_number_id", "hunt_id", "hunt_number", "huntid"];
-  for (const col of cols) {
+  for (const col of HUNT_COLS) {
     const { data, error } = await supabase
       .from("hunt_slots")
-      .select("order_index")
-      .eq(col, huntNumberId)
-      .order("order_index", { ascending: false, nullsFirst: false })
-      .limit(1);
+      .select(ORDER_COLS.join(","))
+      .eq(col, huntNumberId);
     if (!error) {
-      const max = Number(data?.[0]?.order_index);
-      return Number.isFinite(max) ? max + 1 : 1;
+      const max = (data || []).reduce((m, r) => {
+        const v = Number(
+          r.order_index ?? r.order ?? r.position ?? r.sort ?? r.order_idx
+        );
+        return Number.isFinite(v) ? Math.max(m, v) : m;
+      }, 0);
+      return max + 1;
     }
   }
   return 1;
 }
 
-/** 🔹 NOVO: grava a nova ordem (order_index) tentando vários nomes de coluna/id */
+/**
+ * Grava a nova ordem (order_index) com deteção de coluna real.
+ * 1) tenta descobrir a coluna a partir das chaves presentes nos rows;
+ * 2) se não houver, faz uma “prova” no 1º registo até encontrar uma coluna válida;
+ * 3) grava linha-a-linha nessa coluna; se alguma falhar, lança erro.
+ */
 export async function persistOrder(rows) {
   if (!Array.isArray(rows) || rows.length === 0) return;
 
-  const orderCols = ["order_index", "order", "position", "sort", "order_idx"];
+  // 1) tentar inferir pelo _raw das rows (ou pelos próprios campos normalizados)
+  const known = new Set();
+  for (const r of rows) {
+    const raw = r?._raw || r || {};
+    for (const c of ORDER_COLS) {
+      if (c in raw && raw[c] != null) known.add(c);
+    }
+    for (const c of ORDER_COLS) {
+      if (c in r && r[c] != null) known.add(c);
+    }
+  }
+  let chosen = Array.from(known)[0] || null;
 
+  // 2) se não deu, “provar” no 1º id
+  const firstId =
+    rows[0]?.id ?? rows[0]?._raw?.id ?? rows[0]?._raw?.ID ?? null;
+
+  if (!chosen && firstId != null) {
+    for (const c of ORDER_COLS) {
+      const { error } = await supabase
+        .from("hunt_slots")
+        .update({ [c]: 999999 }) // valor temporário
+        .eq("id", firstId);
+      if (!error) { chosen = c; break; }
+    }
+    // limpar o valor temporário se foi escrito
+    if (chosen) {
+      await supabase.from("hunt_slots").update({ [chosen]: null }).eq("id", firstId);
+    }
+  }
+
+  if (!chosen) {
+    throw new Error("Não foi possível detetar a coluna de ordenação (order_index/order/position/…).");
+  }
+
+  // 3) gravar a ordem linha-a-linha *na coluna escolhida*
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
     const id =
-      r?.id ??
-      r?.ID ??
-      r?._raw?.id ??
-      r?._raw?.ID ??
-      r?._raw?.hunt_slot_id ??
-      null;
+      r?.id ?? r?.ID ?? r?._raw?.id ?? r?._raw?.ID ?? r?._raw?.hunt_slot_id ?? null;
     if (id == null) continue;
 
     const orderVal = i + 1;
-    let updated = false;
-
-    for (const c of orderCols) {
-      // tenta com id
-      let { error } = await supabase
+    const { error } = await supabase
+      .from("hunt_slots")
+      .update({ [chosen]: orderVal })
+      .eq("id", id);
+    if (error) {
+      // tenta com "ID"
+      const { error: e2 } = await supabase
         .from("hunt_slots")
-        .update({ [c]: orderVal })
-        .eq("id", id);
-      if (!error) {
-        updated = true;
-        break;
-      }
-      // tenta com ID
-      ({ error } = await supabase
-        .from("hunt_slots")
-        .update({ [c]: orderVal })
-        .eq("ID", id));
-      if (!error) {
-        updated = true;
-        break;
-      }
-    }
-
-    // não lança; passa ao seguinte para ser resiliente
-    if (!updated) {
-      // opcional: console.warn("persistOrder: não consegui atualizar", id);
+        .update({ [chosen]: orderVal })
+        .eq("ID", id);
+      if (e2) throw error; // falhou mesmo -> dispara
     }
   }
 }
@@ -647,5 +513,5 @@ export default {
   getIsSuper,
   updateSuperFlag,
   getNextOrderIndex,
-  persistOrder, // <- agora existe mesmo
+  persistOrder,
 };

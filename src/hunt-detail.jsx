@@ -3458,10 +3458,10 @@ const [stopBox, setStopBox] = useLocalState(`hunt:${nId}:stop`, { value: 0 });
 
     const { slots: apiSlots } = await listHuntSlots({ numberId: nId });
 
-    const readOrder = (r) => {
-      const v = Number(r?.order_index ?? r?._raw?.order_index);
-      return Number.isFinite(v) ? v : Number(r.id);
-    };
+  const readOrder = (r) => {
+    const v = readOrderFromRow(r);   // lê order_index / order / position / sort / order_idx
+    return Number.isFinite(v) ? v : Number(r.id);
+  };
 
     const byOrder = [...(apiSlots || [])].sort((a, b) => readOrder(a) - readOrder(b));
     setSlots(byOrder);
@@ -3490,13 +3490,6 @@ const randomizeSlots = React.useCallback(async () => {
   }
 }, [slots, refreshSlots]);
 
-async function onDrop(i) {
-  // ...
-  await persistOrder(arr);
-  await refreshSlots();
-}
-
-
 // drag & drop
 const dragIndex = React.useRef(null);
 function onDragStart(i) { dragIndex.current = i; }
@@ -3517,6 +3510,7 @@ async function onDrop(i) {
   try {
     await persistOrder(arr);   // grava na BD
     await refreshSlots();      // volta a buscar já ordenado por order_index
+    setSortBy({ key: "order", dir: 1 }); // <- garante que não re-sorteias por date/betsize
   } catch (e) {
     console.error(e);
   }
