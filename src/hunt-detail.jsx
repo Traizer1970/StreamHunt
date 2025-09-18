@@ -3494,7 +3494,6 @@ async function onDrop(i) {
     })();
     return () => (active = false);
   }, [nId]);
-
 const refreshSlots = React.useCallback(async () => {
   if (!nId) return;
   try {
@@ -3502,20 +3501,21 @@ const refreshSlots = React.useCallback(async () => {
 
     const { slots: apiSlots } = await listHuntSlots({ numberId: nId });
 
-    const normOrder = (r) => {
+    const readOrder = (r) => {
       const v = Number(r?.order_index ?? r?._raw?.order_index);
-      return Number.isFinite(v) ? v : Number(r.id); // fallback estável
+      return Number.isFinite(v) ? v : Number(r.id);
     };
 
-    const byOrder = [...(apiSlots || [])].sort((a, b) => normOrder(a) - normOrder(b));
+    const byOrder = [...(apiSlots || [])].sort((a, b) => readOrder(a) - readOrder(b));
     setSlots(byOrder);
-    setSortBy({ key: "order", dir: 1 });
+    setSortBy({ key: "order", dir: 1 }); // trava a UI em “order”
   } catch (e) {
     console.error(e);
     setSlots([]);
     setErrSlots("Falha a carregar as slots deste hunt.");
   }
 }, [nId]);
+
 
 
   React.useEffect(() => { refreshSlots(); }, [refreshSlots]);
@@ -3568,12 +3568,17 @@ const beLeft = React.useMemo(() => {
   const [confirmStart, setConfirmStart] = React.useState(false);
   const openStart = () => setConfirmStart(true);
  // vai para o ecrã de Opening/Redeem depois de confirmares
-const confirmStartYes = React.useCallback(() => {
-  // fixa o modo de ordenação em "order" antes de abrir o fluxo
+const confirmStartYes = React.useCallback(async () => {
+  // força a ordenação por order_index
   setSortBy({ key: "order", dir: 1 });
+
+  // (opcional, mas ajuda a evitar estados antigos)
+  await refreshSlots(); // volta a buscar já ordenado por order_index
+
   setConfirmStart(false);
   setRedeemFlowOpen(true);
-}, []);
+}, [refreshSlots]);
+
 
 
   if (busy) return <div className="max-w-7xl mx-auto px-4 py-10 text-sm opacity-70">A carregar…</div>;
