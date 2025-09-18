@@ -3451,28 +3451,29 @@ const [stopBox, setStopBox] = useLocalState(`hunt:${nId}:stop`, { value: 0 });
 
     return arr;
   }, [slots, sortBy]);
-
-  // drag & drop
-  const dragIndex = React.useRef(null);
-  function onDragStart(i) { dragIndex.current = i; }
-  function onDragOver(e) { e.preventDefault(); }
-async function onDrop(i) {
-  async function randomizeSlots() {
+// 👉 Random: baralhar slots e persistir ordem
+const randomizeSlots = React.useCallback(async () => {
   const shuffled = [...slots];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
-  setSlots(shuffled);                // 1) atualiza UI
+  setSlots(shuffled); // 1) atualiza UI
   try {
-    await persistOrder(shuffled);    // 2) grava no Supabase (order_index)
-    await refreshSlots();            // 3) volta a buscar já ordenado
+    await persistOrder(shuffled); // 2) grava no Supabase (order_index)
+    await refreshSlots();         // 3) volta a buscar já ordenado
     setSortBy({ key: "order", dir: 1 });
   } catch (e) {
     console.error(e);
   }
-}
+}, [slots, refreshSlots]);
 
+// drag & drop
+const dragIndex = React.useRef(null);
+function onDragStart(i) { dragIndex.current = i; }
+function onDragOver(e) { e.preventDefault(); }
+
+async function onDrop(i) {
   const from = dragIndex.current;
   if (from == null || from === i) return;
 
@@ -3491,6 +3492,7 @@ async function onDrop(i) {
     console.error(e);
   }
 }
+
 
   React.useEffect(() => {
     let active = true;
