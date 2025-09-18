@@ -44,6 +44,8 @@ import {
   addHuntSlot,
   updateHuntSlot,
   deleteHuntSlot,
+  persistOrder,          // <—
+  getNextOrderIndex,     // <— (usado no AddBonusModal)
 } from "@/lib/slots";
 import { supabase } from "@/lib/supabase";
 import { cn as _cn } from "@/lib/utils";
@@ -2483,7 +2485,7 @@ const maxOrder = slots.reduce((m, s) => {
   const v = Number(s?.order_index ?? s?._raw?.order_index);
   return Number.isFinite(v) ? Math.max(m, v) : m;
 }, 0);
-const nextIndex = maxOrder + 1;
+const nextIndex = await getNextOrderIndex(numberId);
 
 const payload = {
   slot_id: selected.id,
@@ -3466,18 +3468,21 @@ async function onDrop(i) {
   const from = dragIndex.current;
   if (from == null || from === i) return;
 
-  // trabalha sobre a lista tal como está visível
   const arr = [...sortedSlots];
   const [moved] = arr.splice(from, 1);
   arr.splice(i, 0, moved);
 
-  // atualiza estado imediatamente
+  // atualiza ordem visual imediatamente
   setSlots(arr);
   dragIndex.current = null;
 
-  try { await persistOrder(arr); } catch {}
+  try {
+    await persistOrder(arr);   // grava na BD
+    await refreshSlots();      // volta a buscar já ordenado por order_index
+  } catch (e) {
+    console.error(e);
+  }
 }
-
 
   React.useEffect(() => {
     let active = true;
@@ -3494,6 +3499,7 @@ async function onDrop(i) {
     })();
     return () => (active = false);
   }, [nId]);
+
 const refreshSlots = React.useCallback(async () => {
   if (!nId) return;
   try {
@@ -3569,16 +3575,11 @@ const beLeft = React.useMemo(() => {
   const openStart = () => setConfirmStart(true);
  // vai para o ecrã de Opening/Redeem depois de confirmares
 const confirmStartYes = React.useCallback(async () => {
-  // força a ordenação por order_index
-  setSortBy({ key: "order", dir: 1 });
-
-  // (opcional, mas ajuda a evitar estados antigos)
-  await refreshSlots(); // volta a buscar já ordenado por order_index
-
+  setSortBy({ key: "order", dir: 1 }); // trava a ordenação na UI
+  await refreshSlots();                 // traz da BD em order_index
   setConfirmStart(false);
   setRedeemFlowOpen(true);
 }, [refreshSlots]);
-
 
 
   if (busy) return <div className="max-w-7xl mx-auto px-4 py-10 text-sm opacity-70">A carregar…</div>;
@@ -3824,9 +3825,10 @@ const confirmStartYes = React.useCallback(async () => {
   open={redeemFlowOpen}
   onClose={() => setRedeemFlowOpen(false)}
   hunt={hunt}
-  slots={sortedSlots}
+  slots={sortedSlots}   // <- tem de ser isto
   onSaved={refreshSlots}
 />
+
 
 
 

@@ -295,11 +295,9 @@ export async function addHuntSlot(numberId, payload) {
   );
   if (!sid) throw new Error("slot_id em falta.");
 
-// força a ser número (aceita string "2.00" etc.)
-const betValRaw = firstDefined(payload.bet_size, payload.bet, payload.betsize);
-const betVal = Number(betValRaw);
-if (!Number.isFinite(betVal)) throw new Error("Betsize inválida.");
-
+  // ——— garantir números
+  const betVal = Number(firstDefined(payload.bet_size, payload.bet, payload.betsize));
+  if (!Number.isFinite(betVal)) throw new Error("Betsize inválida.");
 
   const remainVal = firstDefined(
     payload.remaining_balance,
@@ -312,15 +310,18 @@ if (!Number.isFinite(betVal)) throw new Error("Betsize inválida.");
     payload.is_super,
     payload.super_bonus
   );
-// pode vir string; converte para número (ou null)
-const orderValRaw = firstDefined(
-  payload.order_index,
-  payload.order,
-  payload.position,
-  payload.sort,
-  payload.order_idx
-);
-const orderVal = orderValRaw == null ? null : Number(orderValRaw);
+
+  // se não vier order_index no payload, vamos calcular (max + 1)
+  let orderVal = firstDefined(
+    payload.order_index,
+    payload.order,
+    payload.position,
+    payload.sort,
+    payload.order_idx
+  );
+  if (orderVal == null) orderVal = await getNextOrderIndex(numberId);
+  orderVal = Number(orderVal);
+
 
 
   // variações comuns de nomes de colunas (mantemos compat mas preferimos hunt_number_id/bet_size/slot_id)
@@ -471,6 +472,35 @@ export async function updateSuperFlag(rowId, flag) {
     if (!error) return;
   }
   // se não conseguiu (coluna não existe), não falha a operação
+}
+/** Devolve o próximo order_index para um hunt (max + 1). */
+export async function getNextOrderIndex(huntNumberId) {
+  const cols = ["hunt_number_id", "hunt_id", "hunt_number", "huntid"];
+  for (const col of cols) {
+    const { data, error } = await supabase
+      .from("hunt_slots")
+      .select("order_index")
+      .eq(col, huntNumberId)
+      .order("order_index", { ascending: false, nullsFirst: false })
+      .limit(1);
+    if (!error) {
+      const max = Number(data?.[0]?.order_index);
+      return Number.isFinite(max) ? max + 1 : 1;
+    }
+  }
+  return 1;
+}
+
+/** Persiste na BD a ordem recebida (linha i → order_index = i+1). */
+export async function persistOrder(rowsInOrder) {
+  for (let i = 0; i < rowsInOrder.length; i++) {
+    const row = rowsInOrder[i];
+    const { error } = await supabase
+      .from("hunt_slots")
+      .update({ order_index: i + 1 })
+      .eq("id", row.id);
+    if (error) console.error("persistOrder:", error.message);
+  }
 }
 
 /* Default export opcional */
