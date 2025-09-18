@@ -3451,22 +3451,51 @@ const [stopBox, setStopBox] = useLocalState(`hunt:${nId}:stop`, { value: 0 });
 
     return arr;
   }, [slots, sortBy]);
-// 👉 Random: baralhar slots e persistir ordem
+  const refreshSlots = React.useCallback(async () => {
+  if (!nId) return;
+  try {
+    setErrSlots("");
+
+    const { slots: apiSlots } = await listHuntSlots({ numberId: nId });
+
+    const readOrder = (r) => {
+      const v = Number(r?.order_index ?? r?._raw?.order_index);
+      return Number.isFinite(v) ? v : Number(r.id);
+    };
+
+    const byOrder = [...(apiSlots || [])].sort((a, b) => readOrder(a) - readOrder(b));
+    setSlots(byOrder);
+    setSortBy({ key: "order", dir: 1 }); // trava a UI em “order”
+  } catch (e) {
+    console.error(e);
+    setSlots([]);
+    setErrSlots("Falha a carregar as slots deste hunt.");
+  }
+}, [nId]);
+  React.useEffect(() => { refreshSlots(); }, [refreshSlots]);
+// 👇 2) DEIXA ISTO DEPOIS do refreshSlots
 const randomizeSlots = React.useCallback(async () => {
   const shuffled = [...slots];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
-  setSlots(shuffled); // 1) atualiza UI
+  setSlots(shuffled);
   try {
-    await persistOrder(shuffled); // 2) grava no Supabase (order_index)
-    await refreshSlots();         // 3) volta a buscar já ordenado
+    await persistOrder(shuffled);
+    await refreshSlots();
     setSortBy({ key: "order", dir: 1 });
   } catch (e) {
     console.error(e);
   }
 }, [slots, refreshSlots]);
+
+async function onDrop(i) {
+  // ...
+  await persistOrder(arr);
+  await refreshSlots();
+}
+
 
 // drag & drop
 const dragIndex = React.useRef(null);
@@ -3509,32 +3538,6 @@ async function onDrop(i) {
     })();
     return () => (active = false);
   }, [nId]);
-
-const refreshSlots = React.useCallback(async () => {
-  if (!nId) return;
-  try {
-    setErrSlots("");
-
-    const { slots: apiSlots } = await listHuntSlots({ numberId: nId });
-
-    const readOrder = (r) => {
-      const v = Number(r?.order_index ?? r?._raw?.order_index);
-      return Number.isFinite(v) ? v : Number(r.id);
-    };
-
-    const byOrder = [...(apiSlots || [])].sort((a, b) => readOrder(a) - readOrder(b));
-    setSlots(byOrder);
-    setSortBy({ key: "order", dir: 1 }); // trava a UI em “order”
-  } catch (e) {
-    console.error(e);
-    setSlots([]);
-    setErrSlots("Falha a carregar as slots deste hunt.");
-  }
-}, [nId]);
-
-
-
-  React.useEffect(() => { refreshSlots(); }, [refreshSlots]);
 
 const kpis = React.useMemo(() => {
   const startFromHunt  = Number(hunt?.start_cost);
