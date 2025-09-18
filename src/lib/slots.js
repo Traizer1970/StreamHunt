@@ -491,7 +491,6 @@ export async function getNextOrderIndex(huntNumberId) {
   return 1;
 }
 
-/** Persiste na BD a ordem recebida (linha i → order_index = i+1). */
 export async function persistOrder(rowsInOrder) {
   for (let i = 0; i < rowsInOrder.length; i++) {
     const row = rowsInOrder[i];
@@ -503,7 +502,7 @@ export async function persistOrder(rowsInOrder) {
   }
 }
 
-/* Default export opcional */
+
 export default {
   listHuntSlots,
   searchCatalogSlots,
@@ -512,14 +511,8 @@ export default {
   deleteHuntSlot,
   getIsSuper,
   updateSuperFlag,
+  getNextOrderIndex,
+  persistOrder,
 };
-export async function persistOrder(listInOrder) {
-  for (let i = 0; i < listInOrder.length; i++) {
-    const row = listInOrder[i];
-    const { error } = await supabase
-      .from('hunt_slots')
-      .update({ order_index: i + 1 })
-      .eq('id', row.id);
-    if (error) console.error('persistOrder:', error.message);
-  }
-}
+
+

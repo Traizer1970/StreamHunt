@@ -168,16 +168,6 @@ function useLang() {
 const ORDER_COLS = ["order_index", "order", "position", "sort", "order_idx"];
 const readOrderFromRow = (row) => {
   // ─────────────────── ORDER: persistir no DB ───────────────────
-async function persistOrder(listInOrder) {
-  for (let i = 0; i < listInOrder.length; i++) {
-    const row = listInOrder[i];
-    const { error } = await supabase
-      .from('hunt_slots')
-      .update({ order_index: i + 1 })
-      .eq('id', row.id);
-    if (error) console.error('persistOrder:', error.message);
-  }
-}
 
   const raw = row?._raw || row || {};
   for (const c of ORDER_COLS) {
@@ -799,35 +789,32 @@ const DEFAULT_OPENING_OVERLAY = {
   baseW: 560,
   baseH: 320,
   showTitle: true,
-  showCurrent: true,
+  showCurrent: true,   // <- mantém só esta
   kpiFont: 1.0,
-  visible: 5,              // quantas “cards” grandes (3/5/7…)
-  listSide: "left",        // "left" | "right"
-  showBox: true,           // caixa/gradiente de fundo
-  showBestWorst: true,     // badges BEST / WORST
-  metric: "x",             // "x" (multiplicador) | "payout"
-  // ← usados no preview do Opening
+  visible: 5,
+  listSide: "left",
+  showBox: true,
+  showBestWorst: true,
+  metric: "x",
   listAutoScroll: true,
   listSpeedSec: 18,
-  // ← cabeçalho do topo
-  showTopChips: false,   // mostra/esconde os 2 chips do topo
-  showCurrent: false,    // mostra/esconde o chip da slot atual (direita)
-
-  heroAlign: "bottom",   // "top" | "center" | "bottom"
-  heroOffset: 0,         // px
-  listWidth: 208,        // px
-  listRows: 0,           // 0 = auto (calcula), >0 = linhas fixas
-
-  cardsPos: "center",   // "top" | "center" | "bottom"
-  vOffset: 0,           // px (positivo = desce)
-  listWidthPx: 208,     // largura da lista
-  listRowsVisible: 0,   // 0 = auto
-  listRowH: 40,         // altura de cada linha (se quiseres expor depois)
-  listPanel: false,     // se quiseres ativar caixa de fundo na lista
-  bestWorstMode: "badges", // "badges" (padrão) | "cards"
-  cardScale: 1.0,      // escala global dos cards (0.5–2.0)
-  currentScale: 1.08,  // multiplicador extra só no CURRENT (1.0–1.6)
+  showTopChips: false,
+  // (remove a segunda "showCurrent")
+  heroAlign: "bottom",
+  heroOffset: 0,
+  listWidth: 208,
+  listRows: 0,
+  cardsPos: "center",
+  vOffset: 0,
+  listWidthPx: 208,
+  listRowsVisible: 0,
+  listRowH: 40,
+  listPanel: false,
+  bestWorstMode: "badges",
+  cardScale: 1.0,
+  currentScale: 1.08,
 };
+
 
 /* ───────────────────────── URLs ───────────────────────── */
 function buildHuntOverlayUrl(base, huntNumberId, o) {
