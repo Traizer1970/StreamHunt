@@ -164,11 +164,8 @@ function useLang() {
   return { lang, t, setLang };
 }
 
-/* ───────────────────────── utils ───────────────────────── */
 const ORDER_COLS = ["order_index", "order", "position", "sort", "order_idx"];
 const readOrderFromRow = (row) => {
-  // ─────────────────── ORDER: persistir no DB ───────────────────
-
   const raw = row?._raw || row || {};
   for (const c of ORDER_COLS) {
     const v = Number(raw[c]);
@@ -176,6 +173,7 @@ const readOrderFromRow = (row) => {
   }
   return null;
 };
+
 
 const LOCALE = "pt-PT";
 const CURRENCY = "EUR";
@@ -1244,6 +1242,8 @@ const cardH = Math.round(baseCardH * scaleAll);
 const gap = Math.round(18 * scaleAll * 0.9); // gap acompanha o tamanho
 
 const currentScale = Math.max(1, Math.min(1.6, Number(opts.currentScale ?? 1.08)));
+const miniScale = Math.max(0.6, Math.min(1.2, Number(opts.cardScale ?? 1) * 0.85));
+
 
 
   const showBox = opts.showBox !== false;
@@ -2467,12 +2467,17 @@ async function handleAdd() {
     const bs = toNum(betSize);
     if (!Number.isFinite(bs) || bs <= 0) return setErr("Betsize inválida.");
 
-// nova entra mesmo no FIM: usa o MAIOR order_index existente
-const maxOrder = slots.reduce((m, s) => {
-  const v = Number(s?.order_index ?? s?._raw?.order_index);
-  return Number.isFinite(v) ? Math.max(m, v) : m;
-}, 0);
-const nextIndex = await getNextOrderIndex(numberId);
+ let nextIndex;
+ try {
+   nextIndex = await getNextOrderIndex(numberId);
+ } catch {
+   // fallback local caso a função não exista / erro de rede
+   const maxOrder = slots.reduce((m, s) => {
+     const v = Number(s?.order_index ?? s?._raw?.order_index);
+     return Number.isFinite(v) ? Math.max(m, v) : m;
+   }, 0);
+   nextIndex = maxOrder + 1;
+ }
 
 const payload = {
   slot_id: selected.id,
@@ -3452,6 +3457,22 @@ const [stopBox, setStopBox] = useLocalState(`hunt:${nId}:stop`, { value: 0 });
   function onDragStart(i) { dragIndex.current = i; }
   function onDragOver(e) { e.preventDefault(); }
 async function onDrop(i) {
+  async function randomizeSlots() {
+  const shuffled = [...slots];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  setSlots(shuffled);                // 1) atualiza UI
+  try {
+    await persistOrder(shuffled);    // 2) grava no Supabase (order_index)
+    await refreshSlots();            // 3) volta a buscar já ordenado
+    setSortBy({ key: "order", dir: 1 });
+  } catch (e) {
+    console.error(e);
+  }
+}
+
   const from = dragIndex.current;
   if (from == null || from === i) return;
 
@@ -3656,7 +3677,7 @@ const confirmStartYes = React.useCallback(async () => {
           <CalendarIcon className="mr-2 h-4 w-4" />
           {t("date")}
         </Button>
-        <Button variant="outline" className="h-10" onClick={() => setSortBy({ key: "random", dir: 1 })}>
+        <Button variant="outline" className="h-10" onClick={randomizeSlots}>
           <Shuffle className="mr-2 h-4 w-4" />
           {t("random")}
         </Button>

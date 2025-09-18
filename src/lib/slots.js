@@ -491,18 +491,6 @@ export async function getNextOrderIndex(huntNumberId) {
   return 1;
 }
 
-export async function persistOrder(rowsInOrder) {
-  for (let i = 0; i < rowsInOrder.length; i++) {
-    const row = rowsInOrder[i];
-    const { error } = await supabase
-      .from("hunt_slots")
-      .update({ order_index: i + 1 })
-      .eq("id", row.id);
-    if (error) console.error("persistOrder:", error.message);
-  }
-}
-
-
 export default {
   listHuntSlots,
   searchCatalogSlots,
@@ -511,8 +499,7 @@ export default {
   deleteHuntSlot,
   getIsSuper,
   updateSuperFlag,
-  getNextOrderIndex,
-  persistOrder,
+  persistOrder, // <- fica disponível também no default
 };
 
 
