@@ -22,6 +22,9 @@ function normCatalogRow(r) {
   return { id, name, provider, thumbnail, _raw: r };
 }
 
+// nomes possíveis para a coluna de ordem
+const ORDER_COLS = ["order_index", "order", "position", "sort", "order_idx"];
+
 // Lê order_index com vários nomes possíveis
 function readOrder(r) {
   return firstDefined(
@@ -322,8 +325,6 @@ export async function addHuntSlot(numberId, payload) {
   if (orderVal == null) orderVal = await getNextOrderIndex(numberId);
   orderVal = Number(orderVal);
 
-
-
   // variações comuns de nomes de colunas (mantemos compat mas preferimos hunt_number_id/bet_size/slot_id)
   const variants = [
     { hunt: "hunt_number_id", bet: "bet_size", remain: "remaining_balance", spins: "spins_used", slot: "slot_id" },
@@ -337,7 +338,7 @@ export async function addHuntSlot(numberId, payload) {
   ];
 
   const superCols = ["super", "is_super", "super_bonus"];
-  const orderCols = ["order_index", "order", "position", "sort", "order_idx"];
+  const orderCols = ORDER_COLS;
   let lastErr = null;
 
   for (const v of variants) {
@@ -473,22 +474,71 @@ export async function updateSuperFlag(rowId, flag) {
   }
   // se não conseguiu (coluna não existe), não falha a operação
 }
-/** Devolve o próximo order_index para um hunt (max + 1). */
+
+/** Devolve o próximo order_index para um hunt (max + 1), aceitando vários nomes de coluna. */
 export async function getNextOrderIndex(huntNumberId) {
-  const cols = ["hunt_number_id", "hunt_id", "hunt_number", "huntid"];
-  for (const col of cols) {
+  const huntCols = ["hunt_number_id", "hunt_id", "hunt_number", "huntid"];
+
+  // 1) tentar pedir só a coluna mais comum (rápido quando existe)
+  for (const hcol of huntCols) {
     const { data, error } = await supabase
       .from("hunt_slots")
       .select("order_index")
-      .eq(col, huntNumberId)
+      .eq(hcol, huntNumberId)
       .order("order_index", { ascending: false, nullsFirst: false })
       .limit(1);
     if (!error) {
       const max = Number(data?.[0]?.order_index);
-      return Number.isFinite(max) ? max + 1 : 1;
+      if (Number.isFinite(max)) return max + 1;
+      // se existir a coluna mas estiver tudo null, devolve 1
+      return 1;
     }
   }
+
+  // 2) fallback: buscar * e calcular max em qualquer coluna de ordem
+  for (const hcol of huntCols) {
+    const { data, error } = await supabase
+      .from("hunt_slots")
+      .select("*")
+      .eq(hcol, huntNumberId);
+    if (!error) {
+      const maxAny = (data || []).reduce((m, r) => {
+        const v = Number(readOrder(r));
+        return Number.isFinite(v) ? Math.max(m, v) : m;
+      }, 0);
+      return maxAny + 1;
+    }
+  }
+
   return 1;
+}
+
+/** Persiste uma nova ordem (array já ordenado) escrevendo 1..N na coluna de ordem que existir. */
+export async function persistOrder(slots) {
+  if (!Array.isArray(slots) || slots.length === 0) return;
+
+  // função interna que tenta atualizar numa das colunas conhecidas
+  async function writeOrder(rowId, idx) {
+    // tenta com id e ID
+    for (const idCol of ["id", "ID"]) {
+      for (const orderCol of ORDER_COLS) {
+        const { error } = await supabase
+          .from("hunt_slots")
+          .update({ [orderCol]: idx })
+          .eq(idCol, rowId);
+        if (!error) return true; // ok na primeira que existir
+      }
+    }
+    return false;
+  }
+
+  let i = 1;
+  for (const s of slots) {
+    // tolerante a objetos normalizados (id em s.id) ou em s._raw
+    const rowId = firstDefined(s.id, s.ID, s?._raw?.id, s?._raw?.ID);
+    if (!rowId) continue;
+    await writeOrder(rowId, i++);
+  }
 }
 
 export default {
@@ -499,7 +549,6 @@ export default {
   deleteHuntSlot,
   getIsSuper,
   updateSuperFlag,
-  persistOrder, // <- fica disponível também no default
+  getNextOrderIndex,
+  persistOrder, // <- agora existe e é exportado
 };
-
-
