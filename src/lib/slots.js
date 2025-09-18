@@ -22,9 +22,6 @@ function normCatalogRow(r) {
   return { id, name, provider, thumbnail, _raw: r };
 }
 
-// nomes possíveis para a coluna de ordem
-const ORDER_COLS = ["order_index", "order", "position", "sort", "order_idx"];
-
 // Lê order_index com vários nomes possíveis
 function readOrder(r) {
   return firstDefined(
@@ -299,7 +296,9 @@ export async function addHuntSlot(numberId, payload) {
   if (!sid) throw new Error("slot_id em falta.");
 
   // ——— garantir números
-  const betVal = Number(firstDefined(payload.bet_size, payload.bet, payload.betsize));
+  const betVal = Number(
+    firstDefined(payload.bet_size, payload.bet, payload.betsize)
+  );
   if (!Number.isFinite(betVal)) throw new Error("Betsize inválida.");
 
   const remainVal = firstDefined(
@@ -327,25 +326,74 @@ export async function addHuntSlot(numberId, payload) {
 
   // variações comuns de nomes de colunas (mantemos compat mas preferimos hunt_number_id/bet_size/slot_id)
   const variants = [
-    { hunt: "hunt_number_id", bet: "bet_size", remain: "remaining_balance", spins: "spins_used", slot: "slot_id" },
-    { hunt: "hunt_id",        bet: "bet_size", remain: "remaining_balance", spins: "spins_used", slot: "slot_id" },
-    { hunt: "hunt_number_id", bet: "bet",      remain: "remaining_balance", spins: "spins",      slot: "slot_id" },
-    { hunt: "hunt_id",        bet: "bet",      remain: "remaining",         spins: "spins",      slot: "slot_id" },
-    { hunt: "hunt_id",        bet: "betsize",  remain: "remaining_balance", spins: "spins_used", slot: "slot_id" },
-    { hunt: "hunt_number_id", bet: "betsize",  remain: "remaining",         spins: "spins",      slot: "slot_id" },
-    { hunt: "hunt_number_id", bet: "bet_size", remain: "remaining_balance", spins: "spins_used", slot: "SLOT_ID" },
-    { hunt: "hunt_id",        bet: "bet",      remain: "remaining",         spins: "spins",      slot: "SLOT_ID" },
+    {
+      hunt: "hunt_number_id",
+      bet: "bet_size",
+      remain: "remaining_balance",
+      spins: "spins_used",
+      slot: "slot_id",
+    },
+    {
+      hunt: "hunt_id",
+      bet: "bet_size",
+      remain: "remaining_balance",
+      spins: "spins_used",
+      slot: "slot_id",
+    },
+    {
+      hunt: "hunt_number_id",
+      bet: "bet",
+      remain: "remaining_balance",
+      spins: "spins",
+      slot: "slot_id",
+    },
+    {
+      hunt: "hunt_id",
+      bet: "bet",
+      remain: "remaining",
+      spins: "spins",
+      slot: "slot_id",
+    },
+    {
+      hunt: "hunt_id",
+      bet: "betsize",
+      remain: "remaining_balance",
+      spins: "spins_used",
+      slot: "slot_id",
+    },
+    {
+      hunt: "hunt_number_id",
+      bet: "betsize",
+      remain: "remaining",
+      spins: "spins",
+      slot: "slot_id",
+    },
+    {
+      hunt: "hunt_number_id",
+      bet: "bet_size",
+      remain: "remaining_balance",
+      spins: "spins_used",
+      slot: "SLOT_ID",
+    },
+    {
+      hunt: "hunt_id",
+      bet: "bet",
+      remain: "remaining",
+      spins: "spins",
+      slot: "SLOT_ID",
+    },
   ];
 
   const superCols = ["super", "is_super", "super_bonus"];
-  const orderCols = ORDER_COLS;
+  const orderCols = ["order_index", "order", "position", "sort", "order_idx"];
   let lastErr = null;
 
   for (const v of variants) {
     // 1) tenta inserir com/sem 'super' e com/sem 'order_index'
     const baseRow = { [v.hunt]: numberId, [v.slot]: sid, [v.bet]: betVal };
-    if (remainVal !== undefined && remainVal !== null) baseRow[v.remain] = remainVal;
-    if (spinsVal  !== undefined && spinsVal  !== null) baseRow[v.spins]  = spinsVal;
+    if (remainVal !== undefined && remainVal !== null)
+      baseRow[v.remain] = remainVal;
+    if (spinsVal !== undefined && spinsVal !== null) baseRow[v.spins] = spinsVal;
 
     // tentativas: (sem super, sem order) -> (com order) -> (com super) -> (com super + order)
     const attempts = [];
@@ -355,7 +403,8 @@ export async function addHuntSlot(numberId, payload) {
 
     // sem super, com order
     if (orderVal !== undefined && orderVal !== null) {
-      for (const oc of orderCols) attempts.push({ ...baseRow, [oc]: Number(orderVal) });
+      for (const oc of orderCols)
+        attempts.push({ ...baseRow, [oc]: Number(orderVal) });
     }
 
     // com super (cada nome), sem order
@@ -364,9 +413,19 @@ export async function addHuntSlot(numberId, payload) {
     }
 
     // com super + order
-    if (superVal !== undefined && superVal !== null && orderVal !== undefined && orderVal !== null) {
+    if (
+      superVal !== undefined &&
+      superVal !== null &&
+      orderVal !== undefined &&
+      orderVal !== null
+    ) {
       for (const sc of superCols) {
-        for (const oc of orderCols) attempts.push({ ...baseRow, [sc]: !!superVal, [oc]: Number(orderVal) });
+        for (const oc of orderCols)
+          attempts.push({
+            ...baseRow,
+            [sc]: !!superVal,
+            [oc]: Number(orderVal),
+          });
       }
     }
 
@@ -388,25 +447,47 @@ export async function addHuntSlot(numberId, payload) {
  *  NÃO mexe em order_index aqui (só nos fluxos de reordenação).
  */
 export async function updateHuntSlot(rowId, patch) {
-  const betVal     = firstDefined(patch.bet_size, patch.bet, patch.betsize);
-  const remainVal  = firstDefined(patch.remaining_balance, patch.remaining, patch.remain);
-  const spinsVal   = firstDefined(patch.spins_used, patch.spins, patch.spinsUsed);
-  const payoutVal  = firstDefined(patch.payout, patch.PAYOUT);
-  const multVal    = firstDefined(patch.multiplier, patch.MULTIPLIER);
+  const betVal = firstDefined(patch.bet_size, patch.bet, patch.betsize);
+  const remainVal = firstDefined(
+    patch.remaining_balance,
+    patch.remaining,
+    patch.remain
+  );
+  const spinsVal = firstDefined(patch.spins_used, patch.spins, patch.spinsUsed);
+  const payoutVal = firstDefined(patch.payout, patch.PAYOUT);
+  const multVal = firstDefined(patch.multiplier, patch.MULTIPLIER);
 
   const variants = [
-    { bet: "bet_size", remain: "remaining_balance", spins: "spins_used", payout: "payout", mult: "multiplier" },
-    { bet: "bet",      remain: "remaining_balance", spins: "spins",      payout: "payout", mult: "multiplier" },
-    { bet: "betsize",  remain: "remaining",         spins: "spins",      payout: "payout", mult: "multiplier" },
+    {
+      bet: "bet_size",
+      remain: "remaining_balance",
+      spins: "spins_used",
+      payout: "payout",
+      mult: "multiplier",
+    },
+    {
+      bet: "bet",
+      remain: "remaining_balance",
+      spins: "spins",
+      payout: "payout",
+      mult: "multiplier",
+    },
+    {
+      bet: "betsize",
+      remain: "remaining",
+      spins: "spins",
+      payout: "payout",
+      mult: "multiplier",
+    },
   ];
 
   const buildBody = (v) => {
     const b = {};
-    if (betVal     !== undefined) b[v.bet]     = betVal;
-    if (remainVal  !== undefined) b[v.remain]  = remainVal;
-    if (spinsVal   !== undefined) b[v.spins]   = spinsVal;
-    if (payoutVal  !== undefined) b[v.payout]  = payoutVal;
-    if (multVal    !== undefined) b[v.mult]    = multVal;
+    if (betVal !== undefined) b[v.bet] = betVal;
+    if (remainVal !== undefined) b[v.remain] = remainVal;
+    if (spinsVal !== undefined) b[v.spins] = spinsVal;
+    if (payoutVal !== undefined) b[v.payout] = payoutVal;
+    if (multVal !== undefined) b[v.mult] = multVal;
     return b;
   };
 
@@ -414,13 +495,23 @@ export async function updateHuntSlot(rowId, patch) {
   for (const v of variants) {
     const body = buildBody(v);
     tryFns.push(() =>
-      supabase.from("hunt_slots").update(body).eq("id", rowId).select("*").single()
+      supabase
+        .from("hunt_slots")
+        .update(body)
+        .eq("id", rowId)
+        .select("*")
+        .single()
     );
   }
   for (const v of variants) {
     const body = buildBody(v);
     tryFns.push(() =>
-      supabase.from("hunt_slots").update(body).eq("ID", rowId).select("*").single()
+      supabase
+        .from("hunt_slots")
+        .update(body)
+        .eq("ID", rowId)
+        .select("*")
+        .single()
     );
   }
 
@@ -429,9 +520,15 @@ export async function updateHuntSlot(rowId, patch) {
 }
 
 export async function deleteHuntSlot(rowId) {
-  const { error: e1 } = await supabase.from("hunt_slots").delete().eq("id", rowId);
+  const { error: e1 } = await supabase
+    .from("hunt_slots")
+    .delete()
+    .eq("id", rowId);
   if (!e1) return;
-  const { error: e2 } = await supabase.from("hunt_slots").delete().eq("ID", rowId);
+  const { error: e2 } = await supabase
+    .from("hunt_slots")
+    .delete()
+    .eq("ID", rowId);
   if (!e2) return;
   throw e2 || e1;
 }
@@ -475,69 +572,69 @@ export async function updateSuperFlag(rowId, flag) {
   // se não conseguiu (coluna não existe), não falha a operação
 }
 
-/** Devolve o próximo order_index para um hunt (max + 1), aceitando vários nomes de coluna. */
+/** Devolve o próximo order_index para um hunt (max + 1). */
 export async function getNextOrderIndex(huntNumberId) {
-  const huntCols = ["hunt_number_id", "hunt_id", "hunt_number", "huntid"];
-
-  // 1) tentar pedir só a coluna mais comum (rápido quando existe)
-  for (const hcol of huntCols) {
+  const cols = ["hunt_number_id", "hunt_id", "hunt_number", "huntid"];
+  for (const col of cols) {
     const { data, error } = await supabase
       .from("hunt_slots")
       .select("order_index")
-      .eq(hcol, huntNumberId)
+      .eq(col, huntNumberId)
       .order("order_index", { ascending: false, nullsFirst: false })
       .limit(1);
     if (!error) {
       const max = Number(data?.[0]?.order_index);
-      if (Number.isFinite(max)) return max + 1;
-      // se existir a coluna mas estiver tudo null, devolve 1
-      return 1;
+      return Number.isFinite(max) ? max + 1 : 1;
     }
   }
-
-  // 2) fallback: buscar * e calcular max em qualquer coluna de ordem
-  for (const hcol of huntCols) {
-    const { data, error } = await supabase
-      .from("hunt_slots")
-      .select("*")
-      .eq(hcol, huntNumberId);
-    if (!error) {
-      const maxAny = (data || []).reduce((m, r) => {
-        const v = Number(readOrder(r));
-        return Number.isFinite(v) ? Math.max(m, v) : m;
-      }, 0);
-      return maxAny + 1;
-    }
-  }
-
   return 1;
 }
 
-/** Persiste uma nova ordem (array já ordenado) escrevendo 1..N na coluna de ordem que existir. */
-export async function persistOrder(slots) {
-  if (!Array.isArray(slots) || slots.length === 0) return;
+/** 🔹 NOVO: grava a nova ordem (order_index) tentando vários nomes de coluna/id */
+export async function persistOrder(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return;
 
-  // função interna que tenta atualizar numa das colunas conhecidas
-  async function writeOrder(rowId, idx) {
-    // tenta com id e ID
-    for (const idCol of ["id", "ID"]) {
-      for (const orderCol of ORDER_COLS) {
-        const { error } = await supabase
-          .from("hunt_slots")
-          .update({ [orderCol]: idx })
-          .eq(idCol, rowId);
-        if (!error) return true; // ok na primeira que existir
+  const orderCols = ["order_index", "order", "position", "sort", "order_idx"];
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const id =
+      r?.id ??
+      r?.ID ??
+      r?._raw?.id ??
+      r?._raw?.ID ??
+      r?._raw?.hunt_slot_id ??
+      null;
+    if (id == null) continue;
+
+    const orderVal = i + 1;
+    let updated = false;
+
+    for (const c of orderCols) {
+      // tenta com id
+      let { error } = await supabase
+        .from("hunt_slots")
+        .update({ [c]: orderVal })
+        .eq("id", id);
+      if (!error) {
+        updated = true;
+        break;
+      }
+      // tenta com ID
+      ({ error } = await supabase
+        .from("hunt_slots")
+        .update({ [c]: orderVal })
+        .eq("ID", id));
+      if (!error) {
+        updated = true;
+        break;
       }
     }
-    return false;
-  }
 
-  let i = 1;
-  for (const s of slots) {
-    // tolerante a objetos normalizados (id em s.id) ou em s._raw
-    const rowId = firstDefined(s.id, s.ID, s?._raw?.id, s?._raw?.ID);
-    if (!rowId) continue;
-    await writeOrder(rowId, i++);
+    // não lança; passa ao seguinte para ser resiliente
+    if (!updated) {
+      // opcional: console.warn("persistOrder: não consegui atualizar", id);
+    }
   }
 }
 
@@ -550,5 +647,5 @@ export default {
   getIsSuper,
   updateSuperFlag,
   getNextOrderIndex,
-  persistOrder, // <- agora existe e é exportado
+  persistOrder, // <- agora existe mesmo
 };
