@@ -443,38 +443,28 @@ export async function getNextOrderIndex(huntNumberId) {
  * 2) se não houver, faz uma “prova” no 1º registo até encontrar uma coluna válida;
  * 3) grava linha-a-linha nessa coluna; se alguma falhar, lança erro.
  */
-export async function persistOrder(rows) {
-  if (!Array.isArray(rows) || rows.length === 0) return;
+export async function persistOrder(rows, huntNumberId) {
+  try {
+    if (!Array.isArray(rows) || rows.length === 0) return;
 
-  // grava linha a linha o novo order_index
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i];
-    const id =
-      r?.id ?? r?.ID ?? r?._raw?.id ?? r?._raw?.ID ?? r?._raw?.hunt_slot_id ?? null;
-    if (!id) continue;
+    // ordem final = array só com os IDs, NA ORDEM QUE QUERES
+    const ids = rows.map((r) => Number(r?.id ?? r?._raw?.id ?? r?.ID)).filter(Number.isFinite);
 
-    const orderVal = i + 1;
+    if (ids.length === 0) return;
 
-    // atualiza order_index
-    let { error } = await supabase
-      .from("hunt_slots")
-      .update({ order_index: orderVal })
-      .eq("id", id);
+    // chama a função SQL (RPC)
+    const { error } = await supabase.rpc("set_hunt_order", {
+      p_hunt_number_id: Number(huntNumberId),
+      p_ids: ids
+    });
 
-    if (error) {
-      // tenta fallback em caso de coluna ID
-      ({ error } = await supabase
-        .from("hunt_slots")
-        .update({ order_index: orderVal })
-        .eq("ID", id));
-    }
-
-    if (error) {
-      console.error("Erro a gravar ordem em hunt_slots:", error);
-      throw error;
-    }
+    if (error) throw error;
+  } catch (e) {
+    console.error("persistOrder RPC failed:", e);
+    // não lances erro para não quebrar a UI; mas loga para veres no console
   }
 }
+
 
   if (!chosen) {
     throw new Error("Não foi possível detetar a coluna de ordenação (order_index/order/position/…).");
@@ -501,6 +491,7 @@ export async function persistOrder(rows) {
       if (e2) throw error; // falhou mesmo -> dispara
     }
   }
+}
 
 export default {
   listHuntSlots,
