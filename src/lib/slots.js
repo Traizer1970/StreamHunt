@@ -418,13 +418,9 @@ export async function getNextOrderIndex(huntNumberId) {
  * Recebe `rows` NA ORDEM desejada.
  */
 export async function persistOrder(rows) {
-  if (!Array.isArray(rows) || rows.length === 0) return;
-
   const ids = rows
     .map(r => Number(r?.id ?? r?.ID ?? r?._raw?.id ?? r?._raw?.ID ?? r?._raw?.hunt_slot_id))
     .filter(Number.isFinite);
-
-  // chama a RPC que acabaste de criar
   const { error } = await supabase.rpc("set_hunt_order", { p_ids: ids });
   if (error) throw error;
 }
