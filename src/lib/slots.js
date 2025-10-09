@@ -446,36 +446,35 @@ export async function getNextOrderIndex(huntNumberId) {
 export async function persistOrder(rows) {
   if (!Array.isArray(rows) || rows.length === 0) return;
 
-  // 1) tentar inferir pelo _raw das rows (ou pelos próprios campos normalizados)
-  const known = new Set();
-  for (const r of rows) {
-    const raw = r?._raw || r || {};
-    for (const c of ORDER_COLS) {
-      if (c in raw && raw[c] != null) known.add(c);
-    }
-    for (const c of ORDER_COLS) {
-      if (c in r && r[c] != null) known.add(c);
-    }
-  }
-  let chosen = Array.from(known)[0] || null;
+  // grava linha a linha o novo order_index
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const id =
+      r?.id ?? r?.ID ?? r?._raw?.id ?? r?._raw?.ID ?? r?._raw?.hunt_slot_id ?? null;
+    if (!id) continue;
 
-  // 2) se não deu, “provar” no 1º id
-  const firstId =
-    rows[0]?.id ?? rows[0]?._raw?.id ?? rows[0]?._raw?.ID ?? null;
+    const orderVal = i + 1;
 
-  if (!chosen && firstId != null) {
-    for (const c of ORDER_COLS) {
-      const { error } = await supabase
+    // atualiza order_index
+    let { error } = await supabase
+      .from("hunt_slots")
+      .update({ order_index: orderVal })
+      .eq("id", id);
+
+    if (error) {
+      // tenta fallback em caso de coluna ID
+      ({ error } = await supabase
         .from("hunt_slots")
-        .update({ [c]: 999999 }) // valor temporário
-        .eq("id", firstId);
-      if (!error) { chosen = c; break; }
+        .update({ order_index: orderVal })
+        .eq("ID", id));
     }
-    // limpar o valor temporário se foi escrito
-    if (chosen) {
-      await supabase.from("hunt_slots").update({ [chosen]: null }).eq("id", firstId);
+
+    if (error) {
+      console.error("Erro a gravar ordem em hunt_slots:", error);
+      throw error;
     }
   }
+}
 
   if (!chosen) {
     throw new Error("Não foi possível detetar a coluna de ordenação (order_index/order/position/…).");
@@ -502,7 +501,6 @@ export async function persistOrder(rows) {
       if (e2) throw error; // falhou mesmo -> dispara
     }
   }
-}
 
 export default {
   listHuntSlots,
@@ -515,3 +513,4 @@ export default {
   getNextOrderIndex,
   persistOrder,
 };
+

@@ -3487,6 +3487,7 @@ const randomizeSlots = React.useCallback(async () => {
     setSortBy({ key: "order", dir: 1 });
   } catch (e) {
     console.error(e);
+    alert("Falhou a gravar a nova ordem: " + (e?.message || e));
   }
 }, [slots, refreshSlots]);
 
