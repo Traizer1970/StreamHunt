@@ -3508,11 +3508,11 @@ async function onDrop(i) {
   const [moved] = arr.splice(from, 1);
   arr.splice(i, 0, moved);
 
-  setSlots(arr);            // feedback imediato
+  setSlots(arr); // feedback imediato
   dragIndex.current = null;
 
   try {
-    await persistOrder(arr, nId);  // ← persiste a ordem agora correta
+    await persistOrder(arr, nId);   // ← usa 'arr' e 'nId'
     await refreshSlots();
     setSortBy({ key: "order", dir: 1 });
   } catch (e) {
@@ -3520,6 +3520,7 @@ async function onDrop(i) {
     alert("Falhou a gravar a nova ordem: " + (e?.message || e));
   }
 }
+
     React.useEffect(() => {
       let active = true;
       (async () => {
