@@ -410,9 +410,8 @@ export async function getNextOrderIndex(huntNumberId) {
   }
   return 1;
 }
-// /src/lib/slots.js
+// src/lib/slots.js
 export async function persistOrder(rows, huntNumberId) {
-  // rows devem vir NA ORDEM FINAL desejada
   const ids = (Array.isArray(rows) ? rows : [])
     .map(r => Number(
       r?.id ?? r?.ID ?? r?._raw?.id ?? r?._raw?.ID ?? r?._raw?.hunt_slot_id
@@ -423,8 +422,8 @@ export async function persistOrder(rows, huntNumberId) {
   if (!Number.isFinite(n) || ids.length === 0) return;
 
   const { error } = await supabase.rpc("set_hunt_order", {
-    p_hunt_number_id: n,   // integer
-    p_ids: ids,            // bigint[]
+    p_hunt_number_id: n,      // integer
+    p_ids: ids.map(Number),   // bigint[]
   });
 
   if (error) {
@@ -432,6 +431,7 @@ export async function persistOrder(rows, huntNumberId) {
     throw error;
   }
 }
+
 
 export default {
   listHuntSlots,

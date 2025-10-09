@@ -600,14 +600,17 @@
       // criar linha nova tentando as várias colunas
       let last;
       for (const col of cols) {
+// INSERT novo registo em overlay_settings tentando várias colunas JSON
+for (const col of cols) {
   const { data, error } = await supabase
-    .from("hunt_slots")
-    .select("*")
-    .eq("hunt_number_id", nId)
-    .order("order_index", { ascending: true, nullsFirst: false });
+    .from("overlay_settings")
+    .insert({ ...base, [col]: value })
+    .select("id")
+    .single();
+  if (!error && data?.id) { setRowId(data.id); return; }
+  last = error;
+}
 
-        if (!error && data?.id) { setRowId(data.id); return; }
-        last = error;
       }
       throw last || new Error("Falha a inserir overlay_settings.");
     }
@@ -3476,16 +3479,12 @@
     React.useEffect(() => { refreshSlots(); }, [refreshSlots]);
   // 👇 2) DEIXA ISTO DEPOIS do refreshSlots
 const randomizeSlots = React.useCallback(async () => {
-  if (!nId) return;
-  // 1) shuffle em memória (update otimista)
   const shuffled = [...slots];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
   setSlots(shuffled);
-
-  // 2) grava no servidor (RPC) e só depois revalida
   try {
     await persistOrder(shuffled, nId);
     await refreshSlots();
@@ -3496,7 +3495,6 @@ const randomizeSlots = React.useCallback(async () => {
   }
 }, [slots, nId, refreshSlots]);
 
-
   // drag & drop
   const dragIndex = React.useRef(null);
   function onDragStart(i) { dragIndex.current = i; }
@@ -3504,31 +3502,24 @@ const randomizeSlots = React.useCallback(async () => {
 
 async function onDrop(i) {
   const from = dragIndex.current;
-  dragIndex.current = null;
   if (from == null || from === i) return;
-  if (!nId) return;
 
-  // 1) mover no array que estás a renderizar
   const arr = [...sortedSlots];
   const [moved] = arr.splice(from, 1);
   arr.splice(i, 0, moved);
 
-  // 2) update otimista
-  setSlots(arr);
+  setSlots(arr);            // feedback imediato
+  dragIndex.current = null;
 
-  // 3) grava e revalida
   try {
-    await persistOrder(arr, nId);  // <-- passa o huntNumberId correto
-    await refreshSlots();          // re-carrega já por order_index
+    await persistOrder(arr, nId);  // ← persiste a ordem agora correta
+    await refreshSlots();
     setSortBy({ key: "order", dir: 1 });
   } catch (e) {
     console.error(e);
     alert("Falhou a gravar a nova ordem: " + (e?.message || e));
   }
 }
-
-
-
     React.useEffect(() => {
       let active = true;
       (async () => {
