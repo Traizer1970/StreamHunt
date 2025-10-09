@@ -1,4 +1,4 @@
-// /src/hunt-detail.jsx
+  // /src/hunt-detail.jsx
 import React from "react";
 import { useTheme, useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
@@ -3482,9 +3482,9 @@ const randomizeSlots = React.useCallback(async () => {
   }
   setSlots(shuffled);
   try {
-    await persistOrder(shuffled);
-    await refreshSlots();
-    setSortBy({ key: "order", dir: 1 });
+    await persistOrder(shuffled, nId);  // antes: persistOrder(shuffled)
+await refreshSlots();
+setSortBy({ key: "order", dir: 1 });
   } catch (e) {
     console.error(e);
     alert("Falhou a gravar a nova ordem: " + (e?.message || e));
@@ -3509,9 +3509,10 @@ async function onDrop(i) {
   dragIndex.current = null;
 
   try {
-    await persistOrder(arr);   // grava na BD
-    await refreshSlots();      // volta a buscar já ordenado por order_index
-    setSortBy({ key: "order", dir: 1 }); // <- garante que não re-sorteias por date/betsize
+    await persistOrder(arr, nId);   // antes: persistOrder(arr)
+await refreshSlots();
+setSortBy({ key: "order", dir: 1 });
+
   } catch (e) {
     console.error(e);
   }
