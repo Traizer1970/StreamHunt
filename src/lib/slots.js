@@ -431,8 +431,8 @@ export async function persistOrder(rows, huntNumberId) {
   if (!Number.isFinite(Number(huntNumberId)) || ids.length === 0) return;
 
   const { error } = await supabase.rpc("set_hunt_order", {
-    p_hunt_number_id: Number(huntNumberId),
-    p_ids: ids,
+    p_hunt_number_id: Number(huntNumberId), // integer
+    p_ids: ids.map(Number),                 // bigint[]
   });
 
   if (error) {
@@ -440,6 +440,7 @@ export async function persistOrder(rows, huntNumberId) {
     throw error;
   }
 }
+
 
 export default {
   listHuntSlots,
