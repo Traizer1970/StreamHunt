@@ -417,12 +417,28 @@ export async function getNextOrderIndex(huntNumberId) {
  * - fallback: update linha-a-linha em `order_index`
  * Recebe `rows` NA ORDEM desejada.
  */
-export async function persistOrder(rows) {
-  const ids = rows
-    .map(r => Number(r?.id ?? r?.ID ?? r?._raw?.id ?? r?._raw?.ID ?? r?._raw?.hunt_slot_id))
+/**
+ * Grava a nova ordem no servidor através da RPC `set_hunt_order`.
+ * Recebe `rows` NA ORDEM FINAL desejada e o `huntNumberId`.
+ */
+export async function persistOrder(rows, huntNumberId) {
+  const ids = (Array.isArray(rows) ? rows : [])
+    .map(r => Number(
+      r?.id ?? r?.ID ?? r?._raw?.id ?? r?._raw?.ID ?? r?._raw?.hunt_slot_id
+    ))
     .filter(Number.isFinite);
-  const { error } = await supabase.rpc("set_hunt_order", { p_ids: ids });
-  if (error) throw error;
+
+  if (ids.length === 0 || !Number.isFinite(Number(huntNumberId))) return;
+
+  const { error } = await supabase.rpc("set_hunt_order", {
+    p_hunt_number_id: Number(huntNumberId),
+    p_ids: ids
+  });
+
+  if (error) {
+    console.error("persistOrder RPC failed:", error);
+    throw error;
+  }
 }
 
 export default {
