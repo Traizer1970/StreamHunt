@@ -438,59 +438,34 @@ export async function getNextOrderIndex(huntNumberId) {
 }
 
 /**
- * Grava a nova ordem (order_index) com deteção de coluna real.
- * 1) tenta descobrir a coluna a partir das chaves presentes nos rows;
- * 2) se não houver, faz uma “prova” no 1º registo até encontrar uma coluna válida;
- * 3) grava linha-a-linha nessa coluna; se alguma falhar, lança erro.
+ * Grava a nova ordem (order_index) diretamente na BD.
+ * Recebe o array de rows NA ORDEM desejada.
  */
-export async function persistOrder(rows, huntNumberId) {
-  try {
-    if (!Array.isArray(rows) || rows.length === 0) return;
+export async function persistOrder(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return;
 
-    // ordem final = array só com os IDs, NA ORDEM QUE QUERES
-    const ids = rows.map((r) => Number(r?.id ?? r?._raw?.id ?? r?.ID)).filter(Number.isFinite);
+  const ids = rows
+    .map((r) => Number(r?.id ?? r?.ID ?? r?._raw?.id ?? r?._raw?.ID ?? r?._raw?.hunt_slot_id))
+    .filter(Number.isFinite);
 
-    if (ids.length === 0) return;
+  for (let i = 0; i < ids.length; i++) {
+    const id = ids[i];
+    const orderVal = i + 1;
 
-    // chama a função SQL (RPC)
-    const { error } = await supabase.rpc("set_hunt_order", {
-      p_hunt_number_id: Number(huntNumberId),
-      p_ids: ids
-    });
+    let { error } = await supabase
+      .from("hunt_slots")
+      .update({ order_index: orderVal })
+      .eq("id", id);
 
+    if (error) {
+      ({ error } = await supabase
+        .from("hunt_slots")
+        .update({ order_index: orderVal })
+        .eq("ID", id));
+    }
     if (error) throw error;
-  } catch (e) {
-    console.error("persistOrder RPC failed:", e);
-    // não lances erro para não quebrar a UI; mas loga para veres no console
   }
 }
-
-
-  if (!chosen) {
-    throw new Error("Não foi possível detetar a coluna de ordenação (order_index/order/position/…).");
-  }
-
-  // 3) gravar a ordem linha-a-linha *na coluna escolhida*
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i];
-    const id =
-      r?.id ?? r?.ID ?? r?._raw?.id ?? r?._raw?.ID ?? r?._raw?.hunt_slot_id ?? null;
-    if (id == null) continue;
-
-    const orderVal = i + 1;
-    const { error } = await supabase
-      .from("hunt_slots")
-      .update({ [chosen]: orderVal })
-      .eq("id", id);
-    if (error) {
-      // tenta com "ID"
-      const { error: e2 } = await supabase
-        .from("hunt_slots")
-        .update({ [chosen]: orderVal })
-        .eq("ID", id);
-      if (e2) throw error; // falhou mesmo -> dispara
-    }
-  }
 
 export default {
   listHuntSlots,
@@ -503,4 +478,3 @@ export default {
   getNextOrderIndex,
   persistOrder,
 };
-
