@@ -410,38 +410,28 @@ export async function getNextOrderIndex(huntNumberId) {
   }
   return 1;
 }
-
-/**
- * Grava a nova ordem (order_index).
- * - 1º tenta RPC `set_hunt_order(p_hunt_number_id, p_ids)`
- * - fallback: update linha-a-linha em `order_index`
- * Recebe `rows` NA ORDEM desejada.
- */
-/**
- * Grava a nova ordem no servidor através da RPC `set_hunt_order`.
- * Recebe `rows` NA ORDEM FINAL desejada e o `huntNumberId`.
- */
+// /src/lib/slots.js
 export async function persistOrder(rows, huntNumberId) {
+  // rows devem vir NA ORDEM FINAL desejada
   const ids = (Array.isArray(rows) ? rows : [])
     .map(r => Number(
       r?.id ?? r?.ID ?? r?._raw?.id ?? r?._raw?.ID ?? r?._raw?.hunt_slot_id
     ))
     .filter(Number.isFinite);
 
-  if (!Number.isFinite(Number(huntNumberId)) || ids.length === 0) return;
+  const n = Number(huntNumberId);
+  if (!Number.isFinite(n) || ids.length === 0) return;
 
-await supabase.rpc("set_hunt_order", {
-  p_hunt_number_id: Number(nId),     // integer
-  p_ids: ids.map(Number),            // bigint[]
-});
-
+  const { error } = await supabase.rpc("set_hunt_order", {
+    p_hunt_number_id: n,   // integer
+    p_ids: ids,            // bigint[]
+  });
 
   if (error) {
     console.error("persistOrder RPC failed:", error);
     throw error;
   }
 }
-
 
 export default {
   listHuntSlots,
