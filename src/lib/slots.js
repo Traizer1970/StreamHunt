@@ -491,7 +491,6 @@ export async function persistOrder(rows, huntNumberId) {
       if (e2) throw error; // falhou mesmo -> dispara
     }
   }
-}
 
 export default {
   listHuntSlots,
