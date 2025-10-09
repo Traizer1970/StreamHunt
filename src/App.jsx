@@ -37,7 +37,7 @@ import WidgetOverlay from "./widget-overlay.jsx";
 import HuntWidgetPage from "./hunt-widget.jsx";
 
 /* =================== CONFIG =================== */
-const TELEGRAM_URL = "https://t.me/gsousa70";
+const TELEGRAM_URL = "https://t.me/gsousa701";
 const DISCORD_URL = import.meta.env.VITE_DISCORD_URL || "https://discord.gg/your-invite";
 
 /* Icons */
