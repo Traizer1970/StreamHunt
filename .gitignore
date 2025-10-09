@@ -29,3 +29,6 @@ dist/
 .env.local
 .vscode/
 .DS_Store
+
+# Local Netlify folder
+.netlify
