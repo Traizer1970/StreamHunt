@@ -600,11 +600,12 @@ function useOverlaySettings({ type, huntNumberId, defaultValue }) {
     // criar linha nova tentando as várias colunas
     let last;
     for (const col of cols) {
-      const { data, error } = await supabase
-        .from("overlay_settings")
-        .insert({ ...base, [col]: value })
-        .select("id")
-        .single();
+const { data, error } = await supabase
+  .from("hunt_slots")
+  .select("*")
+  .eq("hunt_number_id", nId)
+  .order("order_index", { ascending: true, nullsFirst: false });
+
       if (!error && data?.id) { setRowId(data.id); return; }
       last = error;
     }
@@ -3509,9 +3510,10 @@ async function onDrop(i) {
   dragIndex.current = null;
 
   try {
-await persistOrder(arr, nId);
-await refreshSlots();
+await persistOrder(arrOuSublista, nId);  // PODES mandar só os ids da página/segmento
+await refreshSlots();                    // só refresca DEPOIS de gravar
 setSortBy({ key: "order", dir: 1 });
+
 
   } catch (e) {
     console.error(e);
