@@ -3512,8 +3512,8 @@ async function onDrop(i) {
   dragIndex.current = null;
 
   try {
-    await persistOrder(arr, nId);   // ← usa 'arr' e 'nId'
-    await refreshSlots();
+    await persistOrder(arr, nId);   // ← 'arr' e 'nId' corretos
+    await refreshSlots();           // volta já ordenado por order_index
     setSortBy({ key: "order", dir: 1 });
   } catch (e) {
     console.error(e);

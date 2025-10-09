@@ -410,19 +410,16 @@ export async function getNextOrderIndex(huntNumberId) {
   }
   return 1;
 }
-
 export async function persistOrder(rows, huntNumberId) {
   const ids = (Array.isArray(rows) ? rows : [])
     .map(r => Number(r?.id ?? r?._raw?.id))
     .filter(Number.isFinite);
-
   if (!Number.isFinite(Number(huntNumberId)) || ids.length === 0) return;
 
   const { data, error } = await supabase.rpc("set_hunt_order", {
     p_hunt_number_id: Number(huntNumberId),
-    p_ids: ids.map(Number),
+    p_ids: ids,
   });
-
   if (error) {
     console.error("persistOrder RPC failed:", error);
     throw error;
