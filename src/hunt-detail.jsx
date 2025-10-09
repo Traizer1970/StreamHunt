@@ -3482,7 +3482,7 @@ const randomizeSlots = React.useCallback(async () => {
   }
   setSlots(shuffled);
   try {
-    await persistOrder(shuffled, nId);  // antes: persistOrder(shuffled)
+await persistOrder(shuffled);  // <-- idem
 await refreshSlots();
 setSortBy({ key: "order", dir: 1 });
   } catch (e) {
@@ -3509,7 +3509,7 @@ async function onDrop(i) {
   dragIndex.current = null;
 
   try {
-    await persistOrder(arr, nId);   // antes: persistOrder(arr)
+await persistOrder(arr);       // <-- sem nId, só o array!
 await refreshSlots();
 setSortBy({ key: "order", dir: 1 });
 
