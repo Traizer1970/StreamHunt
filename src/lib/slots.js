@@ -250,46 +250,74 @@ export async function searchCatalogSlots(q, { limit = 25 } = {}) {
   return { slots };
 }
 
-// /src/lib/slots.js
+/**
+ * Adiciona uma slot ao hunt.
+ * payload: { slot_id, bet_size, remaining_balance?, spins_used?, super?, order_index? }
+ */
 export async function addHuntSlot(numberId, payload) {
-  const sid = Number(
-    firstDefined(payload.slot_id, payload.slotId, payload.SLOT_ID, payload.slot)
+  const sid = firstDefined(
+    payload.slot_id, payload.slotId, payload.SLOT_ID, payload.slot
   );
-  if (!Number.isFinite(sid)) throw new Error("slot_id em falta.");
+  if (!sid) throw new Error("slot_id em falta.");
 
-  const betVal = Number(firstDefined(payload.bet_size, payload.bet, payload.betsize));
-  if (!Number.isFinite(betVal) || betVal <= 0) throw new Error("Betsize inválida.");
+  const betVal = Number(
+    firstDefined(payload.bet_size, payload.bet, payload.betsize)
+  );
+  if (!Number.isFinite(betVal)) throw new Error("Betsize inválida.");
 
-  // ordem
+  const remainVal = firstDefined(
+    payload.remaining_balance, payload.remaining, payload.remain
+  );
+  const spinsVal = firstDefined(payload.spins_used, payload.spins);
+  const superVal = firstDefined(
+    payload.super, payload.is_super, payload.super_bonus
+  );
+
+  // se não vier order_index no payload, calcular (max + 1)
   let orderVal = firstDefined(
     payload.order_index, payload.order, payload.position, payload.sort, payload.order_idx
   );
   if (orderVal == null) orderVal = await getNextOrderIndex(numberId);
+  orderVal = Number(orderVal);
 
-  // super
-  const superVal = !!firstDefined(payload.super, payload.is_super, payload.super_bonus);
+  const variants = [
+    { hunt: "hunt_number_id", bet: "bet_size",           remain: "remaining_balance", spins: "spins_used", slot: "slot_id" },
+    { hunt: "hunt_id",        bet: "bet_size",           remain: "remaining_balance", spins: "spins_used", slot: "slot_id" },
+    { hunt: "hunt_number_id", bet: "bet",                remain: "remaining_balance", spins: "spins",      slot: "slot_id" },
+    { hunt: "hunt_id",        bet: "bet",                remain: "remaining",         spins: "spins",      slot: "slot_id" },
+    { hunt: "hunt_id",        bet: "betsize",            remain: "remaining_balance", spins: "spins_used", slot: "slot_id" },
+    { hunt: "hunt_number_id", bet: "betsize",            remain: "remaining",         spins: "spins",      slot: "slot_id" },
+    { hunt: "hunt_number_id", bet: "bet_size",           remain: "remaining_balance", spins: "spins_used", slot: "SLOT_ID" },
+    { hunt: "hunt_id",        bet: "bet",                remain: "remaining",         spins: "spins",      slot: "SLOT_ID" },
+  ];
 
-  const row = {
-    hunt_number_id: Number(numberId),
-    slot_id: sid,
-    bet_size: betVal,
-    order_index: Number(orderVal),
-    is_super: superVal,              // se esta coluna não existir, tiramos já no 2)
-  };
+  let lastErr = null;
+  for (const v of variants) {
+    const baseRow = { [v.hunt]: numberId, [v.slot]: sid, [v.bet]: betVal };
+    if (remainVal !== undefined && remainVal !== null) baseRow[v.remain] = remainVal;
+    if (spinsVal  !== undefined && spinsVal  !== null) baseRow[v.spins]  = spinsVal;
 
-  const { data, error } = await supabase
-    .from("hunt_slots")
-    .insert([row])
-    .select("*")
-    .single();
+    const attempts = [];
+    attempts.push({ ...baseRow }); // sem super / sem order
+    if (orderVal !== undefined && orderVal !== null) {
+      for (const oc of ORDER_COLS) attempts.push({ ...baseRow, [oc]: Number(orderVal) });
+    }
+    if (superVal !== undefined && superVal !== null) {
+      for (const sc of SUPER_COLS) attempts.push({ ...baseRow, [sc]: !!superVal });
+    }
+    if (superVal !== undefined && superVal !== null && orderVal !== undefined && orderVal !== null) {
+      for (const sc of SUPER_COLS) for (const oc of ORDER_COLS)
+        attempts.push({ ...baseRow, [sc]: !!superVal, [oc]: Number(orderVal) });
+    }
 
-  if (error) {
-    console.error("[addHuntSlot] insert failed:", error);
-    throw new Error(error.message || "Falha a inserir em hunt_slots.");
+    for (const row of attempts) {
+      const { data, error } = await supabase.from("hunt_slots").insert([row]).select("*").single();
+      if (!error) return data;
+      lastErr = error;
+    }
   }
-  return data;
+  throw new Error(lastErr?.message || "Não foi possível inserir em hunt_slots.");
 }
-
 
 /** Atualiza um registo da tabela hunt_slots (não mexe na ordem aqui). */
 export async function updateHuntSlot(rowId, patch) {
