@@ -116,7 +116,7 @@ export async function listHuntSlots({ numberId }) {
       .from("hunt_slots")
       .select("*")
       .eq(col, n)
-      .order("order_index", { ascending: true, nullsFirst: false });
+      .order("order_index", { ascending: true, nullsFirst: false })
     if (!error) { hs = data || []; ok = true; break; }
   }
 
@@ -428,11 +428,11 @@ export async function persistOrder(rows, huntNumberId) {
     ))
     .filter(Number.isFinite);
 
-  if (ids.length === 0 || !Number.isFinite(Number(huntNumberId))) return;
+  if (!Number.isFinite(Number(huntNumberId)) || ids.length === 0) return;
 
   const { error } = await supabase.rpc("set_hunt_order", {
     p_hunt_number_id: Number(huntNumberId),
-    p_ids: ids
+    p_ids: ids,
   });
 
   if (error) {
