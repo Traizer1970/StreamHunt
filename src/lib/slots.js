@@ -430,10 +430,11 @@ export async function persistOrder(rows, huntNumberId) {
 
   if (!Number.isFinite(Number(huntNumberId)) || ids.length === 0) return;
 
-  const { error } = await supabase.rpc("set_hunt_order", {
-    p_hunt_number_id: Number(huntNumberId), // integer
-    p_ids: ids.map(Number),                 // bigint[]
-  });
+await supabase.rpc("set_hunt_order", {
+  p_hunt_number_id: Number(nId),     // integer
+  p_ids: ids.map(Number),            // bigint[]
+});
+
 
   if (error) {
     console.error("persistOrder RPC failed:", error);
