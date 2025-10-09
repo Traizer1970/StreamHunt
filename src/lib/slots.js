@@ -26,24 +26,15 @@ function normCatalogRow(r) {
   return { id, name, provider, thumbnail, _raw: r };
 }
 
-// Lê order_index com vários nomes possíveis
+// Lê “order_index” com vários nomes possíveis
 function readOrder(r) {
   return firstDefined(
-    r.order_index,
-    r.ORDER_INDEX,
-    r.order,
-    r.ORDER,
-    r.position,
-    r.POSITION,
-    r.sort,
-    r.SORT,
-    r.order_idx,
-    r.ORDER_IDX,
-    r._raw?.order_index,
-    r._raw?.order,
-    r._raw?.position,
-    r._raw?.sort,
-    r._raw?.order_idx
+    r.order_index, r.ORDER_INDEX,
+    r.order, r.ORDER,
+    r.position, r.POSITION,
+    r.sort, r.SORT,
+    r.order_idx, r.ORDER_IDX,
+    r._raw?.order_index, r._raw?.order, r._raw?.position, r._raw?.sort, r._raw?.order_idx
   );
 }
 
@@ -57,9 +48,7 @@ function normHuntSlotRow(r, catalogById) {
 
   const bet_size = firstDefined(r.bet_size, r.bet, r.betsize, r.bet_value);
   const remaining_balance = firstDefined(
-    r.remaining_balance,
-    r.remaining,
-    r.remain
+    r.remaining_balance, r.remaining, r.remain
   );
   const spins_used = firstDefined(r.spins_used, r.spins, r.spinsUsed);
   const payout = firstDefined(r.payout, r.PAYOUT);
@@ -67,11 +56,7 @@ function normHuntSlotRow(r, catalogById) {
   const order_index = Number(readOrder(r));
 
   const is_super = !!firstDefined(
-    r.is_super,
-    r.super,
-    r.SUPER,
-    r.IS_SUPER,
-    r.super_bonus
+    r.is_super, r.super, r.SUPER, r.IS_SUPER, r.super_bonus
   );
 
   return {
@@ -211,7 +196,7 @@ export async function listHuntSlots({ numberId }) {
 
   const normalized = hs.map((r) => normHuntSlotRow(r, catalogById));
 
-  // 5) Ordenar no cliente (garantia extra)
+  // 3) Ordenar no cliente (garantia extra)
   normalized.sort((a, b) => {
     const aa = Number(readOrder(a));
     const bb = Number(readOrder(b));
@@ -271,10 +256,7 @@ export async function searchCatalogSlots(q, { limit = 25 } = {}) {
  */
 export async function addHuntSlot(numberId, payload) {
   const sid = firstDefined(
-    payload.slot_id,
-    payload.slotId,
-    payload.SLOT_ID,
-    payload.slot
+    payload.slot_id, payload.slotId, payload.SLOT_ID, payload.slot
   );
   if (!sid) throw new Error("slot_id em falta.");
 
@@ -284,24 +266,16 @@ export async function addHuntSlot(numberId, payload) {
   if (!Number.isFinite(betVal)) throw new Error("Betsize inválida.");
 
   const remainVal = firstDefined(
-    payload.remaining_balance,
-    payload.remaining,
-    payload.remain
+    payload.remaining_balance, payload.remaining, payload.remain
   );
   const spinsVal = firstDefined(payload.spins_used, payload.spins);
   const superVal = firstDefined(
-    payload.super,
-    payload.is_super,
-    payload.super_bonus
+    payload.super, payload.is_super, payload.super_bonus
   );
 
   // se não vier order_index no payload, calcular (max + 1)
   let orderVal = firstDefined(
-    payload.order_index,
-    payload.order,
-    payload.position,
-    payload.sort,
-    payload.order_idx
+    payload.order_index, payload.order, payload.position, payload.sort, payload.order_idx
   );
   if (orderVal == null) orderVal = await getNextOrderIndex(numberId);
   orderVal = Number(orderVal);
@@ -438,16 +412,32 @@ export async function getNextOrderIndex(huntNumberId) {
 }
 
 /**
- * Grava a nova ordem (order_index) diretamente na BD.
- * Recebe o array de rows NA ORDEM desejada.
+ * Grava a nova ordem (order_index).
+ * - 1º tenta RPC `set_hunt_order(p_hunt_number_id, p_ids)`
+ * - fallback: update linha-a-linha em `order_index`
+ * Recebe `rows` NA ORDEM desejada.
  */
-export async function persistOrder(rows) {
+export async function persistOrder(rows, huntNumberId) {
   if (!Array.isArray(rows) || rows.length === 0) return;
 
   const ids = rows
     .map((r) => Number(r?.id ?? r?.ID ?? r?._raw?.id ?? r?._raw?.ID ?? r?._raw?.hunt_slot_id))
     .filter(Number.isFinite);
 
+  // Tenta RPC (se existir)
+  if (huntNumberId != null && ids.length > 0) {
+    try {
+      const { error } = await supabase.rpc("set_hunt_order", {
+        p_hunt_number_id: Number(huntNumberId),
+        p_ids: ids,
+      });
+      if (!error) return; // deu pela RPC
+    } catch {
+      // ignora e cai no fallback
+    }
+  }
+
+  // Fallback: update linha-a-linha
   for (let i = 0; i < ids.length; i++) {
     const id = ids[i];
     const orderVal = i + 1;
